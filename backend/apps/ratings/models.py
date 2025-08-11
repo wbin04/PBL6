@@ -15,7 +15,7 @@ class RatingFood(models.Model):
 
 	class Meta:
 		db_table = 'rating_food'
-		unique_together = (('user', 'food'),)
+		unique_together = (('user', 'food', 'order'),)
 
 	def __str__(self):
 		return f"{self.user} rated {self.food} as {self.rating}"

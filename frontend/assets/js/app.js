@@ -50,7 +50,7 @@ async function logout() {
     localStorage.removeItem('access_token');
     localStorage.removeItem('refresh_token');
     localStorage.removeItem('user');
-    window.location.href = 'auth/login.html';
+    window.location.href = '../auth/login.html';
 }
 
 async function updateCartCount() {

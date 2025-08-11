@@ -618,8 +618,8 @@ class AdminPanel {
             'Chờ xác nhận': 'status-pending',
             'Đã xác nhận': 'status-confirmed',
             'Đang chuẩn bị': 'status-preparing',
-            'Đang giao hàng': 'status-shipping',
-            'Đã giao hàng': 'status-delivered',
+            'Đang giao': 'status-shipping',
+            'Đã giao': 'status-delivered',
             'Đã hủy': 'status-cancelled'
         };
         return statusMap[status] || 'status-pending';
@@ -682,8 +682,8 @@ class AdminPanel {
                     <option value="Chờ xác nhận" ${order.order_status === 'Chờ xác nhận' ? 'selected' : ''}>Chờ xác nhận</option>
                     <option value="Đã xác nhận" ${order.order_status === 'Đã xác nhận' ? 'selected' : ''}>Đã xác nhận</option>
                     <option value="Đang chuẩn bị" ${order.order_status === 'Đang chuẩn bị' ? 'selected' : ''}>Đang chuẩn bị</option>
-                    <option value="Đang giao hàng" ${order.order_status === 'Đang giao hàng' ? 'selected' : ''}>Đang giao hàng</option>
-                    <option value="Đã giao hàng" ${order.order_status === 'Đã giao hàng' ? 'selected' : ''}>Đã giao hàng</option>
+                    <option value="Đang giao" ${order.order_status === 'Đang giao' ? 'selected' : ''}>Đang giao</option>
+                    <option value="Đã giao" ${order.order_status === 'Đã giao' ? 'selected' : ''}>Đã giao</option>
                     <option value="Đã hủy" ${order.order_status === 'Đã hủy' ? 'selected' : ''}>Đã hủy</option>
                 </select>
                 <button class="btn btn-primary" onclick="adminPanel.updateOrderStatus(${order.id})">
@@ -703,7 +703,7 @@ class AdminPanel {
                         </tr>
                     </thead>
                     <tbody>
-                        ${order.order_details?.map(item => `
+                        ${(order.items || []).map(item => `
                             <tr>
                                 <td>${item.food.title}</td>
                                 <td>${item.quantity}</td>

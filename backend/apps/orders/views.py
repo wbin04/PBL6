@@ -210,7 +210,7 @@ def admin_order_detail(request, order_id):
         new_status = request.data.get('order_status')
         valid_statuses = [
             'Chờ xác nhận', 'Đã xác nhận', 'Đang chuẩn bị', 
-            'Đang giao hàng', 'Đã giao hàng', 'Đã hủy'
+            'Đang giao', 'Đã giao', 'Đã hủy'
         ]
         
         if new_status not in valid_statuses:
