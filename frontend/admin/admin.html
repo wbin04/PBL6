@@ -1,0 +1,276 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin Panel - Fast Food</title>
+    <link rel="stylesheet" href="../assets/css/style.css">
+    <link rel="stylesheet" href="admin.css">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+</head>
+<body>
+    <!-- Header -->
+    <header class="header">
+        <div class="container">
+            <div class="nav-wrapper">
+                <div class="logo">
+                    <h2>🍔 Admin Panel</h2>
+                </div>
+                <nav class="nav-menu">
+                    <ul class="nav-list">
+                        <li><a href="#" class="nav-link active" data-section="dashboard">Dashboard</a></li>
+                        <li><a href="#" class="nav-link" data-section="customers">Khách hàng</a></li>
+                        <li><a href="#" class="nav-link" data-section="foods">Món ăn</a></li>
+                        <li><a href="#" class="nav-link" data-section="orders">Đơn hàng</a></li>
+                        <li><a href="#" class="nav-link" id="logout-btn">Đăng xuất</a></li>
+                    </ul>
+                </nav>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="main-content">
+        <div class="container">
+            <!-- Dashboard Section -->
+            <section id="dashboard-section" class="admin-section active">
+                <h2>Dashboard</h2>
+                <div class="dashboard-stats">
+                    <div class="stat-card">
+                        <i class="fas fa-users"></i>
+                        <div class="stat-info">
+                            <h3 id="total-customers">0</h3>
+                            <p>Tổng khách hàng</p>
+                        </div>
+                    </div>
+                    <div class="stat-card">
+                        <i class="fas fa-utensils"></i>
+                        <div class="stat-info">
+                            <h3 id="total-foods">0</h3>
+                            <p>Tổng món ăn</p>
+                        </div>
+                    </div>
+                    <div class="stat-card">
+                        <i class="fas fa-shopping-cart"></i>
+                        <div class="stat-info">
+                            <h3 id="total-orders">0</h3>
+                            <p>Tổng đơn hàng</p>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Customers Section -->
+            <section id="customers-section" class="admin-section">
+                <div class="section-header">
+                    <h2>Quản lý khách hàng</h2>
+                    <div class="search-box">
+                        <input type="text" id="customer-search" placeholder="Tìm kiếm khách hàng...">
+                        <button type="button" id="search-customers-btn">
+                            <i class="fas fa-search"></i>
+                        </button>
+                    </div>
+                </div>
+                <div class="table-container">
+                    <table class="admin-table">
+                        <thead>
+                            <tr>
+                                <th>ID</th>
+                                <th>Họ tên</th>
+                                <th>Email</th>
+                                <th>Số điện thoại</th>
+                                <th>Địa chỉ</th>
+                                <th>Ngày tạo</th>
+                                <th>Thao tác</th>
+                            </tr>
+                        </thead>
+                        <tbody id="customers-table-body">
+                            <!-- Customer data will be loaded here -->
+                        </tbody>
+                    </table>
+                </div>
+                <div class="pagination" id="customers-pagination"></div>
+            </section>
+
+            <!-- Foods Section -->
+            <section id="foods-section" class="admin-section">
+                <div class="section-header">
+                    <h2>Quản lý món ăn</h2>
+                    <div class="section-actions">
+                        <div class="search-box">
+                            <input type="text" id="food-search" placeholder="Tìm kiếm món ăn...">
+                            <select id="food-category-filter">
+                                <option value="">Tất cả danh mục</option>
+                            </select>
+                            <button type="button" id="search-foods-btn">
+                                <i class="fas fa-search"></i>
+                            </button>
+                        </div>
+                        <button type="button" class="btn btn-primary" id="add-food-btn">
+                            <i class="fas fa-plus"></i> Thêm món ăn
+                        </button>
+                    </div>
+                </div>
+                <div class="table-container">
+                    <table class="admin-table">
+                        <thead>
+                            <tr>
+                                <th>ID</th>
+                                <th>Hình ảnh</th>
+                                <th>Tên món</th>
+                                <th>Mô tả</th>
+                                <th>Giá</th>
+                                <th>Danh mục</th>
+                                <th>Trạng thái</th>
+                                <th>Thao tác</th>
+                            </tr>
+                        </thead>
+                        <tbody id="foods-table-body">
+                            <!-- Food data will be loaded here -->
+                        </tbody>
+                    </table>
+                </div>
+                <div class="pagination" id="foods-pagination"></div>
+            </section>
+
+            <!-- Orders Section -->
+            <section id="orders-section" class="admin-section">
+                <div class="section-header">
+                    <h2>Quản lý đơn hàng</h2>
+                    <div class="section-actions">
+                        <div class="search-box">
+                            <input type="text" id="order-search" placeholder="Tìm kiếm đơn hàng...">
+                            <select id="order-status-filter">
+                                <option value="">Tất cả trạng thái</option>
+                                <option value="Chờ xác nhận">Chờ xác nhận</option>
+                                <option value="Đã xác nhận">Đã xác nhận</option>
+                                <option value="Đang giao">Đang giao</option>
+                                <option value="Đã giao">Đã giao</option>
+                                <option value="Đã hủy">Đã hủy</option>
+                            </select>
+                            <button type="button" id="search-orders-btn">
+                                <i class="fas fa-search"></i>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+                <div class="table-container">
+                    <table class="admin-table">
+                        <thead>
+                            <tr>
+                                <th>ID</th>
+                                <th>Khách hàng</th>
+                                <th>Tổng tiền</th>
+                                <th>Trạng thái</th>
+                                <th>Phương thức TT</th>
+                                <th>Ngày tạo</th>
+                                <th>Thao tác</th>
+                            </tr>
+                        </thead>
+                        <tbody id="orders-table-body">
+                            <!-- Order data will be loaded here -->
+                        </tbody>
+                    </table>
+                </div>
+                <div class="pagination" id="orders-pagination"></div>
+            </section>
+        </div>
+    </main>
+
+    <!-- Customer Edit Modal -->
+    <div id="customer-modal" class="modal-overlay">
+        <div class="modal">
+            <div class="modal-header">
+                <h3>Chỉnh sửa thông tin khách hàng</h3>
+                <span class="close-modal">&times;</span>
+            </div>
+            <form id="customer-form">
+                <input type="hidden" id="customer-id">
+                <div class="form-group">
+                    <label for="customer-fullname">Họ tên:</label>
+                    <input type="text" id="customer-fullname" required>
+                </div>
+                <div class="form-group">
+                    <label for="customer-phone">Số điện thoại:</label>
+                    <input type="text" id="customer-phone">
+                </div>
+                <div class="form-group">
+                    <label for="customer-address">Địa chỉ:</label>
+                    <textarea id="customer-address"></textarea>
+                </div>
+                <div class="modal-actions">
+                    <button type="button" class="btn btn-secondary close-modal">Hủy</button>
+                    <button type="submit" class="btn btn-primary">Lưu</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Food Add/Edit Modal -->
+    <div id="food-modal" class="modal-overlay">
+        <div class="modal">
+            <div class="modal-header">
+                <h3 id="food-modal-title">Thêm món ăn mới</h3>
+                <span class="close-modal">&times;</span>
+            </div>
+            <form id="food-form">
+                <input type="hidden" id="food-id">
+                <div class="form-group">
+                    <label for="food-title">Tên món:</label>
+                    <input type="text" id="food-title" required>
+                </div>
+                <div class="form-group">
+                    <label for="food-description">Mô tả:</label>
+                    <textarea id="food-description"></textarea>
+                </div>
+                <div class="form-group">
+                    <label for="food-price">Giá:</label>
+                    <input type="number" id="food-price" min="0" required>
+                </div>
+                <div class="form-group">
+                    <label for="food-category">Danh mục:</label>
+                    <select id="food-category" required>
+                        <option value="">Chọn danh mục</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="food-availability">Trạng thái:</label>
+                    <select id="food-availability" required>
+                        <option value="Còn hàng">Còn hàng</option>
+                        <option value="Hết hàng">Hết hàng</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="food-image">Hình ảnh món ăn:</label>
+                    <!-- Preview existing or selected image -->
+                    <img id="food-image-preview" src="" alt="Preview" style="display:none; max-width:100%; height:auto; margin-bottom:1rem;">
+                    <input type="file" id="food-image" name="image_file" accept="image/*">
+                </div>
+                <div class="modal-actions">
+                    <button type="button" class="btn btn-secondary close-modal">Hủy</button>
+                    <button type="submit" class="btn btn-primary">Lưu</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Order Detail Modal -->
+    <div id="order-modal" class="modal-overlay">
+        <div class="modal">
+            <div class="modal-header">
+                <h3>Chi tiết đơn hàng</h3>
+                <span class="close-modal">&times;</span>
+            </div>
+            <div id="order-detail-content">
+                <!-- Order details will be loaded here -->
+            </div>
+            <div class="modal-actions">
+                <button type="button" class="btn btn-secondary close-modal">Đóng</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="../assets/js/api.js"></script>
+    <script src="admin.js"></script>
+</body>
+</html>

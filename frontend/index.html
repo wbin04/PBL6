@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FastFood App - Đặt món nhanh chóng</title>
+    <link rel="stylesheet" href="assets/css/style.css">
+    <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js"></script>
+</head>
+<body>
+    <!-- Header -->
+    <header class="header">
+        <div class="container">
+            <a href="index.html" class="logo">🍔 FastFood</a>
+            
+            <nav class="nav">
+                <a href="index.html" class="active">Trang chủ</a>
+                <a href="menu/categories.html">Thực đơn</a>
+                
+                <div id="guest-menu" class="hidden">
+                    <a href="auth/login.html">Đăng nhập</a>
+                    <a href="auth/register.html">Đăng ký</a>
+                </div>
+                
+                <div id="user-menu" class="hidden">
+                    <a href="cart/cart.html" class="cart-link">
+                        🛒 Giỏ hàng
+                        <span id="cart-count" class="cart-count">0</span>
+                    </a>
+                    <a href="orders/orders.html">Đơn hàng</a>
+                    <a href="admin/admin.html" id="admin-link" class="hidden">Admin</a>
+                    <a href="auth/account.html" class="account-link">Xin chào, <span id="user-name"></span></a>
+                    <a href="#" onclick="logout()">Đăng xuất</a>
+                </div>
+            </nav>
+        </div>
+    </header>
+
+    <!-- Hero Section -->
+    <section class="hero">
+        <div class="container">
+            <h1>Chào mừng đến FastFood</h1>
+            <p>Đặt món ăn ngon, giao hàng nhanh chóng!</p>
+            <a href="menu/categories.html" class="btn btn-primary btn-large">Xem thực đơn</a>
+        </div>
+    </section>
+
+    <!-- Main Content -->
+    <main class="main">
+        <div class="container">
+            <section style="padding: 3rem 0;">
+                <h2 class="text-center" style="margin-bottom: 2rem;">Danh mục phổ biến</h2>
+                <div id="categories-grid" class="grid categories-grid">
+                    <!-- Categories will be loaded here -->
+                </div>
+            </section>
+        </div>
+    </main>
+
+    <!-- Scripts -->
+    <script src="assets/js/api.js"></script>
+    <script src="assets/js/auth.js"></script>
+    <script src="assets/js/cart.js"></script>
+    <script src="assets/js/app.js"></script>
+</body>
+</html>

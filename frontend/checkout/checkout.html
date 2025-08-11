@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Thanh toán - FastFood</title>
+    <link rel="stylesheet" href="../assets/css/style.css">
+</head>
+<body>
+    <header class="header">
+        <div class="container">
+            <a href="../index.html" class="logo">🍔 FastFood</a>
+            <nav class="nav">
+                <a href="../index.html" class="nav-link">Trang chủ</a>
+                <a href="../menu/categories.html" class="nav-link">Thực đơn</a>
+                <div id="guest-menu" class="hidden">
+                    <a href="../auth/login.html">Đăng nhập</a>
+                    <a href="../auth/register.html">Đăng ký</a>
+                </div>
+                <div id="user-menu" class="hidden">
+                    <a href="../cart/cart.html" class="cart-link">
+                        🛒 Giỏ hàng <span id="cart-count" class="cart-count">0</span>
+                    </a>
+                    <a href="../orders/orders.html" class="nav-link">Đơn hàng</a>
+                    <span>Xin chào, <span id="user-name"></span></span>
+                    <a href="#" onclick="logout()">Đăng xuất</a>
+                </div>
+            </nav>
+        </div>
+    </header>
+
+    <div class="checkout-container container">
+        <div class="form-section">
+            <h2>Thông tin giao hàng</h2>
+            <div class="form-group">
+                <label for="receiver_name">Tên người nhận</label>
+                <input type="text" id="receiver_name" placeholder="Nguyễn Văn A">
+            </div>
+            <div class="form-group">
+                <label for="phone_number">Số điện thoại</label>
+                <input type="tel" id="phone_number" placeholder="0901234567">
+            </div>
+            <div class="form-group">
+                <label for="ship_address">Địa chỉ giao hàng</label>
+                <textarea id="ship_address" rows="3" placeholder="Số nhà, đường, quận, thành phố"></textarea>
+            </div>
+            <div class="form-group">
+                <label for="note">Ghi chú (tùy chọn)</label>
+                <textarea id="note" rows="2" placeholder="Ví dụ: Không thêm ớt">xin hộp giấy</textarea>
+            </div>
+            <div class="form-group">
+                <label for="promo_code">Mã khuyến mãi</label>
+                <div style="display:flex; gap:10px;">
+                    <input type="text" id="promo_code" placeholder="Nhập mã khuyến mãi">
+                    <button class="btn btn-secondary" id="apply-promo">Áp dụng</button>
+                </div>
+                <small id="promo-message" class="text-muted"></small>
+            </div>
+            <h2>Phương thức thanh toán</h2>
+            <div class="form-group">
+                <label><input type="radio" name="payment_method" value="cash" checked> Thanh toán khi nhận hàng</label>
+            </div>
+            <!-- Future: add card payment option -->
+            <button class="btn btn-primary" id="place-order">Đặt hàng</button>
+        </div>
+        <div class="order-summary">
+            <h2>Đơn hàng</h2>
+            <div id="summary-items"></div>
+            <div class="summary-row">
+                <span>Tạm tính</span>
+                <span id="summary-subtotal">0 ₫</span>
+            </div>
+            <div class="summary-row">
+                <span>Giảm giá</span>
+                <span id="summary-discount">0 ₫</span>
+            </div>
+            <div class="summary-row">
+                <span>Phí giao hàng</span>
+                <span id="summary-shipping">0 ₫</span>
+            </div>
+            <div class="summary-row total">
+                <span>Tổng cộng</span>
+                <span id="summary-total">0 ₫</span>
+            </div>
+        </div>
+    </div>
+
+    <script src="../assets/js/api.js"></script>
+    <script src="../assets/js/auth.js"></script>
+    <script src="../assets/js/cart.js"></script>
+    <script src="checkout-page.js"></script>
+</body>
+</html>
