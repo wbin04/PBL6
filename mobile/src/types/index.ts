@@ -131,6 +131,12 @@ export interface Rating {
   created_date: string;
 }
 
+export interface FoodRating {
+  username: string;
+  rating: number;
+  content: string;
+}
+
 export interface CreateRatingRequest {
   order_id: number;
   rating: number;
@@ -162,6 +168,7 @@ export type RootStackParamList = {
   ForgotPassword: undefined;
   MainTabs: undefined;
   FoodDetail: { foodId: number };
+  RatingScreen: { foodId: number };
   Cart: undefined;
   Checkout: undefined;
   OrderDetail: { orderId: number };

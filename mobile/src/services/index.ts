@@ -18,6 +18,8 @@ import {
   CreateRatingRequest,
 } from '@/types';
 
+export { ratingService } from './ratingService';
+
 // Authentication Service
 export const authService = {
   async login(credentials: LoginRequest): Promise<LoginResponse> {
@@ -80,7 +82,15 @@ export const menuService = {
 // Cart Service
 export const cartService = {
   async getCart(): Promise<Cart> {
-    return apiClient.get(ENDPOINTS.CART);
+    const response = await apiClient.get<Cart>(ENDPOINTS.CART);
+    // Ensure each cart item has unique id corresponding to food id
+    if (response.items) {
+      response.items = response.items.map(item => ({
+        ...item,
+        id: item.food.id,
+      }));
+    }
+    return response;
   },
 
   async addToCart(item: AddToCartRequest): Promise<Cart> {

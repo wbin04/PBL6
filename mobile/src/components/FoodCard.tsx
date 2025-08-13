@@ -119,13 +119,6 @@ const styles = StyleSheet.create({
     marginBottom: SPACING.xs,
   },
   
-  description: {
-    fontSize: 14,
-    color: COLORS.textSecondary,
-    marginBottom: SPACING.sm,
-    lineHeight: 20,
-  },
-  
   footer: {
     flexDirection: 'row',
     justifyContent: 'space-between',

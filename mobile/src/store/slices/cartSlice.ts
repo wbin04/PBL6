@@ -25,7 +25,11 @@ export const addToCart = createAsyncThunk(
   'cart/addToCart',
   async (item: AddToCartRequest, { rejectWithValue }) => {
     try {
-      return await cartService.addToCart(item);
+      // Add item
+      await cartService.addToCart(item);
+      // Fetch full cart to sync state
+      const updatedCart = await cartService.getCart();
+      return updatedCart;
     } catch (error: any) {
       return rejectWithValue(error.message);
     }
@@ -34,9 +38,16 @@ export const addToCart = createAsyncThunk(
 
 export const updateCartItem = createAsyncThunk(
   'cart/updateCartItem',
-  async ({ foodId, quantity }: { foodId: number; quantity: number }, { rejectWithValue }) => {
+  async (
+    { foodId, quantity }: { foodId: number; quantity: number },
+    { rejectWithValue, dispatch }
+  ) => {
     try {
-      return await cartService.updateCartItem(foodId, quantity);
+      // Update item
+      await cartService.updateCartItem(foodId, quantity);
+      // Refetch full cart to sync state
+      const updatedCart = await cartService.getCart();
+      return updatedCart;
     } catch (error: any) {
       return rejectWithValue(error.message);
     }
@@ -118,7 +129,8 @@ const cartSlice = createSlice({
       })
       .addCase(updateCartItem.fulfilled, (state, action) => {
         state.loading = false;
-        state.cart = action.payload;
+  // Replace cart with updated payload to ensure accurate updates
+  state.cart = action.payload;
         state.error = null;
       })
       .addCase(updateCartItem.rejected, (state, action) => {

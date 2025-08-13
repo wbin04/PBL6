@@ -62,18 +62,18 @@ export const LoginScreen: React.FC = () => {
   };
 
   const testConnection = async () => {
-    try {
-      console.log('Testing connection to:', API_CONFIG.BASE_URL);
-      const response = await fetch(`${API_CONFIG.BASE_URL}/auth/login/`, {
-        method: 'HEAD',
-        timeout: 5000,
-      });
-      console.log('Connection test response status:', response.status);
-      Alert.alert('Kết nối', `Server response: ${response.status}`);
-    } catch (error) {
-      console.error('Connection test failed:', error);
-      Alert.alert('Lỗi kết nối', `Không thể kết nối tới server: ${API_CONFIG.BASE_URL}\n\nLỗi: ${error.message}`);
-    }
+    // try {
+    //   console.log('Testing connection to:', API_CONFIG.BASE_URL);
+    //   const response = await fetch(`${API_CONFIG.BASE_URL}/auth/login/`, {
+    //     method: 'HEAD',
+    //     timeout: 5000,
+    //   });
+    //   console.log('Connection test response status:', response.status);
+    //   Alert.alert('Kết nối', `Server response: ${response.status}`);
+    // } catch (error) {
+    //   console.error('Connection test failed:', error);
+    //   Alert.alert('Lỗi kết nối', `Không thể kết nối tới server: ${API_CONFIG.BASE_URL}\n\nLỗi: ${error.message}`);
+    // }
   };
 
   const handleLogin = async () => {

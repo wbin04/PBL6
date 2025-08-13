@@ -10,7 +10,9 @@ import {
   TouchableOpacity,
   Modal,
 } from 'react-native';
-import { useRoute, RouteProp } from '@react-navigation/native';
+import { useNavigation, useRoute, RouteProp, CompositeNavigationProp } from '@react-navigation/native';
+import { BottomTabNavigationProp } from '@react-navigation/bottom-tabs';
+import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useDispatch, useSelector } from 'react-redux';
 import { Ionicons } from '@expo/vector-icons';
 import {
@@ -18,15 +20,21 @@ import {
   fetchFoods,
   fetchFoodsByCategory,
 } from '@/store/slices/menuSlice';
-import { MainTabParamList, Category, Food } from '@/types';
+import { MainTabParamList, RootStackParamList, Category, Food } from '@/types';
 import { RootState, AppDispatch } from '@/store';
 import { FoodCard } from '@/components';
 import { COLORS, SPACING, BORDER_RADIUS } from '@/constants';
 
 // Menu screen with category filter and search
 type MenuRouteProp = RouteProp<MainTabParamList, 'Menu'>;
+type MenuNavigationProp = CompositeNavigationProp<
+  BottomTabNavigationProp<MainTabParamList, 'Menu'>,
+  NativeStackNavigationProp<RootStackParamList>
+>;
+
 const MenuScreen: React.FC = () => {
   const route = useRoute<MenuRouteProp>();
+  const navigation = useNavigation<MenuNavigationProp>();
   const dispatch = useDispatch<AppDispatch>();
   const { categories, foods, loading } = useSelector((state: RootState) => state.menu);
   const { user } = useSelector((state: RootState) => state.auth);
@@ -88,9 +96,8 @@ const MenuScreen: React.FC = () => {
     return category?.cate_name || 'Tất cả danh mục';
   };
 
-  const handleSearch = () => {
-    // Trigger search if needed, or just keep current behavior
-    // since search is already reactive
+  const handleFoodPress = (foodId: number) => {
+    navigation.navigate('FoodDetail', { foodId });
   };
 
   if (loading) {
@@ -140,7 +147,7 @@ const MenuScreen: React.FC = () => {
           </View>
           <TouchableOpacity 
             style={styles.searchButton}
-            onPress={handleSearch}
+            onPress={() => {}}
           >
             <Ionicons name="search" size={20} color={COLORS.white} />
           </TouchableOpacity>
@@ -225,7 +232,7 @@ const MenuScreen: React.FC = () => {
         data={displayedFoods}
         renderItem={({ item }) => (
           <View style={styles.foodCardContainer}>
-            <FoodCard food={item} onPress={() => {}} />
+            <FoodCard food={item} onPress={() => handleFoodPress(item.id)} />
           </View>
         )}
         keyExtractor={item => item.id.toString()}

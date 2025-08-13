@@ -12,8 +12,9 @@ import { store } from './src/store';
 import { useDispatch, useSelector } from 'react-redux';
 import { RootState, AppDispatch } from './src/store';
 import { loadUserFromStorage } from './src/store/slices/authSlice';
+import { fetchCart } from './src/store/slices/cartSlice';
 
-import { HomeScreen, LoginScreen, MenuScreen } from './src/screens';
+import { HomeScreen, LoginScreen, MenuScreen, FoodDetailScreen, RatingScreen, CartScreen } from './src/screens';
 import { MainTabParamList, RootStackParamList } from '@/types';
 import { COLORS, SPACING } from './src/constants';
 
@@ -25,6 +26,7 @@ export type RootStackParamList = {
   ForgotPassword: undefined;
   MainTabs: undefined;
   FoodDetail: { foodId: number };
+  RatingScreen: { foodId: number };
   Cart: undefined;
   Checkout: undefined;
   OrderDetail: { orderId: number };
@@ -79,7 +81,7 @@ const MainTabNavigator = () => {
       />
       <Tab.Screen
         name="Cart"
-        component={HomeScreen}
+        component={CartScreen}
         options={{
           tabBarLabel: ({ color, size }) => (
             <Text style={{ fontSize: size, color }}>Giỏ hàng</Text>
@@ -126,6 +128,12 @@ const AppNavigator = () => {
     dispatch(loadUserFromStorage());
   }, [dispatch]);
 
+  useEffect(() => {
+    if (isAuthenticated) {
+      dispatch(fetchCart());
+    }
+  }, [dispatch, isAuthenticated]);
+
   if (loading) {
     // TODO: Replace with proper loading screen
     return null;
@@ -149,8 +157,13 @@ const AppNavigator = () => {
         )}
         <Stack.Screen
           name="FoodDetail"
-          component={HomeScreen}
-          options={{ headerShown: true, title: 'Chi tiết món ăn' }}
+          component={FoodDetailScreen}
+          options={{ headerShown: false }}
+        />
+        <Stack.Screen
+          name="RatingScreen"
+          component={RatingScreen}
+          options={{ headerShown: false }}
         />
       </Stack.Navigator>
     </NavigationContainer>
