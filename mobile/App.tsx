@@ -49,6 +49,7 @@ const MainTabNavigator = () => {
           backgroundColor: COLORS.white,
           borderTopWidth: 1,
           borderTopColor: COLORS.border,
+          paddingTop: SPACING.xs,
           paddingBottom: SPACING.lg,  // larger bottom padding
           height: 80,                  // increased height
         },

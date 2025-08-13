@@ -61,21 +61,6 @@ export const LoginScreen: React.FC = () => {
     return true;
   };
 
-  const testConnection = async () => {
-    // try {
-    //   console.log('Testing connection to:', API_CONFIG.BASE_URL);
-    //   const response = await fetch(`${API_CONFIG.BASE_URL}/auth/login/`, {
-    //     method: 'HEAD',
-    //     timeout: 5000,
-    //   });
-    //   console.log('Connection test response status:', response.status);
-    //   Alert.alert('Kết nối', `Server response: ${response.status}`);
-    // } catch (error) {
-    //   console.error('Connection test failed:', error);
-    //   Alert.alert('Lỗi kết nối', `Không thể kết nối tới server: ${API_CONFIG.BASE_URL}\n\nLỗi: ${error.message}`);
-    // }
-  };
-
   const handleLogin = async () => {
     if (!validateForm()) return;
     
@@ -144,14 +129,6 @@ export const LoginScreen: React.FC = () => {
 
         <TouchableOpacity onPress={handleForgotPassword}>
           <Text style={styles.forgotPassword}>Quên mật khẩu?</Text>
-        </TouchableOpacity>
-
-        {/* Test connection button */}
-        <TouchableOpacity 
-          style={styles.testButton} 
-          onPress={testConnection}
-        >
-          <Text style={styles.testButtonText}>Test Connection</Text>
         </TouchableOpacity>
 
         <Button
@@ -243,21 +220,6 @@ const styles = StyleSheet.create({
     fontSize: 14,
     textAlign: 'right',
     marginBottom: SPACING.md,
-  },
-  
-  testButton: {
-    backgroundColor: COLORS.secondary,
-    paddingVertical: 8,
-    paddingHorizontal: 16,
-    borderRadius: 8,
-    alignSelf: 'center',
-    marginBottom: SPACING.lg,
-  },
-  
-  testButtonText: {
-    color: COLORS.white,
-    fontSize: 12,
-    fontWeight: '600',
   },
   
   loginButton: {

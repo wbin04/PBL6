@@ -1,40 +1,45 @@
-import { Platform } from 'react-native';
+import { Platform, NativeModules } from 'react-native';
 import Constants from 'expo-constants';
 
-// API Configuration
-// Determine API host: Android emulator, Expo Go on device via debuggerHost, or localhost
-const getApiHost = () => {
-  // Android emulator uses 10.0.2.2
-  if (Platform.OS === 'android') {
-    return '10.0.2.2';
+export const getApiHost = (): string => {
+  // 1) Web: dùng hostname của trang
+  if (Platform.OS === 'web' && typeof window !== 'undefined') {
+    return window.location.hostname;
   }
-  // Web uses localhost
-  if (Platform.OS === 'web') {
-    return 'localhost';
+
+  // 2) Dev (Metro): lấy từ URL của bundle JS (chứa IP máy tính)
+  const scriptURL: string | undefined = (NativeModules as any)?.SourceCode?.scriptURL;
+  if (scriptURL) {
+    try {
+      return new URL(scriptURL).hostname; 
+    } catch {}
   }
-  // Expo Go on iOS or device: derive host from debuggerHost in manifest or expoConfig
-  const manifestHost = Constants.manifest?.debuggerHost;
-  const configHost = (Constants.expoConfig as any)?.debuggerHost;
-  const hostStr = manifestHost || configHost;
-  if (hostStr) {
-    return hostStr.split(':')[0];
+
+  // 3) Expo (SDK mới/cũ): lấy từ expoConfig/manifest
+  const hostLike =
+    (Constants as any)?.expoConfig?.hostUri ||
+    (Constants as any)?.manifest2?.extra?.expoClient?.hostUri ||
+    (Constants as any)?.manifest?.hostUri ||
+    (Constants as any)?.manifest?.debuggerHost;
+
+  if (hostLike) {
+    try {
+      const host = hostLike.split('//').pop()!.split(':')[0];
+      if (host) return host; 
+    } catch {}
   }
-  // Fallback to localhost
+
+  // 4) Fallbacks
+  if (Platform.OS === 'android') return '10.0.2.2'; // emulator ↔ host
   return 'localhost';
 };
 
 // Use dynamic API host instead of static IP
 export const API_CONFIG = {
-  BASE_URL: `http://192.168.1.5:8000/api`, // Dynamic host resolution
+  BASE_URL: `http://${getApiHost()}:8000/api`, // Dynamic host resolution
   TIMEOUT: 10000,
   RETRY_ATTEMPTS: 3,
 };
-
-// Log the API URL for debugging
-console.log('API_CONFIG.BASE_URL:', API_CONFIG.BASE_URL);
-console.log('Platform OS:', Platform.OS);
-console.log('Constants.manifest?.debuggerHost:', Constants.manifest?.debuggerHost);
-console.log('Constants.expoConfig?.debuggerHost:', (Constants.expoConfig as any)?.debuggerHost);
 
 // App Colors
 export const COLORS = {

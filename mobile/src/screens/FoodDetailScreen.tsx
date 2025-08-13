@@ -467,6 +467,7 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.white,
     paddingHorizontal: SPACING.lg,
     paddingVertical: SPACING.md,
+    paddingBottom: SPACING.xxl,
     borderTopWidth: 1,
     borderTopColor: COLORS.divider,
     ...SHADOWS.md,
