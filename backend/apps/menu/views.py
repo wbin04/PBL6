@@ -16,7 +16,13 @@ def category_list(request):
     """Get all categories"""
     categories = Category.objects.all()
     serializer = CategorySerializer(categories, many=True)
-    return Response(serializer.data)
+    # Return in paginated response format for frontend compatibility
+    return Response({
+        'count': categories.count(),
+        'next': None,
+        'previous': None,
+        'results': serializer.data,
+    })
 
 
 @api_view(['GET'])

@@ -24,7 +24,7 @@ async function updateAuthUI() {
             
             if (guestMenu) guestMenu.classList.add('hidden');
             if (userMenu) userMenu.classList.remove('hidden');
-            if (userNameElement) userNameElement.textContent = user.fullname || user.username;
+            if (userNameElement) userNameElement.textContent = user.username;
             
             // Show admin link if user has admin role
             if (adminLink && user.role === 'Admin') {
@@ -73,7 +73,8 @@ async function updateCartCount() {
 
 async function loadFeaturedCategories() {
     try {
-        const categories = await API.get('/menu/categories/');
+        const categories_response = await API.get('/menu/categories/');
+        const categories = categories_response.results;
         const container = document.getElementById('categories-grid');
         
         if (container) {

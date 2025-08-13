@@ -49,7 +49,7 @@ function updateAuthUI() {
         const user = getCurrentUser();
         if (userMenu) userMenu.classList.remove('hidden');
         if (guestMenu) guestMenu.classList.add('hidden');
-        if (userNameSpan) userNameSpan.textContent = user.fullname;
+        if (userNameSpan) userNameSpan.textContent = user.username;
     } else {
         if (userMenu) userMenu.classList.add('hidden');
         if (guestMenu) guestMenu.classList.remove('hidden');

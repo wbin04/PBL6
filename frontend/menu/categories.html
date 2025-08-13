@@ -54,8 +54,8 @@
             try {
                 showLoading('categories-container');
                 
-                const categories = await API.get('/menu/categories/');
-                
+                const categories_response = await API.get('/menu/categories/');
+                const categories = categories_response.results;
                 hideLoading('categories-container');
                 
                 const container = document.getElementById('categories-grid');

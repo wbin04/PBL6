@@ -28,8 +28,8 @@ class LoginSerializer(serializers.Serializer):
             msg = 'Unable to log in with provided credentials.'
             raise serializers.ValidationError(msg, code='authorization')
 
-        # Verify password (plaintext)
-        if not user.check_password(password):
+        # Verify password (plaintext comparison since passwords are stored as plaintext)
+        if user.password != password:
             msg = 'Unable to log in with provided credentials.'
             raise serializers.ValidationError(msg, code='authorization')
 
@@ -42,7 +42,7 @@ class UserSerializer(serializers.ModelSerializer):
     
     class Meta:
         model = User
-        fields = ['id', 'email', 'fullname', 'phone_number', 'address', 'role', 'created_date']
+        fields = ['id', 'username', 'email', 'fullname', 'phone_number', 'address', 'role', 'created_date']
         read_only_fields = ['id', 'created_date']
 
 

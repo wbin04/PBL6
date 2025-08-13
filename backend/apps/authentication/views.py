@@ -14,18 +14,22 @@ from .models import User
 @api_view(['POST'])
 @permission_classes([AllowAny])
 def login_view(request):
+    # print(f"Login attempt with data: {request.data}")  # Debug log
     serializer = LoginSerializer(data=request.data, context={'request': request})
     
     if serializer.is_valid():
         user = serializer.validated_data['user']
         refresh = RefreshToken.for_user(user)
-        
-        return Response({
+        response_data = {
             'refresh': str(refresh),
             'access': str(refresh.access_token),
             'user': UserSerializer(user).data
-        })
+        }
+        # print("Serialized user JSON:", response_data['user'])  # Debug: print user JSON
+        print(f"Login successful for user: {user.email}")  # Debug log
+        return Response(response_data)
     
+    print(f"Login failed with errors: {serializer.errors}")  # Debug log
     return Response({'error': 'Invalid credentials'}, status=status.HTTP_400_BAD_REQUEST)
 
 
