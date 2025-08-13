@@ -158,7 +158,7 @@ const FoodDetailScreen: React.FC = () => {
             style={styles.foodImage}
             resizeMode="cover"
           />
-          {!foodDetail.availability && (
+          {foodDetail.availability=="Hết hàng" && (
             <View style={styles.unavailableOverlay}>
               <Text style={styles.unavailableText}>Tạm hết hàng</Text>
             </View>
@@ -172,10 +172,10 @@ const FoodDetailScreen: React.FC = () => {
             <View style={styles.availabilityContainer}>
               <View style={[
                 styles.availabilityBadge,
-                { backgroundColor: foodDetail.availability ? COLORS.success : COLORS.error }
+                { backgroundColor: foodDetail.availability=="Còn hàng" ? COLORS.success : COLORS.error }
               ]}>
                 <Text style={styles.availabilityText}>
-                  {foodDetail.availability ? 'Còn hàng' : 'Tạm hết hàng'}
+                  {foodDetail.availability}
                 </Text>
               </View>
             </View>
@@ -222,7 +222,7 @@ const FoodDetailScreen: React.FC = () => {
 
       {/* Bottom Section */}
       <View style={styles.bottomContainer}>
-        {foodDetail.availability ? (
+        {foodDetail.availability=="Còn hàng" ? (
           <>
             {/* Quantity Selector */}
             <View style={styles.quantityContainer}>

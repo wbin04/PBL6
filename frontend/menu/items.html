@@ -90,7 +90,8 @@
 
         async function loadCategories() {
             try {
-                const categories = await API.get('/menu/categories/');
+                const categories_response = await API.get('/menu/categories/');
+                const categories = categories_response.results;
                 const select = document.getElementById('category-filter');
                 
                 // Clear existing options (except "Tất cả danh mục")

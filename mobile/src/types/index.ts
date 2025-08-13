@@ -48,7 +48,7 @@ export interface Food {
   price: string;
   image: string;
   category_name?: string;
-  availability: boolean;
+  availability: string;
   average_rating?: number;
   rating_count?: number;
 }
