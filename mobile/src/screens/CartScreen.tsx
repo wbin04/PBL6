@@ -9,6 +9,7 @@ import {
   Alert,
   ActivityIndicator,
   SafeAreaView,
+  StatusBar,
 } from 'react-native';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -16,8 +17,9 @@ import { Ionicons } from '@expo/vector-icons';
 import { useDispatch, useSelector } from 'react-redux';
 import { RootState, AppDispatch } from '@/store';
 import { fetchCart, updateCartItem, removeFromCart, clearCart } from '@/store/slices/cartSlice';
-import { CartItem, RootStackParamList } from '@/types';
+import { CartItem as CartItemType, RootStackParamList } from '@/types';
 import { COLORS, SPACING, BORDER_RADIUS, SHADOWS, API_CONFIG } from '@/constants';
+import { CartItem } from '@/components';
 
 type CartScreenNavigationProp = NativeStackNavigationProp<RootStackParamList, 'Cart'>;
 
@@ -42,7 +44,7 @@ const CartScreen: React.FC = () => {
   useEffect(() => {
     if (cart?.items) {
       // Select all items by default
-      const allItemIds = new Set(cart.items.map((item: CartItem) => item.id));
+      const allItemIds = new Set(cart.items.map((item: CartItemType) => item.id));
       setSelectedItems(allItemIds);
     }
   }, [cart]);
@@ -63,7 +65,7 @@ const CartScreen: React.FC = () => {
     if (selectedItems.size === cartItems.length) {
       setSelectedItems(new Set());
     } else {
-      const allItemIds = new Set(cartItems.map((item: CartItem) => item.id));
+      const allItemIds = new Set(cartItems.map((item: CartItemType) => item.id));
       setSelectedItems(allItemIds);
     }
   };
@@ -128,7 +130,7 @@ const handleQuantityChange = async (itemId: number, delta: number) => {
 };
 
   const handleRemoveItem = async (itemId: number) => {
-    const item = cartItems.find((item: CartItem) => item.id === itemId);
+    const item = cartItems.find((item: CartItemType) => item.id === itemId);
     if (!item) return;
 
     Alert.alert(
@@ -227,18 +229,29 @@ const handleQuantityChange = async (itemId: number, delta: number) => {
   }
 
   return (
-    <SafeAreaView style={styles.container}>
+    <View style={styles.container}>
+      <StatusBar barStyle="light-content" backgroundColor={COLORS.primary} />
       {/* Header */}
       <View style={styles.header}>
-        <Text style={styles.headerTitle}>Đây là giỏ hàng của bạn</Text>
-        {cartItems.length > 0 && (
-          <TouchableOpacity style={styles.selectAllButton} onPress={handleSelectAll}>
-            <Text style={styles.selectAllText}>
-              {selectedItems.size === cartItems.length ? 'Bỏ chọn tất cả' : 'Chọn tất cả'}
-            </Text>
-          </TouchableOpacity>
-        )}
+        <Text style={styles.greeting}>
+          {user ? `Giỏ hàng của ${user.username} đã sẵn sàng!` : 'Giỏ hàng của bạn đã sẵn sàng!'}
+        </Text>
+        <Text style={styles.subtitle}>Bạn muốn thưởng thức ngay bây giờ chứ?</Text>
       </View>
+      
+      {/* Select All */}
+      {cartItems.length > 0 && (
+        <TouchableOpacity style={styles.selectAllButton} onPress={handleSelectAll}>
+          {selectedItems.size === cartItems.length ? (
+            <Ionicons name="checkbox" size={20} color={COLORS.primary} style={{ marginRight: SPACING.xs }} />
+          ) : (
+            <Ionicons name="square-outline" size={20} color={COLORS.gray400} style={{ marginRight: SPACING.xs }} />
+          )}
+          <Text style={styles.selectAllText}>
+            {selectedItems.size === cartItems.length ? 'Bỏ chọn tất cả' : 'Chọn tất cả'}
+          </Text>
+        </TouchableOpacity>
+      )}
 
       {cartItems.length === 0 ? (
         <View style={styles.emptyContainer}>
@@ -249,7 +262,7 @@ const handleQuantityChange = async (itemId: number, delta: number) => {
           </Text>
           <TouchableOpacity 
             style={styles.shopNowButton}
-            onPress={() => navigation.navigate('MainTabs')}
+            onPress={() => navigation.getParent()?.navigate('Menu')}
           >
             <Text style={styles.shopNowText}>Mua sắm ngay</Text>
           </TouchableOpacity>
@@ -259,78 +272,17 @@ const handleQuantityChange = async (itemId: number, delta: number) => {
           {/* Cart Items */}
           <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
             {cartItems.map((item) => (
-              <TouchableOpacity
+              <CartItem
                 key={item.id}
-                style={styles.cartItemCard}
-                activeOpacity={0.8}
-                onPress={() => navigation.navigate('FoodDetail', { foodId: item.food.id })}
-              >
-                <View style={styles.cartItemHeader}>
-                  <TouchableOpacity
-                    style={styles.checkbox}
-                    onPress={() => handleSelectItem(item.id)}
-                  >
-                    {selectedItems.has(item.id) ? (
-                      <Ionicons name="checkbox" size={24} color={COLORS.primary} />
-                    ) : (
-                      <Ionicons name="square-outline" size={24} color={COLORS.gray400} />
-                    )}
-                  </TouchableOpacity>
-                </View>
-
-                <View style={styles.cartItemContent}>
-                  <Image
-                    source={{ uri: getImageUri(item.food.image) }}
-                    style={styles.itemImage}
-                    resizeMode="cover"
-                  />
-
-                  <View style={styles.itemInfo}>
-                    <Text style={styles.itemTitle}>{item.food.title}</Text>
-                    <Text style={styles.itemDescription} numberOfLines={2}>
-                      {item.food.description}
-                    </Text>
-
-                    <View style={styles.itemActions}>
-                      {/* Quantity Controls */}
-                      <View style={styles.quantityContainer}>
-                        <TouchableOpacity
-                          style={styles.quantityButton}
-                          onPress={() => handleQuantityChange(item.id, -1)}
-                          disabled={updating.has(item.id)}
-                        >
-                          <Ionicons name="remove" size={16} color={COLORS.primary} />
-                        </TouchableOpacity>
-                        <Text style={styles.quantityText}>{item.quantity}</Text>
-                        <TouchableOpacity
-                          style={styles.quantityButton}
-                          onPress={() => handleQuantityChange(item.id, 1)}
-                          disabled={updating.has(item.id) || item.quantity >= 99}
-                        >
-                          <Ionicons name="add" size={16} color={COLORS.primary} />
-                        </TouchableOpacity>
-                      </View>
-
-                      {/* Delete Button */}
-                      <TouchableOpacity
-                        style={styles.deleteButton}
-                        onPress={() => handleRemoveItem(item.id)}
-                      >
-                        <Ionicons name="trash-outline" size={20} color={COLORS.error} />
-                      </TouchableOpacity>
-                    </View>
-
-                    {/* Price */}
-                    <Text style={styles.itemPrice}>{formatPrice(item.subtotal)}</Text>
-                  </View>
-                </View>
-
-                {updating.has(item.id) && (
-                  <View style={styles.updatingOverlay}>
-                    <ActivityIndicator size="small" color={COLORS.primary} />
-                  </View>
-                )}
-              </TouchableOpacity>
+                item={item}
+                isSelected={selectedItems.has(item.id)}
+                isUpdating={updating.has(item.id)}
+                onSelect={handleSelectItem}
+                onQuantityChange={handleQuantityChange}
+                onRemove={handleRemoveItem}
+                onPress={(foodId) => navigation.navigate('FoodDetail', { foodId })}
+                formatPrice={formatPrice}
+              />
             ))}
           </ScrollView>
 
@@ -374,13 +326,13 @@ const handleQuantityChange = async (itemId: number, delta: number) => {
                 onPress={handleCheckout}
                 disabled={selectedItems.size === 0}
               >
-                <Text style={styles.checkoutButtonText}>Tiến hành thanh toán</Text>
+                <Text style={styles.checkoutButtonText}>Thanh toán ngay</Text>
               </TouchableOpacity>
             </View>
           </View>
         </>
       )}
-    </SafeAreaView>
+    </View>
   );
 };
 
@@ -395,22 +347,38 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    backgroundColor: COLORS.white,
+    backgroundColor: COLORS.primary,
+    paddingTop: 50,
     paddingHorizontal: SPACING.lg,
-    paddingVertical: SPACING.md,
-    borderBottomWidth: 1,
-    borderBottomColor: COLORS.divider,
-    ...SHADOWS.sm,
+    paddingBottom: SPACING.lg,
+    borderBottomLeftRadius: 30,
+    borderBottomRightRadius: 30,
+    elevation: 10,
+    shadowColor: COLORS.primary,
+    shadowOffset: { width: 0, height: 5 },
+    shadowOpacity: 0.3,
+    shadowRadius: 10,
+    alignItems: 'flex-start',
   },
   headerTitle: {
-    fontSize: 20,
+    fontSize: 24,
     fontWeight: 'bold',
-    color: COLORS.text,
+    color: COLORS.white,
+  },
+  greeting: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: COLORS.white,
+    marginBottom: SPACING.xs,
+  },
+  subtitle: {
+    fontSize: 16,
+    color: COLORS.white,
+    opacity: 0.9,
   },
   selectAllButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
     paddingHorizontal: SPACING.sm,
     paddingVertical: SPACING.xs,
   },
@@ -418,6 +386,8 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: COLORS.primary,
     fontWeight: '600',
+    paddingHorizontal: SPACING.sm,
+    paddingVertical: SPACING.xs,
   },
   emptyContainer: {
     flex: 1,
@@ -454,90 +424,6 @@ const styles = StyleSheet.create({
   content: {
     flex: 1,
     paddingHorizontal: SPACING.md,
-  },
-  cartItemCard: {
-    backgroundColor: COLORS.white,
-    borderRadius: BORDER_RADIUS.lg,
-    marginVertical: SPACING.xs,
-    padding: SPACING.md,
-    ...SHADOWS.sm,
-    position: 'relative',
-  },
-  cartItemHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: SPACING.sm,
-  },
-  checkbox: {
-    padding: SPACING.xs,
-  },
-  cartItemContent: {
-    flexDirection: 'row',
-  },
-  itemImage: {
-    width: 80,
-    height: 80,
-    borderRadius: BORDER_RADIUS.md,
-    marginRight: SPACING.md,
-  },
-  itemInfo: {
-    flex: 1,
-  },
-  itemTitle: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: COLORS.text,
-    marginBottom: SPACING.xs,
-  },
-  itemDescription: {
-    fontSize: 14,
-    color: COLORS.textSecondary,
-    lineHeight: 20,
-    marginBottom: SPACING.sm,
-  },
-  itemActions: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: SPACING.sm,
-  },
-  quantityContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: COLORS.gray100,
-    borderRadius: BORDER_RADIUS.md,
-    paddingHorizontal: SPACING.xs,
-  },
-  quantityButton: {
-    padding: SPACING.xs,
-  },
-  quantityText: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: COLORS.text,
-    paddingHorizontal: SPACING.sm,
-    minWidth: 30,
-    textAlign: 'center',
-  },
-  deleteButton: {
-    padding: SPACING.sm,
-  },
-  itemPrice: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: COLORS.primary,
-    textAlign: 'right',
-  },
-  updatingOverlay: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    backgroundColor: 'rgba(255, 255, 255, 0.8)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderRadius: BORDER_RADIUS.lg,
   },
   bottomContainer: {
     backgroundColor: COLORS.white,

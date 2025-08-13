@@ -77,8 +77,14 @@ const FoodDetailScreen: React.FC = () => {
       }));
       
       if (addToCart.fulfilled.match(result)) {
-        Alert.alert('Thành công', `Đã thêm ${quantity} ${foodDetail.title} vào giỏ hàng`);
-        setQuantity(1); // Reset quantity after successful add
+        Alert.alert(
+          'Thành công',
+          `Đã thêm ${quantity} ${foodDetail.title} vào giỏ hàng`,
+          [
+            { text: 'OK', onPress: () => navigation.goBack() }
+          ]
+        );
+        setQuantity(1);
       } else {
         Alert.alert('Lỗi', 'Không thể thêm món vào giỏ hàng');
       }

@@ -115,7 +115,7 @@ const MenuScreen: React.FC = () => {
         <Text style={styles.greeting}>
           {user ? `Xin chào, ${user.username}!` : 'Chào mừng đến FastFood!'}
         </Text>
-        <Text style={styles.subtitle}>Bạn muốn ăn gì hôm nay?</Text>
+        <Text style={styles.subtitle}>Thực đơn hôm nay có những gì?</Text>
       </View>
       
       <View style={styles.filterContainer}>
@@ -252,7 +252,7 @@ const styles = StyleSheet.create({
   header: {
     backgroundColor: COLORS.primary,
     paddingTop: 50,
-    paddingHorizontal: SPACING.md,
+    paddingHorizontal: SPACING.lg,
     paddingBottom: SPACING.lg,
     borderBottomLeftRadius: 25,
     borderBottomRightRadius: 25,

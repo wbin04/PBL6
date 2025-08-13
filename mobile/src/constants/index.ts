@@ -25,7 +25,7 @@ const getApiHost = () => {
 
 // Use dynamic API host instead of static IP
 export const API_CONFIG = {
-  BASE_URL: `http://172.20.10.6:8000/api`, // Dynamic host resolution
+  BASE_URL: `http://192.168.1.5:8000/api`, // Dynamic host resolution
   TIMEOUT: 10000,
   RETRY_ATTEMPTS: 3,
 };
