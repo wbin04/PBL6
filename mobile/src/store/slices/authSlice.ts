@@ -162,18 +162,15 @@ const authSlice = createSlice({
         }
       })
       
-      // Update profile
+      // Update profile: keep loading flag unaffected to avoid unmounting navigators
       .addCase(updateProfile.pending, (state) => {
-        state.loading = true;
         state.error = null;
       })
       .addCase(updateProfile.fulfilled, (state, action) => {
-        state.loading = false;
         state.user = action.payload;
         state.error = null;
       })
       .addCase(updateProfile.rejected, (state, action) => {
-        state.loading = false;
         state.error = action.payload as string;
       })
       

@@ -23,8 +23,11 @@ export interface LoginRequest {
 export interface RegisterRequest {
   email: string;
   password: string;
-  full_name: string;
+  password_confirm: string;
+  fullname: string;
+  username: string;
   phone_number?: string;
+  address?: string;
 }
 
 export interface LoginResponse {
@@ -88,7 +91,7 @@ export interface OrderItem {
 export interface Order {
   id: number;
   user?: User;
-  order_status: 'pending' | 'confirmed' | 'preparing' | 'ready' | 'delivered' | 'cancelled';
+  order_status: 'Chờ xác nhận' | 'Đã xác nhận' | 'Đang chuẩn bị' | 'Đang giao' | 'Đã giao' | 'Đã huỷ';
   total_money: string;
   payment_method: 'cash' | 'vnpay' | 'momo';
   receiver_name: string;
@@ -138,9 +141,10 @@ export interface FoodRating {
 }
 
 export interface CreateRatingRequest {
-  order_id: number;
+  food: number;
+  order: number;
   rating: number;
-  comment?: string;
+  content?: string;
 }
 
 // API Response Types
@@ -170,8 +174,10 @@ export type RootStackParamList = {
   FoodDetail: { foodId: number };
   RatingScreen: { foodId: number };
   Cart: undefined;
-  Checkout: undefined;
+  Checkout: { selectedIds: number[] };
   OrderDetail: { orderId: number };
+  EditOrder: { orderId: number };
+  RatingOrder: { orderId: number };
   Profile: undefined;
   EditProfile: undefined;
 };

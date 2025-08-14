@@ -39,14 +39,12 @@ export const authService = {
   },
 
   async updateProfile(userData: Partial<User>): Promise<User> {
-    return apiClient.put(ENDPOINTS.PROFILE, userData);
+    // Use profile/update endpoint for updating user info
+    return apiClient.put(ENDPOINTS.PROFILE_UPDATE, userData);
   },
 
-  async resetPassword(currentPassword: string, newPassword: string): Promise<void> {
-    return apiClient.post(ENDPOINTS.RESET_PASSWORD, {
-      current_password: currentPassword,
-      new_password: newPassword,
-    });
+  async resetPassword(data: { identifier: string; new_password: string; new_password_confirm: string }): Promise<{ message: string }> {
+    return apiClient.post(ENDPOINTS.RESET_PASSWORD, data);
   },
 };
 

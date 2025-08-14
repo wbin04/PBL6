@@ -13,7 +13,7 @@ const initialState: OrderState = {
 // Async thunks
 export const fetchOrders = createAsyncThunk(
   'orders/fetchOrders',
-  async (page = 1, { rejectWithValue }) => {
+  async (page: number = 1, { rejectWithValue }) => {
     try {
       return await ordersService.getOrders(page);
     } catch (error: any) {
@@ -80,8 +80,8 @@ const ordersSlice = createSlice({
       .addCase(fetchOrders.fulfilled, (state, action) => {
         state.loading = false;
         const response = action.payload as PaginatedResponse<Order>;
-        // If it's the first page, replace orders, otherwise append
-        if (action.meta.arg === 1) {
+        // If it's the first page (arg undefined or 1), replace orders; otherwise, append
+        if (action.meta.arg == null || action.meta.arg === 1) {
           state.orders = response.results;
         } else {
           state.orders = [...state.orders, ...response.results];

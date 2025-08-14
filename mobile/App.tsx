@@ -14,7 +14,7 @@ import { RootState, AppDispatch } from './src/store';
 import { loadUserFromStorage } from './src/store/slices/authSlice';
 import { fetchCart } from './src/store/slices/cartSlice';
 
-import { HomeScreen, LoginScreen, MenuScreen, FoodDetailScreen, RatingScreen, CartScreen } from './src/screens';
+import { HomeScreen, LoginScreen, RegisterScreen, ForgotPasswordScreen, MenuScreen, FoodDetailScreen, RatingScreen, CartScreen, OrderScreen, CheckoutScreen, OrderDetailScreen, EditOrderScreen, RatingOrderScreen, ProfileScreen } from './src/screens';
 import { MainTabParamList, RootStackParamList } from '@/types';
 import { COLORS, SPACING } from './src/constants';
 
@@ -94,7 +94,7 @@ const MainTabNavigator = () => {
       />
       <Tab.Screen
         name="Orders"
-        component={HomeScreen}
+        component={OrderScreen}
         options={{
           tabBarLabel: ({ color, size }) => (
             <Text style={{ fontSize: size, color }}>Đơn hàng</Text>
@@ -106,7 +106,7 @@ const MainTabNavigator = () => {
       />
       <Tab.Screen
         name="Profile"
-        component={HomeScreen}
+        component={ProfileScreen}
         options={{
           tabBarLabel: ({ color, size }) => (
             <Text style={{ fontSize: size, color }}>Tài khoản</Text>
@@ -135,38 +135,26 @@ const AppNavigator = () => {
     }
   }, [dispatch, isAuthenticated]);
 
-  if (loading) {
-    // TODO: Replace with proper loading screen
-    return null;
-  }
 
   return (
     <NavigationContainer>
-      <Stack.Navigator
-        screenOptions={{
-          headerShown: false,
-        }}
-      >
-        {isAuthenticated ? (
+      {isAuthenticated ? (
+        <Stack.Navigator screenOptions={{ headerShown: false }}>
           <Stack.Screen name="MainTabs" component={MainTabNavigator} />
-        ) : (
-          <>
-            <Stack.Screen name="Login" component={LoginScreen} />
-            <Stack.Screen name="Register" component={LoginScreen} />
-            <Stack.Screen name="ForgotPassword" component={LoginScreen} />
-          </>
-        )}
-        <Stack.Screen
-          name="FoodDetail"
-          component={FoodDetailScreen}
-          options={{ headerShown: false }}
-        />
-        <Stack.Screen
-          name="RatingScreen"
-          component={RatingScreen}
-          options={{ headerShown: false }}
-        />
-      </Stack.Navigator>
+          <Stack.Screen name="FoodDetail" component={FoodDetailScreen} />
+          <Stack.Screen name="RatingScreen" component={RatingScreen} />
+          <Stack.Screen name="Checkout" component={CheckoutScreen} />
+          <Stack.Screen name="OrderDetail" component={OrderDetailScreen} />
+          <Stack.Screen name="EditOrder" component={EditOrderScreen} />
+          <Stack.Screen name="RatingOrder" component={RatingOrderScreen} />
+        </Stack.Navigator>
+      ) : (
+        <Stack.Navigator screenOptions={{ headerShown: false }}>
+          <Stack.Screen name="Login" component={LoginScreen} />
+          <Stack.Screen name="Register" component={RegisterScreen} />
+          <Stack.Screen name="ForgotPassword" component={ForgotPasswordScreen} />
+        </Stack.Navigator>
+      )}
     </NavigationContainer>
   );
 };

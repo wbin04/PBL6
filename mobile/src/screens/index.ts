@@ -1,6 +1,14 @@
 export { HomeScreen } from './HomeScreen';
 export { LoginScreen } from './LoginScreen';
+export { RegisterScreen } from './RegisterScreen';
+export { ForgotPasswordScreen } from './ForgotPasswordScreen';
 export { default as MenuScreen } from './MenuScreen';
 export { default as FoodDetailScreen } from './FoodDetailScreen';
 export { default as RatingScreen } from './RatingScreen';
 export { default as CartScreen } from './CartScreen';
+export { default as OrderScreen } from './OrderScreen';
+export { default as CheckoutScreen } from './CheckoutScreen';
+export { default as OrderDetailScreen } from './OrderDetailScreen';
+export { EditOrderScreen } from './EditOrderScreen';
+export { RatingOrderScreen } from './RatingOrderScreen';
+export { ProfileScreen } from './ProfileScreen';

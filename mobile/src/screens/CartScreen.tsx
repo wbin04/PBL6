@@ -196,7 +196,7 @@ const handleQuantityChange = async (itemId: number, delta: number) => {
     }
 
     // Navigate to checkout screen
-    navigation.navigate('Checkout');
+  navigation.navigate('Checkout', { selectedIds: Array.from(selectedItems) });
   };
 
   const formatPrice = (price: number) => {
@@ -354,10 +354,6 @@ const styles = StyleSheet.create({
     borderBottomLeftRadius: 30,
     borderBottomRightRadius: 30,
     elevation: 10,
-    shadowColor: COLORS.primary,
-    shadowOffset: { width: 0, height: 5 },
-    shadowOpacity: 0.3,
-    shadowRadius: 10,
     alignItems: 'flex-start',
   },
   headerTitle: {

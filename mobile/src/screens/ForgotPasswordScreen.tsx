@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import {
   View,
   Text,
@@ -10,79 +10,81 @@ import {
   KeyboardAvoidingView,
   Platform,
 } from 'react-native';
-import * as SecureStore from 'expo-secure-store';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../../App';
-import { useDispatch, useSelector } from 'react-redux';
-import { RootState, AppDispatch } from '@/store';
-import { login } from '@/store/slices/authSlice';
 import { Button } from '@/components';
 import { COLORS, SPACING, VALIDATION, API_CONFIG } from '@/constants';
+import { authService } from '@/services';
 
-export const LoginScreen: React.FC = () => {
-  const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList, 'Login'>>();
-  const dispatch = useDispatch<AppDispatch>();
+export const ForgotPasswordScreen: React.FC = () => {
+  const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList, 'ForgotPassword'>>();
   
-  const { loading, error } = useSelector((state: RootState) => state.auth);
-  
-  const [email, setEmail] = useState('bin@gmail.com');
-  const [password, setPassword] = useState('123');
-
-  // Debug API configuration on component mount
-  useEffect(() => {
-    console.log('=== LOGIN SCREEN DEBUG INFO ===');
-    console.log('API Base URL:', API_CONFIG.BASE_URL);
-    console.log('Platform OS:', Platform.OS);
-    console.log('============================');
-  }, []);
+  const [identifier, setIdentifier] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [newPasswordConfirm, setNewPasswordConfirm] = useState('');
+  const [loading, setLoading] = useState(false);
 
   const validateForm = () => {
-    if (!email.trim()) {
-      Alert.alert('Lỗi', 'Vui lòng nhập email');
+    if (!identifier.trim()) {
+      Alert.alert('Lỗi', 'Vui lòng nhập email, tên đăng nhập hoặc số điện thoại');
       return false;
     }
     
-    if (!VALIDATION.EMAIL_REGEX.test(email)) {
-      Alert.alert('Lỗi', 'Email không hợp lệ');
+    if (!newPassword.trim()) {
+      Alert.alert('Lỗi', 'Vui lòng nhập mật khẩu mới');
       return false;
     }
     
-    if (!password.trim()) {
-      Alert.alert('Lỗi', 'Vui lòng nhập mật khẩu');
-      return false;
-    }
-    
-    if (password.length < VALIDATION.PASSWORD_MIN_LENGTH) {
+    if (newPassword.length < VALIDATION.PASSWORD_MIN_LENGTH) {
       Alert.alert('Lỗi', `Mật khẩu phải có ít nhất ${VALIDATION.PASSWORD_MIN_LENGTH} ký tự`);
+      return false;
+    }
+
+    if (newPassword !== newPasswordConfirm) {
+      Alert.alert('Lỗi', 'Mật khẩu xác nhận không khớp');
       return false;
     }
     
     return true;
   };
 
-  const handleLogin = async () => {
+  const handleResetPassword = async () => {
     if (!validateForm()) return;
     
+    setLoading(true);
     try {
-      console.log('Attempting login with:', { email, password });
+      console.log('Attempting password reset for:', identifier);
       console.log('API URL being used:', API_CONFIG.BASE_URL);
       
-  await dispatch(login({ email: email.trim(), password })).unwrap();
-  console.log('Login successful, auth state changed');
+      const response = await authService.resetPassword({
+        identifier: identifier.trim(),
+        new_password: newPassword,
+        new_password_confirm: newPasswordConfirm
+      });
+      
+      console.log('Password reset successful');
+      Alert.alert(
+        'Thành công', 
+        'Đặt lại mật khẩu thành công!',
+        [
+          {
+            text: 'OK',
+            onPress: () => navigation.navigate('Login')
+          }
+        ]
+      );
     } catch (err: any) {
-      console.error('Login error caught in handleLogin:', err);
+      console.error('Password reset error:', err);
       const message = typeof err === 'string' ? err : (err.message ?? JSON.stringify(err));
-      Alert.alert('Lỗi đăng nhập', `${message}\n\nAPI URL: ${API_CONFIG.BASE_URL}`);
+      Alert.alert('Lỗi', `${message}\n\nAPI URL: ${API_CONFIG.BASE_URL}`);
+    } finally {
+      setLoading(false);
     }
   };
 
-  const handleRegister = () => {
-    navigation.navigate('Register');
-  };
-
-  const handleForgotPassword = () => {
-    navigation.navigate('ForgotPassword');
+  const handleBackToLogin = () => {
+    navigation.navigate('Login');
   };
 
   return (
@@ -94,55 +96,61 @@ export const LoginScreen: React.FC = () => {
       
       <View style={styles.header}>
         <Text style={styles.logo}>🍔 FastFood</Text>
-        <Text style={styles.subtitle}>Đăng nhập để đặt món</Text>
+        <Text style={styles.subtitle}>Đặt lại mật khẩu</Text>
         {/* Debug info */}
         <Text style={styles.debugText}>{API_CONFIG.BASE_URL}</Text>
       </View>
 
       <View style={styles.form}>
         <View style={styles.inputContainer}>
-          <Text style={styles.label}>Email</Text>
+          <Text style={styles.label}>Email / Tên đăng nhập / Số điện thoại</Text>
           <TextInput
             style={styles.input}
-            value={email}
-            onChangeText={setEmail}
-            placeholder="Nhập email của bạn"
+            value={identifier}
+            onChangeText={setIdentifier}
+            placeholder="Nhập email, tên đăng nhập hoặc số điện thoại"
             placeholderTextColor={COLORS.textSecondary}
-            keyboardType="email-address"
             autoCapitalize="none"
             autoCorrect={false}
           />
         </View>
 
         <View style={styles.inputContainer}>
-          <Text style={styles.label}>Mật khẩu</Text>
+          <Text style={styles.label}>Mật khẩu mới</Text>
           <TextInput
             style={styles.input}
-            value={password}
-            onChangeText={setPassword}
-            placeholder="Nhập mật khẩu"
+            value={newPassword}
+            onChangeText={setNewPassword}
+            placeholder="Nhập mật khẩu mới"
             placeholderTextColor={COLORS.textSecondary}
             secureTextEntry
           />
         </View>
 
-        <TouchableOpacity onPress={handleForgotPassword}>
-          <Text style={styles.forgotPassword}>Quên mật khẩu?</Text>
-        </TouchableOpacity>
+        <View style={styles.inputContainer}>
+          <Text style={styles.label}>Xác nhận mật khẩu mới</Text>
+          <TextInput
+            style={styles.input}
+            value={newPasswordConfirm}
+            onChangeText={setNewPasswordConfirm}
+            placeholder="Nhập lại mật khẩu mới"
+            placeholderTextColor={COLORS.textSecondary}
+            secureTextEntry
+          />
+        </View>
 
         <Button
-          title="Đăng nhập"
-          onPress={handleLogin}
+          title="Đặt lại mật khẩu"
+          onPress={handleResetPassword}
           loading={loading}
           disabled={loading}
           fullWidth
-          style={styles.loginButton}
+          style={styles.resetButton}
         />
 
-        <View style={styles.registerContainer}>
-          <Text style={styles.registerText}>Chưa có tài khoản? </Text>
-          <TouchableOpacity onPress={handleRegister}>
-            <Text style={styles.registerLink}>Đăng ký ngay</Text>
+        <View style={styles.backContainer}>
+          <TouchableOpacity onPress={handleBackToLogin}>
+            <Text style={styles.backLink}>← Quay lại đăng nhập</Text>
           </TouchableOpacity>
         </View>
       </View>
@@ -214,29 +222,16 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.white,
   },
   
-  forgotPassword: {
-    color: COLORS.primary,
-    fontSize: 14,
-    textAlign: 'right',
-    marginBottom: SPACING.md,
-  },
-  
-  loginButton: {
+  resetButton: {
     marginBottom: SPACING.lg,
+    marginTop: SPACING.md,
   },
   
-  registerContainer: {
-    flexDirection: 'row',
-    justifyContent: 'center',
+  backContainer: {
     alignItems: 'center',
   },
   
-  registerText: {
-    fontSize: 14,
-    color: COLORS.textSecondary,
-  },
-  
-  registerLink: {
+  backLink: {
     fontSize: 14,
     color: COLORS.primary,
     fontWeight: '600',

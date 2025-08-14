@@ -167,6 +167,7 @@ export const ENDPOINTS = {
   REGISTER: '/auth/register/',
   REFRESH: '/auth/refresh/',
   PROFILE: '/auth/profile/',
+  PROFILE_UPDATE: '/auth/profile/update/',
   RESET_PASSWORD: '/auth/reset-password/',
   
   // Menu
