@@ -139,6 +139,20 @@ class StoreManagerPanel {
 
     async loadDashboard() {
         try {
+            // Load store manager info
+            const infoResponse = await fetch(`${this.baseURL}/menu/store/info/`, {
+                headers: { 'Authorization': `Bearer ${this.token}` }
+            });
+            
+            if (infoResponse.ok) {
+                const info = await infoResponse.json();
+                // Update header with store name
+                const logo = document.querySelector('.logo h2');
+                if (info.assigned_store) {
+                    logo.textContent = `🏪 ${info.assigned_store.name}`;
+                }
+            }
+
             // Load statistics
             const [foodsRes, ordersRes] = await Promise.all([
                 fetch(`${this.baseURL}/menu/store/foods/?page=1`, {

@@ -189,14 +189,20 @@ def is_store_manager(user):
     return user.is_authenticated and user.role and user.role.id == 3
 
 def get_user_store(user):
-    """Get the store associated with a store manager user.
-    For now, this assumes store managers manage the first store.
-    In a real implementation, this would be based on a User-Store relationship."""
+    """Get the store associated with a store manager user."""
     if not is_store_manager(user):
         return None
-    # For now, return the first store. This should be replaced with proper user-store association
-    from apps.stores.models import Store
-    return Store.objects.first()
+    
+    try:
+        from apps.stores.models import StoreManager
+        store_manager = StoreManager.objects.select_related('store').get(user=user)
+        return store_manager.store
+    except StoreManager.DoesNotExist:
+        # Fallback: return first store if no explicit assignment exists
+        from apps.stores.models import Store
+        return Store.objects.first()
+    except Exception:
+        return None
 
 
 @api_view(['GET', 'POST'])
@@ -407,3 +413,31 @@ def store_food_detail(request, food_id):
     elif request.method == 'DELETE':
         food.delete()
         return Response({'message': 'Food deleted successfully'}, status=status.HTTP_204_NO_CONTENT)
+
+
+# Store manager info endpoint for debugging
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def store_manager_info(request):
+    """Get store manager information and assigned store"""
+    if not is_store_manager(request.user):
+        return Response({'error': 'Store manager access required'}, status=status.HTTP_403_FORBIDDEN)
+    
+    user_store = get_user_store(request.user)
+    
+    return Response({
+        'user': {
+            'id': request.user.id,
+            'username': request.user.username,
+            'fullname': request.user.fullname,
+            'role': {
+                'id': request.user.role.id if request.user.role else None,
+                'name': request.user.role.role_name if request.user.role else None
+            }
+        },
+        'assigned_store': {
+            'id': user_store.id if user_store else None,
+            'name': user_store.store_name if user_store else None,
+            'description': user_store.description if user_store else None
+        } if user_store else None
+    })

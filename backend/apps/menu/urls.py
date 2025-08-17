@@ -15,4 +15,5 @@ urlpatterns = [
     # Store manager endpoints
     path('store/foods/', views.store_foods_list, name='store_foods_list'),
     path('store/foods/<int:food_id>/', views.store_food_detail, name='store_food_detail'),
+    path('store/info/', views.store_manager_info, name='store_manager_info'),
 ]

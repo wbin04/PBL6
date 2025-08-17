@@ -1,0 +1,250 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Demo - Quản lý cửa hàng - Fast Food</title>
+    <link rel="stylesheet" href="../assets/css/style.css">
+    <link rel="stylesheet" href="store-manager.css">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+</head>
+<body>
+    <!-- Header -->
+    <header class="header">
+        <div class="container">
+            <div class="nav-wrapper">
+                <div class="logo">
+                    <h2>🏪 FastFood Chi nhánh 1</h2>
+                </div>
+                <nav class="nav-menu">
+                    <ul class="nav-list">
+                        <li><a href="#" class="nav-link active" data-section="dashboard">Tổng quan</a></li>
+                        <li><a href="#" class="nav-link" data-section="foods">Quản lý món ăn</a></li>
+                        <li><a href="#" class="nav-link" data-section="orders">Quản lý đơn hàng</a></li>
+                    </ul>
+                </nav>
+                <div class="user-menu">
+                    <span id="user-name">Quản lý Chi nhánh 1</span>
+                    <button class="btn btn-secondary" onclick="logout()">Đăng xuất</button>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <main class="main-content">
+        <div class="container">
+            <!-- Dashboard Section -->
+            <section id="dashboard-section" class="store-section active">
+                <div class="section-header">
+                    <h2>Tổng quan cửa hàng</h2>
+                </div>
+                <div class="stats-grid">
+                    <div class="stat-card">
+                        <div class="stat-icon">
+                            <i class="fas fa-utensils"></i>
+                        </div>
+                        <div class="stat-info">
+                            <h3 id="total-foods">12</h3>
+                            <p>Tổng món ăn</p>
+                        </div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-icon">
+                            <i class="fas fa-shopping-cart"></i>
+                        </div>
+                        <div class="stat-info">
+                            <h3 id="total-orders">45</h3>
+                            <p>Tổng đơn hàng</p>
+                        </div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-icon">
+                            <i class="fas fa-clock"></i>
+                        </div>
+                        <div class="stat-info">
+                            <h3 id="pending-orders">8</h3>
+                            <p>Đơn hàng chờ xử lý</p>
+                        </div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-icon">
+                            <i class="fas fa-check-circle"></i>
+                        </div>
+                        <div class="stat-info">
+                            <h3 id="completed-orders">37</h3>
+                            <p>Đơn hàng hoàn thành</p>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Foods Section -->
+            <section id="foods-section" class="store-section">
+                <div class="section-header">
+                    <h2>Quản lý món ăn</h2>
+                    <div class="section-actions">
+                        <div class="search-box">
+                            <input type="text" id="food-search" placeholder="Tìm kiếm món ăn...">
+                            <select id="food-category-filter">
+                                <option value="">Tất cả danh mục</option>
+                                <option value="1">Burger</option>
+                                <option value="2">Pizza</option>
+                                <option value="3">Đồ uống</option>
+                            </select>
+                            <button type="button" id="search-foods-btn">
+                                <i class="fas fa-search"></i>
+                            </button>
+                        </div>
+                        <button type="button" class="btn btn-primary" id="add-food-btn">
+                            <i class="fas fa-plus"></i> Thêm món ăn
+                        </button>
+                    </div>
+                </div>
+                <div class="table-container">
+                    <table class="store-table">
+                        <thead>
+                            <tr>
+                                <th>ID</th>
+                                <th>Hình ảnh</th>
+                                <th>Tên món</th>
+                                <th>Mô tả</th>
+                                <th>Giá</th>
+                                <th>Danh mục</th>
+                                <th>Trạng thái</th>
+                                <th>Thao tác</th>
+                            </tr>
+                        </thead>
+                        <tbody id="foods-table-body">
+                            <tr>
+                                <td>1</td>
+                                <td><img src="https://via.placeholder.com/50" alt="Burger Bò"></td>
+                                <td>Burger Bò</td>
+                                <td>Burger bò nướng thơm ngon</td>
+                                <td>55,000đ</td>
+                                <td>Burger</td>
+                                <td><span class="status-badge status-available">Còn hàng</span></td>
+                                <td>
+                                    <button class="btn btn-warning btn-sm">
+                                        <i class="fas fa-edit"></i> Sửa
+                                    </button>
+                                    <button class="btn btn-danger btn-sm">
+                                        <i class="fas fa-trash"></i> Xóa
+                                    </button>
+                                </td>
+                            </tr>
+                            <tr>
+                                <td>2</td>
+                                <td><img src="https://via.placeholder.com/50" alt="Pizza Margherita"></td>
+                                <td>Pizza Margherita</td>
+                                <td>Pizza truyền thống với cà chua và phô mai</td>
+                                <td>89,000đ</td>
+                                <td>Pizza</td>
+                                <td><span class="status-badge status-available">Còn hàng</span></td>
+                                <td>
+                                    <button class="btn btn-warning btn-sm">
+                                        <i class="fas fa-edit"></i> Sửa
+                                    </button>
+                                    <button class="btn btn-danger btn-sm">
+                                        <i class="fas fa-trash"></i> Xóa
+                                    </button>
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+
+            <!-- Orders Section -->
+            <section id="orders-section" class="store-section">
+                <div class="section-header">
+                    <h2>Quản lý đơn hàng</h2>
+                    <div class="section-actions">
+                        <div class="search-box">
+                            <input type="text" id="order-search" placeholder="Tìm kiếm đơn hàng...">
+                            <select id="order-status-filter">
+                                <option value="">Tất cả trạng thái</option>
+                                <option value="Chờ xác nhận">Chờ xác nhận</option>
+                                <option value="Đã xác nhận">Đã xác nhận</option>
+                                <option value="Đang chuẩn bị">Đang chuẩn bị</option>
+                                <option value="Đang giao">Đang giao</option>
+                                <option value="Đã giao">Đã giao</option>
+                                <option value="Đã hủy">Đã hủy</option>
+                            </select>
+                            <button type="button" id="search-orders-btn">
+                                <i class="fas fa-search"></i>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+                <div class="table-container">
+                    <table class="store-table">
+                        <thead>
+                            <tr>
+                                <th>ID</th>
+                                <th>Khách hàng</th>
+                                <th>Ngày đặt</th>
+                                <th>Tổng tiền</th>
+                                <th>Trạng thái</th>
+                                <th>Thao tác</th>
+                            </tr>
+                        </thead>
+                        <tbody id="orders-table-body">
+                            <tr>
+                                <td>#101</td>
+                                <td>Nguyễn Văn A</td>
+                                <td>17/01/2025</td>
+                                <td>144,000đ</td>
+                                <td><span class="status-badge status-pending">Chờ xác nhận</span></td>
+                                <td>
+                                    <button class="btn btn-info btn-sm">
+                                        <i class="fas fa-eye"></i> Xem
+                                    </button>
+                                    <button class="btn btn-success btn-sm">
+                                        <i class="fas fa-check"></i> Xác nhận
+                                    </button>
+                                </td>
+                            </tr>
+                            <tr>
+                                <td>#102</td>
+                                <td>Trần Thị B</td>
+                                <td>17/01/2025</td>
+                                <td>89,000đ</td>
+                                <td><span class="status-badge status-preparing">Đang chuẩn bị</span></td>
+                                <td>
+                                    <button class="btn btn-info btn-sm">
+                                        <i class="fas fa-eye"></i> Xem
+                                    </button>
+                                    <button class="btn btn-success btn-sm">
+                                        <i class="fas fa-truck"></i> Giao hàng
+                                    </button>
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+        </div>
+    </main>
+
+    <script>
+        // Simple demo navigation
+        document.querySelectorAll('.nav-link').forEach(link => {
+            link.addEventListener('click', (e) => {
+                e.preventDefault();
+                const section = e.target.getAttribute('data-section');
+                
+                // Update navigation
+                document.querySelectorAll('.nav-link').forEach(l => l.classList.remove('active'));
+                e.target.classList.add('active');
+                
+                // Show section
+                document.querySelectorAll('.store-section').forEach(sec => sec.classList.remove('active'));
+                document.getElementById(`${section}-section`).classList.add('active');
+            });
+        });
+        
+        // Prevent actual actions in demo
+        function logout() { alert('Demo: Đăng xuất'); }
+    </script>
+</body>
+</html>

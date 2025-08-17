@@ -11,3 +11,17 @@ class Store(models.Model):
     
     def __str__(self):
         return self.store_name
+
+
+class StoreManager(models.Model):
+    """Maps store managers (users with role_id=3) to stores"""
+    user = models.ForeignKey('authentication.User', on_delete=models.CASCADE, db_column='user_id')
+    store = models.ForeignKey(Store, on_delete=models.CASCADE, db_column='store_id')
+    created_date = models.DateTimeField(auto_now_add=True)
+    
+    class Meta:
+        db_table = 'store_managers'
+        unique_together = ('user', 'store')
+    
+    def __str__(self):
+        return f"{self.user.username} manages {self.store.store_name}"
