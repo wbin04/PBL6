@@ -63,6 +63,8 @@
                 alert('Đăng nhập thành công!');
                 if (response.user.role === 'Quản lý') {
                     window.location.href = '../admin/admin.html';
+                } else if (response.user.role === 'Cửa hàng' || response.user.role_id === 3) {
+                    window.location.href = '../store-manager/store-manager.html';
                 } else {
                     window.location.href = '../index.html';
                 }

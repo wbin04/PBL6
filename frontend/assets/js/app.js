@@ -26,8 +26,13 @@ async function updateAuthUI() {
             if (userMenu) userMenu.classList.remove('hidden');
             if (userNameElement) userNameElement.textContent = user.username;
             
-            // Show admin link if user has admin role
+            // Show admin link if user has admin role, store manager link if user has store role
             if (adminLink && user.role === 'Admin') {
+                adminLink.classList.remove('hidden');
+            } else if (adminLink && (user.role === 'Cửa hàng' || user.role_id === 3)) {
+                // Update admin link to store manager link for store users
+                adminLink.href = 'store-manager/store-manager.html';
+                adminLink.textContent = 'Quản lý cửa hàng';
                 adminLink.classList.remove('hidden');
             } else if (adminLink) {
                 adminLink.classList.add('hidden');

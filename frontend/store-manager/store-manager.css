@@ -1,0 +1,130 @@
+/* Store Manager specific styles */
+.store-name {
+    font-size: 0.9rem;
+    color: #666;
+    margin: 0;
+    font-weight: normal;
+}
+
+.logo h2 {
+    margin-bottom: 5px;
+}
+
+/* Status badges for store manager */
+.status-available {
+    background-color: #28a745;
+    color: white;
+}
+
+.status-unavailable {
+    background-color: #dc3545;
+    color: white;
+}
+
+.status-pending {
+    background-color: #ffc107;
+    color: #212529;
+}
+
+.status-paid {
+    background-color: #17a2b8;
+    color: white;
+}
+
+.status-preparing {
+    background-color: #fd7e14;
+    color: white;
+}
+
+.status-ready {
+    background-color: #6f42c1;
+    color: white;
+}
+
+.status-completed {
+    background-color: #28a745;
+    color: white;
+}
+
+.status-cancelled {
+    background-color: #dc3545;
+    color: white;
+}
+
+/* Recent orders section */
+.recent-section {
+    margin-top: 2rem;
+}
+
+.recent-section h3 {
+    margin-bottom: 1rem;
+    color: #333;
+}
+
+/* Order detail styling */
+.order-info {
+    margin-bottom: 2rem;
+    padding: 1rem;
+    background-color: #f8f9fa;
+    border-radius: 5px;
+}
+
+.order-info h4 {
+    margin-bottom: 1rem;
+    color: #333;
+}
+
+.order-items {
+    margin-top: 1rem;
+}
+
+.order-items h4 {
+    margin-bottom: 1rem;
+    color: #333;
+}
+
+.order-total {
+    text-align: right;
+    margin-top: 1rem;
+    padding: 1rem;
+    background-color: #f8f9fa;
+    border-radius: 5px;
+    font-size: 1.2rem;
+}
+
+/* Store manager dashboard customizations */
+.dashboard-stats .stat-card {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    border-radius: 10px;
+    padding: 20px;
+    text-align: center;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+}
+
+.dashboard-stats .stat-card:nth-child(2) {
+    background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+}
+
+.dashboard-stats .stat-card:nth-child(3) {
+    background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+}
+
+.dashboard-stats .stat-card:nth-child(4) {
+    background: linear-gradient(135deg, #43e97b 0%, #38f9d7 100%);
+}
+
+.dashboard-stats .stat-card i {
+    font-size: 2rem;
+    margin-bottom: 10px;
+}
+
+.dashboard-stats .stat-card h3 {
+    font-size: 2rem;
+    margin: 10px 0 5px 0;
+}
+
+.dashboard-stats .stat-card p {
+    margin: 0;
+    opacity: 0.9;
+}
