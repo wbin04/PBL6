@@ -20,6 +20,7 @@ class Food(models.Model):
     price = models.DecimalField(max_digits=10, decimal_places=0)
     image = models.TextField(blank=True)
     category = models.ForeignKey(Category, on_delete=models.CASCADE, related_name='foods', db_column='cate_id')
+    store = models.ForeignKey('stores.Store', on_delete=models.CASCADE, related_name='foods', db_column='store_id', null=True, blank=True)
     availability = models.CharField(max_length=30, default='Còn hàng')
     # created_date = models.DateTimeField(default=timezone.now)  # Temporarily commented out
     

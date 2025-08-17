@@ -37,9 +37,27 @@
         <div class="container">
             <h2 style="margin: 2rem 0;">Danh mục thực đơn</h2>
             
+            <!-- Store filter -->
+            <div class="card" style="margin-bottom: 2rem;">
+                <div style="display: flex; gap: 1rem; align-items: center;">
+                    <label for="store-filter">Lọc theo cửa hàng:</label>
+                    <select id="store-filter" onchange="filterByStore()" style="padding: 0.5rem;">
+                        <option value="">Tất cả cửa hàng</option>
+                    </select>
+                </div>
+            </div>
+            
             <div id="categories-container">
                 <div id="categories-grid" class="grid categories-grid">
                     <!-- Categories will be loaded here -->
+                </div>
+            </div>
+            
+            <!-- Stores Section -->
+            <h2 style="margin: 3rem 0 2rem 0;">Cửa hàng</h2>
+            <div id="stores-container">
+                <div id="stores-grid" class="grid categories-grid">
+                    <!-- Stores will be loaded here -->
                 </div>
             </div>
         </div>
@@ -92,9 +110,78 @@
                 `;
             }
         }
+
+        async function loadStores() {
+            try {
+                showLoading('stores-container');
+                
+                const stores_response = await API.get('/menu/stores/');
+                const stores = stores_response.results;
+                hideLoading('stores-container');
+                
+                // Load stores for filter
+                const select = document.getElementById('store-filter');
+                stores.forEach(store => {
+                    const option = document.createElement('option');
+                    option.value = store.id;
+                    option.textContent = store.store_name;
+                    select.appendChild(option);
+                });
+                
+                const container = document.getElementById('stores-grid');
+                if (!container) {
+                    console.error('stores-grid element not found');
+                    return;
+                }
+                
+                if (!stores || stores.length === 0) {
+                    container.innerHTML = `
+                        <div class="empty-state">
+                            <h3>Chưa có cửa hàng nào</h3>
+                            <p>Vui lòng thêm cửa hàng trong Admin panel</p>
+                        </div>
+                    `;
+                    return;
+                }
+                
+                container.innerHTML = stores.map(store => `
+                    <div class="category-card" onclick="viewStore(${store.id})">
+                        <img src="${getImageUrl(store.image)}" alt="${store.store_name}">
+                        <h3>${store.store_name}</h3>
+                        <p class="text-muted">${store.description}</p>
+                    </div>
+                `).join('');
+                
+            } catch (error) {
+                console.error('Error loading stores:', error);
+                document.getElementById('stores-container').innerHTML = `
+                    <div class="empty-state">
+                        <h3>Không thể tải cửa hàng</h3>
+                        <p>Vui lòng thử lại sau</p>
+                    </div>
+                `;
+            }
+        }
         
         function viewCategory(categoryId) {
-            window.location.href = `items.html?category=${categoryId}`;
+            const storeFilter = document.getElementById('store-filter').value;
+            let url = `items.html?category=${categoryId}`;
+            if (storeFilter) {
+                url += `&store=${storeFilter}`;
+            }
+            window.location.href = url;
+        }
+
+        function viewStore(storeId) {
+            window.location.href = `items.html?store=${storeId}`;
+        }
+
+        function filterByStore() {
+            // If a store is selected, redirect to items page with store filter
+            const storeId = document.getElementById('store-filter').value;
+            if (storeId) {
+                window.location.href = `items.html?store=${storeId}`;
+            }
         }
         
         function showLoading(elementId) {
@@ -145,6 +232,7 @@
         document.addEventListener('DOMContentLoaded', () => {
             updateAuthUI();
             loadCategories();
+            loadStores();
             updateCartCount();
         });
     </script>

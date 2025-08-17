@@ -8,6 +8,8 @@ from django.db.models import Q, Avg, Count, Value
 from django.db.models.functions import Coalesce
 from .models import Category, Food
 from .serializers import CategorySerializer, FoodSerializer, FoodListSerializer
+from apps.stores.models import Store
+from apps.stores.serializers import StoreSerializer
 
 
 @api_view(['GET'])
@@ -27,13 +29,28 @@ def category_list(request):
 
 @api_view(['GET'])
 @permission_classes([AllowAny])
+def store_list(request):
+    """Get all stores"""
+    stores = Store.objects.all()
+    serializer = StoreSerializer(stores, many=True)
+    # Return in paginated response format for frontend compatibility
+    return Response({
+        'count': stores.count(),
+        'next': None,
+        'previous': None,
+        'results': serializer.data,
+    })
+
+
+@api_view(['GET'])
+@permission_classes([AllowAny])
 def food_list(request):
     """Get foods with filters and pagination"""
     try:
         # Include all foods regardless of availability; frontend will handle disabled state
         # Prefetch ratings to compute average_rating and rating_count
         # Fetch foods without prefetching ratings to avoid missing column errors
-        foods = Food.objects.select_related('category')\
+        foods = Food.objects.select_related('category', 'store')\
             .annotate(
                 avg_rating=Coalesce(Avg('ratings__rating'), Value(0.0)),
                 rating_count_annotated=Count('ratings')
@@ -44,6 +61,11 @@ def food_list(request):
         category_id = request.GET.get('category')
         if category_id:
             foods = foods.filter(category_id=category_id)
+
+        # Filter by store
+        store_id = request.GET.get('store')
+        if store_id:
+            foods = foods.filter(store_id=store_id)
 
         # Search by title or description
         search = request.GET.get('search')
@@ -106,7 +128,7 @@ def food_detail(request, pk):
     """Get food detail"""
     try:
         # Fetch food with related category and compute ratings
-        food = Food.objects.select_related('category')\
+        food = Food.objects.select_related('category', 'store')\
             .annotate(
                 avg_rating=Coalesce(Avg('ratings__rating'), Value(0.0)),
                 rating_count_annotated=Count('ratings')

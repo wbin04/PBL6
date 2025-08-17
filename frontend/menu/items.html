@@ -48,6 +48,9 @@
                     <select id="category-filter" onchange="filterByCategory()">
                         <option value="">Tất cả danh mục</option>
                     </select>
+                    <select id="store-filter" onchange="filterByStore()">
+                        <option value="">Tất cả cửa hàng</option>
+                    </select>
                     <select id="sort-filter" onchange="sortFoods()">
                         <option value="created_date">Mới nhất</option>
                         <option value="price_asc">Giá tăng dần</option>
@@ -85,6 +88,7 @@
     <script>
         let currentPage = 1;
         let currentCategory = '';
+        let currentStore = '';
         let currentSearch = '';
         let currentSort = 'created_date';
 
@@ -124,12 +128,43 @@
             }
         }
 
+        async function loadStores() {
+            try {
+                const stores_response = await API.get('/menu/stores/');
+                const stores = stores_response.results;
+                const select = document.getElementById('store-filter');
+                
+                // Clear existing options (except "Tất cả cửa hàng")
+                while (select.children.length > 1) {
+                    select.removeChild(select.lastChild);
+                }
+                
+                stores.forEach(store => {
+                    const option = document.createElement('option');
+                    option.value = store.id;
+                    option.textContent = store.store_name;
+                    select.appendChild(option);
+                });
+                
+                // Check URL params for store and set it
+                const urlParams = new URLSearchParams(window.location.search);
+                const storeId = urlParams.get('store');
+                if (storeId) {
+                    select.value = storeId;
+                    currentStore = storeId;
+                }
+            } catch (error) {
+                console.error('Error loading stores:', error);
+            }
+        }
+
         async function loadFoods(page = 1) {
             try {
                 showLoading('foods-container');
                 
                 const params = new URLSearchParams();
                 if (currentCategory) params.append('category', currentCategory);
+                if (currentStore) params.append('store', currentStore);
                 if (currentSearch) params.append('search', currentSearch);
                 if (currentSort) params.append('sort', currentSort);
                 params.append('page', page.toString());
@@ -182,6 +217,7 @@
                         <div class="food-info">
                             <h3>${food.title}</h3>
                             <p class="description">${food.description}</p>
+                            ${food.store_name ? `<p class="store-name">🏪 ${food.store_name}</p>` : ''}
                             <div class="food-rating clickable" onclick="toggleRatings(${food.id})">
                                 <span class="stars">${'★'.repeat(Math.floor(food.average_rating || 0))}${'☆'.repeat(5 - Math.floor(food.average_rating || 0))}</span>
                                 <span>(${food.rating_count} đánh giá)</span>
@@ -219,6 +255,21 @@
                 params.set('category', currentCategory);
             } else {
                 params.delete('category');
+            }
+            params.set('page', currentPage);
+            window.history.replaceState(null, '', `${window.location.pathname}?${params.toString()}`);
+            loadFoods(currentPage);
+        }
+
+        function filterByStore() {
+            currentStore = document.getElementById('store-filter').value;
+            currentPage = 1;
+            // Update URL with selected store and reset page
+            const params = new URLSearchParams(window.location.search);
+            if (currentStore) {
+                params.set('store', currentStore);
+            } else {
+                params.delete('store');
             }
             params.set('page', currentPage);
             window.history.replaceState(null, '', `${window.location.pathname}?${params.toString()}`);
@@ -298,7 +349,8 @@
         document.addEventListener('DOMContentLoaded', async () => {
             updateAuthUI();
             await loadCategories(); // Wait for categories to load first
-            loadFoods(); // Then load foods with correct category filter
+            await loadStores(); // Wait for stores to load
+            loadFoods(); // Then load foods with correct filters
             updateCartCount();
         });
     </script>

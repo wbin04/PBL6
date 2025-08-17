@@ -1,5 +1,6 @@
 from rest_framework import serializers
 from .models import Category, Food
+from apps.stores.serializers import StoreSerializer
 
 
 class CategorySerializer(serializers.ModelSerializer):
@@ -16,6 +17,8 @@ class CategorySerializer(serializers.ModelSerializer):
 class FoodSerializer(serializers.ModelSerializer):
     category = CategorySerializer(read_only=True)
     category_id = serializers.IntegerField(write_only=True)
+    store = StoreSerializer(read_only=True)
+    store_id = serializers.IntegerField(write_only=True, required=False, allow_null=True)
     average_rating = serializers.FloatField(source='avg_rating', read_only=True)
     rating_count = serializers.IntegerField(source='rating_count_annotated', read_only=True)
     
@@ -23,7 +26,7 @@ class FoodSerializer(serializers.ModelSerializer):
         model = Food
         fields = [
             'id', 'title', 'description', 'price', 'image', 
-            'category', 'category_id', 'availability', 
+            'category', 'category_id', 'store', 'store_id', 'availability', 
             'average_rating', 'rating_count'
         ]
         read_only_fields = ['id']
@@ -32,6 +35,7 @@ class FoodSerializer(serializers.ModelSerializer):
 class FoodListSerializer(serializers.ModelSerializer):
     """Lighter serializer for food list views"""
     category_name = serializers.CharField(source='category.cate_name', read_only=True)
+    store_name = serializers.CharField(source='store.store_name', read_only=True)
     average_rating = serializers.FloatField(source='avg_rating', read_only=True)
     rating_count = serializers.IntegerField(source='rating_count_annotated', read_only=True)
     
@@ -39,5 +43,5 @@ class FoodListSerializer(serializers.ModelSerializer):
         model = Food
         fields = [
             'id', 'title', 'description', 'price', 'image', 
-            'category_name', 'availability', 'average_rating', 'rating_count'
+            'category_name', 'store_name', 'availability', 'average_rating', 'rating_count'
         ]
