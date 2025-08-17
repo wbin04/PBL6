@@ -6,6 +6,8 @@ from rest_framework import status
 from django.core.paginator import Paginator
 from django.db.models import Q, Avg, Count, Value
 from django.db.models.functions import Coalesce
+from django.core.files.storage import default_storage
+from django.utils import timezone
 from .models import Category, Food
 from .serializers import CategorySerializer, FoodSerializer, FoodListSerializer
 from apps.stores.models import Store
@@ -182,6 +184,20 @@ def category_foods(request, category_id):
 def is_admin(user):
     return user.is_authenticated and user.role and user.role.id == 2
 
+# Store manager utility functions
+def is_store_manager(user):
+    return user.is_authenticated and user.role and user.role.id == 3
+
+def get_user_store(user):
+    """Get the store associated with a store manager user.
+    For now, this assumes store managers manage the first store.
+    In a real implementation, this would be based on a User-Store relationship."""
+    if not is_store_manager(user):
+        return None
+    # For now, return the first store. This should be replaced with proper user-store association
+    from apps.stores.models import Store
+    return Store.objects.first()
+
 
 @api_view(['GET', 'POST'])
 @parser_classes([MultiPartParser, FormParser, JSONParser])
@@ -264,6 +280,119 @@ def admin_food_detail(request, food_id):
             filename = f"assets/{file.name}"
             # Delete existing to avoid collision
             if default_storage.exists(filename):
+                default_storage.delete(filename)
+            path = default_storage.save(filename, file)
+            data['image'] = path
+        # Remove file key to prevent validation errors
+        data.pop('image_file', None)
+        serializer = FoodSerializer(food, data=data, partial=True)
+        if serializer.is_valid():
+            serializer.save()
+            return Response(serializer.data)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+    
+    elif request.method == 'DELETE':
+        food.delete()
+        return Response({'message': 'Food deleted successfully'}, status=status.HTTP_204_NO_CONTENT)
+
+
+# Store manager views for food management
+@api_view(['GET', 'POST'])
+@parser_classes([MultiPartParser, FormParser, JSONParser])
+@permission_classes([IsAuthenticated])
+def store_foods_list(request):
+    """Store manager food management - list and create foods for their store"""
+    if not is_store_manager(request.user):
+        return Response({'error': 'Store manager access required'}, status=status.HTTP_403_FORBIDDEN)
+    
+    user_store = get_user_store(request.user)
+    if not user_store:
+        return Response({'error': 'No store associated with this user'}, status=status.HTTP_403_FORBIDDEN)
+    
+    if request.method == 'GET':
+        # Only show foods from the store manager's store
+        foods = Food.objects.select_related('category').filter(store=user_store).order_by('-id')
+        
+        # Search filter
+        search = request.GET.get('search')
+        if search:
+            foods = foods.filter(
+                Q(title__icontains=search) | Q(description__icontains=search)
+            )
+        
+        # Category filter
+        category_id = request.GET.get('category')
+        if category_id:
+            foods = foods.filter(category_id=category_id)
+        
+        # Pagination
+        page = request.GET.get('page', 1)
+        paginator = Paginator(foods, 10)
+        page_obj = paginator.get_page(page)
+        
+        serializer = FoodSerializer(page_obj, many=True)
+        return Response({
+            'foods': serializer.data,
+            'total_pages': paginator.num_pages,
+            'current_page': int(page),
+            'total_foods': paginator.count
+        })
+    
+    elif request.method == 'POST':
+        # Create new food for the store manager's store
+        data = request.data.copy()
+        # Automatically assign the food to the store manager's store
+        data['store'] = user_store.id
+        
+        # Handle image upload
+        if 'image_file' in request.FILES:
+            file = request.FILES['image_file']
+            filename = f"food_{timezone.now().strftime('%Y%m%d_%H%M%S')}_{file.name}"
+            path = default_storage.save(filename, file)
+            data['image'] = path
+        # Remove file key to prevent validation errors
+        data.pop('image_file', None)
+        
+        serializer = FoodSerializer(data=data)
+        if serializer.is_valid():
+            serializer.save()
+            return Response(serializer.data, status=status.HTTP_201_CREATED)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+@api_view(['GET', 'PUT', 'DELETE'])
+@parser_classes([MultiPartParser, FormParser, JSONParser])
+@permission_classes([IsAuthenticated])
+def store_food_detail(request, food_id):
+    """Store manager food management - get, update or delete a specific food from their store"""
+    if not is_store_manager(request.user):
+        return Response({'error': 'Store manager access required'}, status=status.HTTP_403_FORBIDDEN)
+    
+    user_store = get_user_store(request.user)
+    if not user_store:
+        return Response({'error': 'No store associated with this user'}, status=status.HTTP_403_FORBIDDEN)
+    
+    try:
+        # Only allow access to foods from the store manager's store
+        food = Food.objects.select_related('category').get(id=food_id, store=user_store)
+    except Food.DoesNotExist:
+        return Response({'error': 'Food not found in your store'}, status=status.HTTP_404_NOT_FOUND)
+    
+    if request.method == 'GET':
+        serializer = FoodSerializer(food)
+        return Response(serializer.data)
+    
+    elif request.method == 'PUT':
+        data = request.data.copy()
+        # Ensure the food remains in the store manager's store
+        data['store'] = user_store.id
+        
+        # Handle image upload
+        if 'image_file' in request.FILES:
+            file = request.FILES['image_file']
+            filename = f"food_{timezone.now().strftime('%Y%m%d_%H%M%S')}_{file.name}"
+            # Delete old image if exists
+            if food.image and default_storage.exists(filename):
                 default_storage.delete(filename)
             path = default_storage.save(filename, file)
             data['image'] = path

@@ -150,6 +150,20 @@ def update_order_status(request, pk):
 def is_admin(user):
     return user.is_authenticated and user.role and user.role.id == 2
 
+# Store manager utility functions
+def is_store_manager(user):
+    return user.is_authenticated and user.role and user.role.id == 3
+
+def get_user_store(user):
+    """Get the store associated with a store manager user.
+    For now, this assumes store managers manage the first store.
+    In a real implementation, this would be based on a User-Store relationship."""
+    if not is_store_manager(user):
+        return None
+    # For now, return the first store. This should be replaced with proper user-store association
+    from apps.stores.models import Store
+    return Store.objects.first()
+
 
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
@@ -207,6 +221,99 @@ def admin_order_detail(request, order_id):
     
     elif request.method == 'PUT':
         # Admin can update order status
+        new_status = request.data.get('order_status')
+        valid_statuses = [
+            'Chờ xác nhận', 'Đã xác nhận', 'Đang chuẩn bị', 
+            'Đang giao', 'Đã giao', 'Đã hủy'
+        ]
+        
+        if new_status not in valid_statuses:
+            return Response({'error': 'Invalid status'}, status=status.HTTP_400_BAD_REQUEST)
+        
+        order.order_status = new_status
+        order.save()
+        
+        serializer = OrderSerializer(order)
+        return Response(serializer.data)
+
+
+# Store manager views for order management
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def store_orders_list(request):
+    """Store manager order management - list orders containing items from their store"""
+    if not is_store_manager(request.user):
+        return Response({'error': 'Store manager access required'}, status=status.HTTP_403_FORBIDDEN)
+    
+    user_store = get_user_store(request.user)
+    if not user_store:
+        return Response({'error': 'No store associated with this user'}, status=status.HTTP_403_FORBIDDEN)
+    
+    # Get orders that contain items from the store manager's store
+    # This requires a join through OrderDetail to Food to Store
+    orders = Order.objects.select_related('user').filter(
+        orderdetail__food__store=user_store
+    ).distinct().order_by('-id')
+    
+    # Filter by status
+    status_filter = request.GET.get('status')
+    if status_filter:
+        orders = orders.filter(order_status=status_filter)
+    
+    # Search by customer info, order ID, or receiver name
+    search = request.GET.get('search')
+    if search:
+        orders = orders.filter(
+            Q(user__fullname__icontains=search) |
+            Q(user__phone_number__icontains=search) |
+            Q(user__email__icontains=search) |
+            Q(id__icontains=search) |
+            Q(receiver_name__icontains=search)
+        )
+    
+    # Pagination
+    page = request.GET.get('page', 1)
+    paginator = Paginator(orders, 10)
+    page_obj = paginator.get_page(page)
+    
+    serializer = OrderSerializer(page_obj, many=True)
+    return Response({
+        'orders': serializer.data,
+        'total_pages': paginator.num_pages,
+        'current_page': int(page),
+        'total_orders': paginator.count
+    })
+
+
+@api_view(['GET', 'PUT'])
+@permission_classes([IsAuthenticated])
+def store_order_detail(request, order_id):
+    """Store manager order management - get or update orders containing items from their store"""
+    if not is_store_manager(request.user):
+        return Response({'error': 'Store manager access required'}, status=status.HTTP_403_FORBIDDEN)
+    
+    user_store = get_user_store(request.user)
+    if not user_store:
+        return Response({'error': 'No store associated with this user'}, status=status.HTTP_403_FORBIDDEN)
+    
+    try:
+        # Only allow access to orders containing items from the store manager's store
+        order = Order.objects.select_related('user').filter(
+            id=order_id,
+            orderdetail__food__store=user_store
+        ).distinct().first()
+        
+        if not order:
+            return Response({'error': 'Order not found or not associated with your store'}, status=status.HTTP_404_NOT_FOUND)
+    except Order.DoesNotExist:
+        return Response({'error': 'Order not found'}, status=status.HTTP_404_NOT_FOUND)
+    
+    if request.method == 'GET':
+        serializer = OrderSerializer(order)
+        return Response(serializer.data)
+    
+    elif request.method == 'PUT':
+        # Store manager can update order status
         new_status = request.data.get('order_status')
         valid_statuses = [
             'Chờ xác nhận', 'Đã xác nhận', 'Đang chuẩn bị', 

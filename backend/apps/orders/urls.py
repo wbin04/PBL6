@@ -9,4 +9,8 @@ urlpatterns = [
     # Admin endpoints
     path('admin/', views.admin_orders_list, name='admin_orders_list'),
     path('admin/<int:order_id>/', views.admin_order_detail, name='admin_order_detail'),
+    
+    # Store manager endpoints
+    path('store/', views.store_orders_list, name='store_orders_list'),
+    path('store/<int:order_id>/', views.store_order_detail, name='store_order_detail'),
 ]

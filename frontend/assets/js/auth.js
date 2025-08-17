@@ -13,6 +13,11 @@ function getUserRole() {
     return user?.role?.role_name || null;
 }
 
+function getUserRoleId() {
+    const user = getCurrentUser();
+    return user?.role?.id || null;
+}
+
 function logout() {
     localStorage.removeItem('access_token');
     localStorage.removeItem('refresh_token');

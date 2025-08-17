@@ -59,11 +59,17 @@
                 localStorage.setItem('access_token', response.access);
                 localStorage.setItem('refresh_token', response.refresh);
                 localStorage.setItem('user', JSON.stringify(response.user));
+                
                 // Redirect based on role
                 alert('Đăng nhập thành công!');
-                if (response.user.role === 'Quản lý') {
+                if (response.user.role.id === 2) {
+                    // Admin role
                     window.location.href = '../admin/admin.html';
+                } else if (response.user.role.id === 3) {
+                    // Store manager role
+                    window.location.href = '../store/store-manager.html';
                 } else {
+                    // Regular customer
                     window.location.href = '../index.html';
                 }
             } catch (error) {
