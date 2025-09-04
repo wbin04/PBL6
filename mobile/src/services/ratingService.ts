@@ -60,3 +60,4 @@ class RatingService {
 }
 
 export const ratingService = new RatingService();
+

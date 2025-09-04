@@ -147,3 +147,4 @@ const styles = StyleSheet.create({
   },
   logoutButtonText: { color: COLORS.error, fontSize: 16, fontWeight: '600' },
 });
+
