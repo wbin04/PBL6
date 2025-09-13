@@ -178,6 +178,14 @@ export type RootStackParamList = {
   OrderDetail: { orderId: number };
   EditOrder: { orderId: number };
   RatingOrder: { orderId: number };
+  Review: { orderId: number };
+  CancelDetail: { 
+    orderId: string;
+    shopName: string;
+    productName: string;
+    productPrice: string;
+    productImage: any;
+  };
   Profile: undefined;
   EditProfile: undefined;
 };

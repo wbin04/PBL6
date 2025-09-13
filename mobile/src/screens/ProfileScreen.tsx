@@ -1,150 +1,233 @@
-import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, TextInput, TouchableOpacity, Alert, StatusBar, ScrollView, ActivityIndicator } from 'react-native';
-import { useDispatch, useSelector } from 'react-redux';
+import React, { useState } from 'react';
+import {
+  View,
+  Text,
+  StyleSheet,
+  ScrollView,
+  TouchableOpacity,
+  TextInput,
+  Image,
+  StatusBar,
+} from 'react-native';
+import { ChevronLeft, Camera } from 'lucide-react-native';
 import { useNavigation } from '@react-navigation/native';
-import { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import { CompositeNavigationProp } from '@react-navigation/native';
-import { BottomTabNavigationProp } from '@react-navigation/bottom-tabs';
-import { RootStackParamList, MainTabParamList } from '@/types';
-import { RootState, AppDispatch } from '@/store';
-import { logout, updateProfile } from '@/store/slices/authSlice';
-import { COLORS, SPACING, BORDER_RADIUS, SHADOWS } from '@/constants';
+import { Fonts } from '@/constants/Fonts';
 
-// Navigation prop type combining Tab and Stack
-type ProfileScreenNavigationProp = CompositeNavigationProp<
-  BottomTabNavigationProp<MainTabParamList, 'Profile'>,
-  NativeStackNavigationProp<RootStackParamList>
->;
+type Nav = any;
 
 export const ProfileScreen: React.FC = () => {
-  const dispatch = useDispatch<AppDispatch>();
-  const user = useSelector((state: RootState) => state.auth.user);
-  const globalLoading = useSelector((state: RootState) => state.auth.loading);
-  const [localLoading, setLocalLoading] = useState(false);
+  const navigation = useNavigation<Nav>();
+  
+  const [profileData, setProfileData] = useState({
+    fullName: 'John Smith',
+    dateOfBirth: '09 / 10 / 1991',
+    email: 'johnsmith@example.com',
+    phoneNumber: '+123 567 89000',
+  });
 
-  const [fullname, setFullname] = useState(user?.fullname || '');
-  const [email, setEmail] = useState(user?.email || '');
-  const [phone, setPhone] = useState(user?.phone_number || '');
-  const [address, setAddress] = useState(user?.address || '');
-
-  const handleSave = async () => {
-    setLocalLoading(true);
-    try {
-      await dispatch(updateProfile({ fullname, phone_number: phone, address })).unwrap();
-      Alert.alert('Thành công', 'Cập nhật thông tin thành công');
-    } catch (err: any) {
-        const msg = typeof err === 'string'
-          ? err
-          : err.message || JSON.stringify(err);
-        Alert.alert('Lỗi', msg);
-    } finally {
-      setLocalLoading(false);
-    }
+  const handleUpdateProfile = () => {
+    // Handle profile update logic here
+    console.log('Updating profile...', profileData);
+    // You can add API call or navigation back here
   };
 
-  const handleLogout = () => {
-    dispatch(logout());
+  const handleInputChange = (field: string, value: string) => {
+    setProfileData(prev => ({
+      ...prev,
+      [field]: value,
+    }));
   };
 
   return (
     <View style={styles.container}>
-      {(localLoading || globalLoading) && (
-        <View style={styles.loadingOverlay}>
-          <ActivityIndicator size="large" color={COLORS.white} />
-        </View>
-      )}
-      <StatusBar backgroundColor={COLORS.primary} barStyle="light-content" />
+      <StatusBar backgroundColor="#f5cb58" barStyle="light-content" />
+      
+      {/* Header */}
       <View style={styles.header}>
-        <Text style={styles.headerTitle}>Đây là hồ sơ của bạn.</Text>
-        <Text style={styles.headerSubtitle}>Bạn muốn cập nhật thông tin chứ?</Text>
+        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
+          <ChevronLeft size={24} color="#fff" />
+        </TouchableOpacity>
+        <Text style={styles.headerTitle}>My profile</Text>
+        <View style={styles.placeholder} />
       </View>
-      <ScrollView contentContainerStyle={styles.content}>
-        <View style={styles.formGroup}>
-          <Text style={styles.label}>Họ tên</Text>
-          <TextInput style={styles.input} value={fullname} onChangeText={setFullname} />
+
+      <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
+        {/* Avatar Section */}
+        <View style={styles.avatarSection}>
+          <View style={styles.avatarContainer}>
+            <Image
+              source={require('@/assets/images/gourmet-burger.png')}
+              style={styles.avatar}
+            />
+            <TouchableOpacity style={styles.cameraButton}>
+              <Camera size={16} color="#fff" />
+            </TouchableOpacity>
+          </View>
         </View>
-        <View style={styles.formGroup}>
-          <Text style={styles.label}>Email</Text>
-          <TextInput style={styles.input} value={email} editable={false} />
+
+        {/* Form Fields */}
+        <View style={styles.formContainer}>
+          {/* Full Name */}
+          <View style={styles.fieldContainer}>
+            <Text style={styles.fieldLabel}>Full Name</Text>
+            <TextInput
+              style={styles.textInput}
+              value={profileData.fullName}
+              onChangeText={(value) => handleInputChange('fullName', value)}
+              placeholder="Enter your full name"
+              placeholderTextColor="#999"
+            />
+          </View>
+
+          {/* Date of Birth */}
+          <View style={styles.fieldContainer}>
+            <Text style={styles.fieldLabel}>Date of Birth</Text>
+            <TextInput
+              style={styles.textInput}
+              value={profileData.dateOfBirth}
+              onChangeText={(value) => handleInputChange('dateOfBirth', value)}
+              placeholder="DD / MM / YYYY"
+              placeholderTextColor="#999"
+            />
+          </View>
+
+          {/* Email */}
+          <View style={styles.fieldContainer}>
+            <Text style={styles.fieldLabel}>Email</Text>
+            <TextInput
+              style={styles.textInput}
+              value={profileData.email}
+              onChangeText={(value) => handleInputChange('email', value)}
+              placeholder="Enter your email"
+              placeholderTextColor="#999"
+              keyboardType="email-address"
+              autoCapitalize="none"
+            />
+          </View>
+
+          {/* Phone Number */}
+          <View style={styles.fieldContainer}>
+            <Text style={styles.fieldLabel}>Phone Number</Text>
+            <TextInput
+              style={styles.textInput}
+              value={profileData.phoneNumber}
+              onChangeText={(value) => handleInputChange('phoneNumber', value)}
+              placeholder="Enter your phone number"
+              placeholderTextColor="#999"
+              keyboardType="phone-pad"
+            />
+          </View>
         </View>
-        <View style={styles.formGroup}>
-          <Text style={styles.label}>Số điện thoại</Text>
-          <TextInput style={styles.input} value={phone} onChangeText={setPhone} keyboardType="phone-pad" />
+
+        {/* Update Button */}
+        <View style={styles.buttonContainer}>
+          <TouchableOpacity style={styles.updateButton} onPress={handleUpdateProfile}>
+            <Text style={styles.updateButtonText}>Update Profile</Text>
+          </TouchableOpacity>
         </View>
-        <View style={styles.formGroup}>
-          <Text style={styles.label}>Địa chỉ</Text>
-          <TextInput style={styles.input} value={address} onChangeText={setAddress} />
-        </View>
-        <TouchableOpacity
-          style={[styles.saveButton, (localLoading || globalLoading) && styles.disabledButton]}
-          onPress={handleSave}
-          disabled={localLoading || globalLoading}
-        >
-          <Text style={styles.saveButtonText}>
-            {localLoading || globalLoading ? 'Đang lưu...' : 'Lưu thay đổi'}
-          </Text>
-        </TouchableOpacity>
-        <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
-          <Text style={styles.logoutButtonText}>Đăng xuất</Text>
-        </TouchableOpacity>
       </ScrollView>
     </View>
   );
 };
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: COLORS.background },
+  container: {
+    flex: 1,
+    backgroundColor: '#f5f5f5',
+  },
   header: {
-    backgroundColor: COLORS.primary,
-    paddingTop: 60,
-    paddingBottom: SPACING.lg,
-    paddingHorizontal: SPACING.lg,
-    borderBottomLeftRadius: 30,
-    borderBottomRightRadius: 30,
-    ...SHADOWS.md,
-  },
-  headerTitle: { fontSize: 20, fontWeight: 'bold', color: COLORS.white },
-  headerSubtitle: { fontSize: 14, color: COLORS.white, marginTop: SPACING.xs },
-  content: { padding: SPACING.lg },
-  formGroup: { marginBottom: SPACING.md },
-  label: { fontSize: 14, color: COLORS.textSecondary, marginBottom: SPACING.xs },
-  input: {
-    borderWidth: 1,
-    borderColor: COLORS.border,
-    borderRadius: BORDER_RADIUS.md,
-    padding: SPACING.md,
-    backgroundColor: COLORS.white,
-  },
-  saveButton: {
-    backgroundColor: COLORS.primary,
-    padding: SPACING.md,
-    borderRadius: BORDER_RADIUS.md,
+    backgroundColor: '#f5cb58',
+    flexDirection: 'row',
     alignItems: 'center',
-    marginTop: SPACING.lg,
+    justifyContent: 'space-between',
+    paddingHorizontal: 20,
+    paddingTop: 50,
+    paddingBottom: 20,
   },
-  disabledButton: {
-    backgroundColor: COLORS.gray300,
+  backButton: {
+    padding: 4,
   },
-  loadingOverlay: {
+  headerTitle: {
+    color: '#fff',
+    fontSize: 20,
+    fontFamily: Fonts.LeagueSpartanBold,
+  },
+  placeholder: {
+    width: 32,
+  },
+  content: {
+    flex: 1,
+    backgroundColor: '#fff',
+    borderTopLeftRadius: 30,
+    borderTopRightRadius: 30,
+    marginTop: -20,
+  },
+  avatarSection: {
+    alignItems: 'center',
+    paddingTop: 40,
+    paddingBottom: 30,
+  },
+  avatarContainer: {
+    position: 'relative',
+  },
+  avatar: {
+    width: 100,
+    height: 100,
+    borderRadius: 50,
+    borderWidth: 4,
+    borderColor: '#fff',
+  },
+  cameraButton: {
     position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
     bottom: 0,
-    backgroundColor: 'rgba(0,0,0,0.5)',
+    right: 0,
+    backgroundColor: '#e95322',
+    borderRadius: 20,
+    width: 40,
+    height: 40,
+    alignItems: 'center',
     justifyContent: 'center',
-    alignItems: 'center',
-    zIndex: 10,
+    borderWidth: 3,
+    borderColor: '#fff',
   },
-  saveButtonText: { color: COLORS.white, fontSize: 16, fontWeight: '600' },
-  logoutButton: {
-    borderWidth: 1,
-    borderColor: COLORS.error,
-    padding: SPACING.md,
-    borderRadius: BORDER_RADIUS.md,
-    alignItems: 'center',
-    marginTop: SPACING.sm,
+  formContainer: {
+    paddingHorizontal: 24,
   },
-  logoutButtonText: { color: COLORS.error, fontSize: 16, fontWeight: '600' },
+  fieldContainer: {
+    marginBottom: 24,
+  },
+  fieldLabel: {
+    fontSize: 16,
+    fontFamily: Fonts.LeagueSpartanSemiBold,
+    color: '#333',
+    marginBottom: 8,
+  },
+  textInput: {
+    backgroundColor: '#f5cb58',
+    borderRadius: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    fontSize: 16,
+    fontFamily: Fonts.LeagueSpartanRegular,
+    color: '#333',
+    opacity: 0.8,
+  },
+  buttonContainer: {
+    paddingHorizontal: 24,
+    paddingTop: 20,
+    paddingBottom: 40,
+  },
+  updateButton: {
+    backgroundColor: '#e95322',
+    borderRadius: 12,
+    paddingVertical: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  updateButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontFamily: Fonts.LeagueSpartanBold,
+  },
 });
 

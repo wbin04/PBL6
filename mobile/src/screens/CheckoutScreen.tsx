@@ -1,4 +1,5 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
   View,
   Text,
@@ -17,7 +18,7 @@ import { useDispatch, useSelector } from 'react-redux';
 import { RootState, AppDispatch } from '@/store';
 import { fetchCart } from '@/store/slices/cartSlice';
 import { createOrder } from '@/store/slices/ordersSlice';
-import { RootStackParamList, CreateOrderRequest, CartItem } from '@/types';
+import { RootStackParamList, CreateOrderRequest, CartItem, Food } from '@/types';
 import { COLORS, SPACING, BORDER_RADIUS, SHADOWS } from '@/constants';
 import { CheckoutFoodItem } from '@/components';
 
@@ -34,16 +35,26 @@ interface DeliveryInfo {
 const CheckoutScreen: React.FC = () => {
   const navigation = useNavigation<CheckoutScreenNavigationProp>();
   const route = useRoute<CheckoutScreenRouteProp>();
-  const { selectedIds } = route.params;
+  
+  console.log('CheckoutScreen - ALL route params:', route.params);
+
+  const params = (route.params || {}) as any;
+  const { selectedIds = [], cartItems: reorderCartItems, isReorder, shopName: reorderShopName } = params;
+
+  console.log('CheckoutScreen - selectedIds:', selectedIds);
+  console.log('CheckoutScreen - reorderCartItems:', reorderCartItems);
+  console.log('CheckoutScreen - isReorder:', isReorder);
+  console.log('CheckoutScreen - reorderShopName:', reorderShopName);
+  
   const dispatch = useDispatch<AppDispatch>();
   const { user } = useSelector((state: RootState) => state.auth);
   const { cart, loading: cartLoading } = useSelector((state: RootState) => state.cart);
   const { loading: orderLoading } = useSelector((state: RootState) => state.orders);
 
   const [deliveryInfo, setDeliveryInfo] = useState<DeliveryInfo>({
-    receiverName: user?.fullname || '',
-    phoneNumber: user?.phone_number || '',
-    address: user?.address || '',
+    receiverName: 'Lý Hoàng Quyên',
+    phoneNumber: '(+84) 867 517 503',
+    address: '142/18 Au Co, Phường Hòa Khánh Bắc, Quận Liên Chiều, Đà Nẵng',
     note: '',
   });
 
@@ -59,18 +70,54 @@ const CheckoutScreen: React.FC = () => {
   }, [dispatch]);
 
   const cartItems = cart?.items || [];
-  const selectedCartItems: CartItem[] = cartItems.filter(item => selectedIds.includes(item.id));
-  const subtotal = selectedCartItems.reduce((sum, item) => sum + item.subtotal, 0);
-  const total = subtotal + (selectedCartItems.length > 0 ? SHIPPING_FEE : 0) - discount;
+  
+  // Memoize selectedCartItems để tối ưu performance  
+  const selectedCartItems = useMemo((): CartItem[] => {
+    if (isReorder && reorderCartItems) {
+      return reorderCartItems.map((item: any) => ({
+        id: parseInt(item.id),
+        food: {
+          id: parseInt(item.id),
+          title: item.name,
+          description: '',
+          price: item.price.toString(),
+          image: item.image,
+          availability: 'available'
+        },
+        quantity: item.quantity,
+        subtotal: item.price * item.quantity
+      }));
+    }
+    
+    // Kiểm tra selectedIds tồn tại và là array
+    if (!selectedIds || !Array.isArray(selectedIds)) {
+      return [];
+    }
+    
+    return cartItems.filter(item => selectedIds.includes(item.id));
+  }, [isReorder, reorderCartItems, cartItems, selectedIds]);
+    
+  console.log('CheckoutScreen - selectedCartItems:', selectedCartItems);
+  
+  // Memoize calculations để tối ưu performance
+  const subtotal = useMemo(() => 
+    selectedCartItems.reduce((sum, item) => sum + item.subtotal, 0),
+    [selectedCartItems]
+  );
+  
+  const total = useMemo(() => 
+    subtotal + (selectedCartItems.length > 0 ? SHIPPING_FEE : 0) - discount,
+    [subtotal, selectedCartItems.length, discount]
+  );
 
-  const handleInputChange = (field: keyof DeliveryInfo, value: string) => {
+  const handleInputChange = useCallback((field: keyof DeliveryInfo, value: string) => {
     setDeliveryInfo(prev => ({
       ...prev,
       [field]: value,
     }));
-  };
+  }, []);
 
-  const handleApplyPromo = async () => {
+  const handleApplyPromo = useCallback(async () => {
     if (!promoCode.trim()) {
       Alert.alert('Thông báo', 'Vui lòng nhập mã khuyến mãi');
       return;
@@ -93,77 +140,63 @@ const CheckoutScreen: React.FC = () => {
     } finally {
       setApplyingPromo(false);
     }
-  };
+  }, [promoCode, subtotal]);
 
-  const validateForm = (): boolean => {
-    if (!deliveryInfo.receiverName.trim()) {
-      Alert.alert('Lỗi', 'Vui lòng nhập tên người nhận');
-      return false;
-    }
-
-    if (!deliveryInfo.phoneNumber.trim()) {
-      Alert.alert('Lỗi', 'Vui lòng nhập số điện thoại');
-      return false;
-    }
-
-    if (!/^[0-9]{10,11}$/.test(deliveryInfo.phoneNumber)) {
-      Alert.alert('Lỗi', 'Số điện thoại không hợp lệ');
-      return false;
-    }
-
-    if (!deliveryInfo.address.trim()) {
-      Alert.alert('Lỗi', 'Vui lòng nhập địa chỉ giao hàng');
-      return false;
-    }
-
-    if (cartItems.length === 0) {
-      Alert.alert('Lỗi', 'Giỏ hàng trống');
-      return false;
-    }
-
+  const validateForm = useCallback((): boolean => {
+    // Bỏ hết validation - luôn return true
     return true;
-  };
+  }, [deliveryInfo, cartItems.length]);
 
-  const handlePlaceOrder = async () => {
-    if (!validateForm()) return;
+  const handlePlaceOrder = useCallback(async () => {
+    // Bỏ validation - đặt hàng luôn
 
-    const orderData: CreateOrderRequest = {
-      payment_method: paymentMethod,
-      receiver_name: deliveryInfo.receiverName,
-      phone_number: deliveryInfo.phoneNumber,
-      ship_address: deliveryInfo.address,
-      note: deliveryInfo.note || undefined,
-      promo: promoCode || undefined,
+    // Tạo đơn hàng mock đơn giản
+    const newOrder = {
+      id: Date.now().toString(),
+      items: selectedCartItems.map(item => ({
+        id: item.id.toString(),
+        name: item.food.title,
+        price: parseFloat(item.food.price),
+        quantity: item.quantity,
+        image: item.food.image
+      })),
+      totalAmount: total,
+      status: 'pending',
+      orderDate: new Date().toISOString(),
+      deliveryInfo: {
+        receiverName: deliveryInfo.receiverName || 'Khách hàng',
+        phoneNumber: deliveryInfo.phoneNumber || '0123456789',
+        address: deliveryInfo.address || 'Địa chỉ giao hàng',
+        note: deliveryInfo.note || ''
+      },
+      paymentMethod,
+      promoCode
     };
 
     try {
-      const result = await dispatch(createOrder(orderData)).unwrap();
+      // Lưu đơn hàng vào AsyncStorage
+      const existingOrdersJson = await AsyncStorage.getItem('pendingOrders');
+      const existingOrders = existingOrdersJson ? JSON.parse(existingOrdersJson) : [];
+      existingOrders.unshift(newOrder);
+      await AsyncStorage.setItem('pendingOrders', JSON.stringify(existingOrders));
       
-      Alert.alert(
-        'Thành công',
-        'Đơn hàng của bạn đã được đặt thành công!',
-        [
+      console.log('Đặt hàng thành công:', newOrder);
+      
+      // Chuyển thẳng về trang Orders
+      navigation.reset({
+        index: 0,
+        routes: [
           {
-            text: 'OK',
-            onPress: () => {
-              navigation.reset({
-                index: 0,
-                routes: [
-                  {
-                    name: 'MainTabs',
-                    params: { screen: 'Orders' },
-                  },
-                ],
-              });
-            },
+            name: 'MainTabs',
+            params: { screen: 'Orders' },
           },
-        ]
-      );
+        ],
+      });
+      
     } catch (error: any) {
-      console.error('Error placing order:', error);
-      Alert.alert('Lỗi', error.message || 'Không thể đặt hàng. Vui lòng thử lại.');
+      console.error('Lỗi lưu đơn hàng:', error);
     }
-  };
+  }, [validateForm, paymentMethod, deliveryInfo, promoCode, selectedCartItems, total, navigation]);
 
   const formatPrice = (price: number) => {
     return new Intl.NumberFormat('vi-VN', {
@@ -209,52 +242,35 @@ const CheckoutScreen: React.FC = () => {
       <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
         {/* Delivery Information */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Thông tin giao hàng</Text>
+          <Text style={styles.sectionTitle}>Giao hàng đến</Text>
           
-          <View style={styles.inputGroup}>
-            <Text style={styles.inputLabel}>Tên người nhận</Text>
-            <TextInput
-              style={styles.textInput}
-              value={deliveryInfo.receiverName}
-              onChangeText={(value) => handleInputChange('receiverName', value)}
-              placeholder="Nhập tên người nhận"
-              placeholderTextColor={COLORS.gray400}
-            />
+          <View style={styles.deliveryCard}>
+            <View style={styles.deliveryIcon}>
+              <Ionicons name="location" size={16} color={COLORS.white} />
+            </View>
+            
+            <View style={styles.deliveryDetails}>
+              <Text style={styles.deliveryName}>
+                {deliveryInfo.receiverName} - {deliveryInfo.phoneNumber}
+              </Text>
+              <Text style={styles.deliveryAddress}>{deliveryInfo.address}</Text>
+            </View>
+            
+            <TouchableOpacity 
+              style={styles.updateButton}
+              onPress={() => (navigation as any).navigate('AddressSelection')}
+            >
+              <Text style={styles.updateButtonText}>Cập nhật</Text>
+            </TouchableOpacity>
           </View>
 
           <View style={styles.inputGroup}>
-            <Text style={styles.inputLabel}>Số điện thoại</Text>
-            <TextInput
-              style={styles.textInput}
-              value={deliveryInfo.phoneNumber}
-              onChangeText={(value) => handleInputChange('phoneNumber', value)}
-              placeholder="Nhập số điện thoại"
-              placeholderTextColor={COLORS.gray400}
-              keyboardType="phone-pad"
-              maxLength={11}
-            />
-          </View>
-
-          <View style={styles.inputGroup}>
-            <Text style={styles.inputLabel}>Địa chỉ giao hàng</Text>
-            <TextInput
-              style={[styles.textInput, styles.textArea]}
-              value={deliveryInfo.address}
-              onChangeText={(value) => handleInputChange('address', value)}
-              placeholder="Nhập địa chỉ giao hàng"
-              placeholderTextColor={COLORS.gray400}
-              multiline
-              numberOfLines={3}
-            />
-          </View>
-
-          <View style={styles.inputGroup}>
-            <Text style={styles.inputLabel}>Ghi chú (tùy chọn)</Text>
+            <Text style={styles.inputLabel}>Ghi chú cho shipper (ví dụ: gọi trước khi đến)</Text>
             <TextInput
               style={[styles.textInput, styles.textArea]}
               value={deliveryInfo.note}
               onChangeText={(value) => handleInputChange('note', value)}
-              placeholder="Nhập ghi chú cho đơn hàng"
+              placeholder="Nhập ghi chú (không bắt buộc)"
               placeholderTextColor={COLORS.gray400}
               multiline
               numberOfLines={2}
@@ -568,6 +584,52 @@ const styles = StyleSheet.create({
     color: COLORS.white,
     fontSize: 18,
     fontWeight: 'bold',
+  },
+  deliveryCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: COLORS.white,
+    padding: SPACING.md,
+    borderRadius: BORDER_RADIUS.lg,
+    marginBottom: SPACING.md,
+    ...SHADOWS.sm,
+  },
+  deliveryIcon: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: COLORS.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: SPACING.md,
+  },
+  deliveryDetails: {
+    flex: 1,
+  },
+  deliveryName: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: COLORS.text,
+    marginBottom: 4,
+  },
+  deliveryAddress: {
+    fontSize: 14,
+    color: COLORS.gray600,
+    lineHeight: 20,
+  },
+  updateButton: {
+    paddingHorizontal: SPACING.md,
+    paddingVertical: SPACING.xs,
+    backgroundColor: COLORS.white,
+    borderWidth: 1,
+    borderColor: COLORS.primary,
+    borderRadius: BORDER_RADIUS.md,
+    marginLeft: SPACING.lg, // Thêm margin để xa địa chỉ hơn
+  },
+  updateButtonText: {
+    color: COLORS.primary,
+    fontSize: 14,
+    fontWeight: '600',
   },
 });
 

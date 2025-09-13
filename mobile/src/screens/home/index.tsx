@@ -21,6 +21,7 @@ import {
 // import BottomBar from "@/components/BottomBar";
 import FoodCustomizationPopup from "@/components/FoodCustomizationPopup";
 import { FoodTile } from "@/components/FoodTile";
+import ProfileDrawer from "@/components/ProfileDrawer";
 import { RestaurantCard } from "@/components/RestaurantCard";
 import { Fonts } from "@/constants/Fonts";
 import { useDatabase } from "@/hooks/useDatabase";
@@ -43,6 +44,7 @@ export default function HomeScreen() {
   const [popupOpen, setPopupOpen] = useState(false);
   const [selectedFood, setSelectedFood] = useState<any>(null);
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
+  const [profileDrawerOpen, setProfileDrawerOpen] = useState(false);
 
   const categories = getCategories();
   const allRestaurants = getRestaurants();
@@ -110,7 +112,12 @@ export default function HomeScreen() {
             </TouchableOpacity>
 
             <View style={styles.headerIcon}><Bell size={24} color="#e95322" /></View>
-            <View style={styles.headerIcon}><User size={24} color="#e95322" /></View>
+            <TouchableOpacity 
+              onPress={() => setProfileDrawerOpen(true)}
+              style={styles.headerIcon}
+            >
+              <User size={24} color="#e95322" />
+            </TouchableOpacity>
           </View>
 
           <View>
@@ -281,6 +288,19 @@ export default function HomeScreen() {
 
 
       <FoodCustomizationPopup isOpen={popupOpen} onClose={() => setPopupOpen(false)} foodItem={selectedFood || {}} />
+      
+      <ProfileDrawer 
+        isVisible={profileDrawerOpen}
+        onClose={() => setProfileDrawerOpen(false)}
+        onNavigate={(screen) => {
+          if (screen === 'ManageOrders') {
+            navigation.navigate('ManageOrders');
+          } else if (screen === 'Profile') {
+            navigation.navigate('Profile');
+          }
+          // Add more navigation cases as needed
+        }}
+      />
     </View>
   );
 }

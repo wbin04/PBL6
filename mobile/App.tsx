@@ -199,16 +199,29 @@ import HomeScreen from "@/screens/home";
 import RestaurantsScreen from "@/screens/restaurants";
 import FavoritesScreen from "@/screens/favorites";
 import CartScreen from "@/screens/cart";
-import CheckoutScreen from "@/screens/checkout";
+import CheckoutScreen from "@/screens/CheckoutScreen";
 import RestaurantDetail from "@/screens/restaurants/[id]";
 import FoodDetailScreen from "@/screens/foods/[id]";
 import FoodReviewsScreen from "@/screens/foods/[id]/reviews";
 import CardPaymentScreen from "@/screens/payment/card";
 import BankPaymentScreen from "@/screens/payment/bank";
 import AddressListScreen from "@/screens/address";
-import AddAddressScreen from "@/screens/address/add";
+import AddAddressScreen from "@/screens/address/AddAddressScreen";
 import LoginScreen from "@/screens/welcome/login";
 import RegisterScreen from "@/screens/welcome/signup";
+import ManageOrdersScreen from "@/screens/ManageOrdersScreen";
+import CancelScreen from "@/screens/CancelScreen";
+import TrackingScreen from "@/screens/TrackingScreen";
+import MapTrackingScreen from "@/screens/MapTrackingScreen";
+import AddressSelectionScreen from "@/screens/address/AddressSelectionScreen";
+import ReviewScreen from "@/screens/ReviewScreen";
+import CancelDetailScreen from "@/screens/CancelDetailScreen";
+import AddressPickerScreen from "@/screens/address/AddressPickerScreen";
+import { ProfileScreen } from "@/screens/ProfileScreen";
+
+// Redux
+import { Provider } from "react-redux";
+import { store } from "@/store";
 
 SplashScreen.preventAutoHideAsync().catch(() => {});
 
@@ -266,7 +279,7 @@ function MainTabs() {
       />
       <Tab.Screen
         name="Orders"
-        component={FavoritesScreen}
+        component={ManageOrdersScreen}
         options={{
           tabBarIcon: ({ color, size }) => <FileText color={color} size={24} />,
         }}
@@ -292,28 +305,38 @@ export default function App() {
   if (!loaded) return null;
 
   return (
-    <GestureHandlerRootView style={{ flex: 1 }}>
-      <SafeAreaProvider>
-        <NavigationContainer>
-          <StatusBar style="auto" />
-          <Stack.Navigator screenOptions={{ headerShown: false }} initialRouteName="Login">
-            <Stack.Screen name="Login" component={LoginScreen} />
-            <Stack.Screen name="Register" component={RegisterScreen} />
+    <Provider store={store}>
+      <GestureHandlerRootView style={{ flex: 1 }}>
+        <SafeAreaProvider>
+          <NavigationContainer>
+            <StatusBar style="auto" />
+            <Stack.Navigator screenOptions={{ headerShown: false }} initialRouteName="MainTabs">
+              <Stack.Screen name="Login" component={LoginScreen} />
+              <Stack.Screen name="Register" component={RegisterScreen} />
 
-            <Stack.Screen name="MainTabs" component={MainTabs} />
+              <Stack.Screen name="MainTabs" component={MainTabs} />
 
-            <Stack.Screen name="Checkout" component={CheckoutScreen} />
-            <Stack.Screen name="Cart" component={CartScreen} />
-            <Stack.Screen name="RestaurantDetail" component={RestaurantDetail} />
-            <Stack.Screen name="FoodDetail" component={FoodDetailScreen} />
-            <Stack.Screen name="FoodReviews" component={FoodReviewsScreen} />
-            <Stack.Screen name="CardPayment" component={CardPaymentScreen} />
-            <Stack.Screen name="BankPayment" component={BankPaymentScreen} />
-            <Stack.Screen name="AddressList" component={AddressListScreen} />
-            <Stack.Screen name="AddAddress" component={AddAddressScreen} />
-          </Stack.Navigator>
-        </NavigationContainer>
-      </SafeAreaProvider>
-    </GestureHandlerRootView>
+              <Stack.Screen name="Checkout" component={CheckoutScreen} />
+              <Stack.Screen name="Cart" component={CartScreen} />
+              <Stack.Screen name="RestaurantDetail" component={RestaurantDetail} />
+              <Stack.Screen name="FoodDetail" component={FoodDetailScreen} />
+              <Stack.Screen name="FoodReviews" component={FoodReviewsScreen} />
+              <Stack.Screen name="CardPayment" component={CardPaymentScreen} />
+              <Stack.Screen name="BankPayment" component={BankPaymentScreen} />
+              <Stack.Screen name="AddressList" component={AddressListScreen} />
+              <Stack.Screen name="AddAddress" component={AddAddressScreen} />
+              <Stack.Screen name="Cancel" component={CancelScreen} />
+              <Stack.Screen name="Tracking" component={TrackingScreen} />
+              <Stack.Screen name="MapTracking" component={MapTrackingScreen} />
+              <Stack.Screen name="AddressSelection" component={AddressSelectionScreen} />
+              <Stack.Screen name="AddressPicker" component={AddressPickerScreen} />
+              <Stack.Screen name="Review" component={ReviewScreen} />
+              <Stack.Screen name="CancelDetail" component={CancelDetailScreen} />
+              <Stack.Screen name="Profile" component={ProfileScreen} />
+            </Stack.Navigator>
+          </NavigationContainer>
+        </SafeAreaProvider>
+      </GestureHandlerRootView>
+    </Provider>
   );
 }
