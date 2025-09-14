@@ -12,7 +12,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { useNavigation, useFocusEffect } from '@react-navigation/native';
+import { useNavigation, useFocusEffect, useRoute } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '@/types';
 
@@ -295,6 +295,17 @@ const ManageOrdersScreen: React.FC = () => {
   const [expandedShops, setExpandedShops] = useState<string[]>([]);
   const [orders, setOrders] = useState<OrderItem[]>(sampleOrders);
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
+  const route = useRoute();
+
+  // Xử lý parameter từ navigation
+  useEffect(() => {
+    if (route.params && (route.params as any).selectedTab) {
+      const paramTab = (route.params as any).selectedTab;
+      if (['Chờ xác nhận', 'Đang giao', 'Đã giao', 'Đã hủy'].includes(paramTab)) {
+        setSelectedTab(paramTab);
+      }
+    }
+  }, [route.params]);
 
   // Load đơn hàng từ AsyncStorage khi màn hình được focus
   const loadPendingOrders = async () => {

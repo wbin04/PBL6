@@ -179,6 +179,7 @@ export type RootStackParamList = {
   EditOrder: { orderId: number };
   RatingOrder: { orderId: number };
   Review: { orderId: number };
+  Orders: { selectedTab?: 'Chờ xác nhận' | 'Đang giao' | 'Đã giao' | 'Đã hủy' } | undefined;
   CancelDetail: { 
     orderId: string;
     shopName: string;
@@ -188,6 +189,7 @@ export type RootStackParamList = {
   };
   Profile: undefined;
   EditProfile: undefined;
+  AdminHome: undefined;
 };
 
 export type MainTabParamList = {

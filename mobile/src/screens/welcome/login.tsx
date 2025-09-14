@@ -23,13 +23,53 @@ export default function LoginScreen() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
 
+  // Mock user data for testing
+  const users = [
+    {
+      email: "customer@example.com",
+      password: "123456",
+      role_id: 1,
+      name: "John Smith",
+    },
+    {
+      email: "admin@example.com", 
+      password: "123456",
+      role_id: 2,
+      name: "Samantha",
+    },
+  ];
+
   const goHome = () => {
     navigation.navigate("MainTabs", { screen: "Home" });
   };
 
+  const goAdminHome = () => {
+    navigation.navigate("AdminHome");
+  };
+
   const handleLogin = () => {
     console.log("Đăng nhập:", { email, password });
-    goHome();
+    
+    // Tìm user với email và password khớp
+    const user = users.find(u => u.email === email && u.password === password);
+    
+    if (!user) {
+      Alert.alert("Lỗi đăng nhập", "Email hoặc mật khẩu không đúng!");
+      return;
+    }
+
+    // Kiểm tra role_id và điều hướng phù hợp
+    if (user.role_id === 1) {
+      // Customer - đi tới home của khách hàng
+      console.log("Đăng nhập với role Customer");
+      goHome();
+    } else if (user.role_id === 2) {
+      // Admin - đi tới home của admin
+      console.log("Đăng nhập với role Admin");
+      goAdminHome();
+    } else {
+      Alert.alert("Lỗi", "Role không hợp lệ!");
+    }
   };
 
   const handleSocialLogin = (provider: string) => {

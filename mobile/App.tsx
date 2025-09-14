@@ -218,6 +218,7 @@ import ReviewScreen from "@/screens/ReviewScreen";
 import CancelDetailScreen from "@/screens/CancelDetailScreen";
 import AddressPickerScreen from "@/screens/address/AddressPickerScreen";
 import { ProfileScreen } from "@/screens/ProfileScreen";
+import AdminHomeScreen from "@/screens/AdminHomeScreen";
 
 // Redux
 import { Provider } from "react-redux";
@@ -333,6 +334,7 @@ export default function App() {
               <Stack.Screen name="Review" component={ReviewScreen} />
               <Stack.Screen name="CancelDetail" component={CancelDetailScreen} />
               <Stack.Screen name="Profile" component={ProfileScreen} />
+              <Stack.Screen name="AdminHome" component={AdminHomeScreen} />
             </Stack.Navigator>
           </NavigationContainer>
         </SafeAreaProvider>

@@ -23,6 +23,7 @@ import FoodCustomizationPopup from "@/components/FoodCustomizationPopup";
 import { FoodTile } from "@/components/FoodTile";
 import ProfileDrawer from "@/components/ProfileDrawer";
 import { RestaurantCard } from "@/components/RestaurantCard";
+import NotificationModal from "@/components/NotificationModal";
 import { Fonts } from "@/constants/Fonts";
 import { useDatabase } from "@/hooks/useDatabase";
 
@@ -45,6 +46,7 @@ export default function HomeScreen() {
   const [selectedFood, setSelectedFood] = useState<any>(null);
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   const [profileDrawerOpen, setProfileDrawerOpen] = useState(false);
+  const [showNotificationModal, setShowNotificationModal] = useState(false);
 
   const categories = getCategories();
   const allRestaurants = getRestaurants();
@@ -80,6 +82,11 @@ export default function HomeScreen() {
     if (found) saveFav([...favorites, found]);
   };
 
+  const handleNotificationPress = () => {
+    console.log('Notification pressed!');
+    setShowNotificationModal(true);
+  };
+
   const scrollRef = useRef<ScrollView>(null);
   const onScrollBanner = (e: any) => {
     const idx = Math.round(e.nativeEvent.contentOffset.x / (width - 48));
@@ -111,7 +118,15 @@ export default function HomeScreen() {
               <ShoppingCart size={24} color="#e95322" />
             </TouchableOpacity>
 
-            <View style={styles.headerIcon}><Bell size={24} color="#e95322" /></View>
+            {/* Notification */}
+            <TouchableOpacity 
+              onPress={handleNotificationPress}
+              style={styles.headerIcon}
+            >
+              <Bell size={24} color="#e95322" />
+            </TouchableOpacity>
+            
+            {/* Profile */}
             <TouchableOpacity 
               onPress={() => setProfileDrawerOpen(true)}
               style={styles.headerIcon}
@@ -299,6 +314,26 @@ export default function HomeScreen() {
             navigation.navigate('Profile');
           }
           // Add more navigation cases as needed
+        }}
+      />
+
+      <NotificationModal 
+        isVisible={showNotificationModal}
+        onClose={() => setShowNotificationModal(false)}
+        onNavigate={(screen: string, params?: any) => {
+          console.log('Navigate to:', screen, params);
+          // Navigation logic for each screen
+          if (screen === 'Restaurants') {
+            navigation.navigate('Restaurants');
+          } else if (screen === 'Favorites') {
+            navigation.navigate('Favorites');
+          } else if (screen === 'Orders') {
+            navigation.navigate('Orders', params);
+          } else if (screen === 'OrderHistory') {
+            navigation.navigate('OrderHistory', params);
+          } else if (screen === 'Tracking') {
+            navigation.navigate('Tracking', params);
+          }
         }}
       />
     </View>

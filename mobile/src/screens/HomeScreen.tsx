@@ -33,7 +33,11 @@ export const HomeScreen: React.FC = () => {
   
   const { categories, foods, loading } = useSelector((state: RootState) => state.menu);
   const [refreshing, setRefreshing] = useState(false);
+  const [showNotificationModal, setShowNotificationModal] = useState(false);
   const { user } = useSelector((state: RootState) => state.auth);
+
+  // Debug log để kiểm tra state
+  console.log('showNotificationModal:', showNotificationModal);
 
   useEffect(() => {
     dispatch(fetchCategories());
@@ -113,6 +117,11 @@ export const HomeScreen: React.FC = () => {
     return 'Chào buổi tối';
   };
 
+  const handleNotificationPress = () => {
+    console.log('Notification pressed!'); // Debug log
+    setShowNotificationModal(true);
+  };
+
   return (
     <View style={styles.container}>
       <StatusBar barStyle="light-content" backgroundColor={COLORS.primary} />
@@ -127,7 +136,7 @@ export const HomeScreen: React.FC = () => {
           </View>
           
           {/* Notification Bell */}
-          <TouchableOpacity style={styles.notificationButton}>
+          <TouchableOpacity style={styles.notificationButton} onPress={handleNotificationPress}>
             <Ionicons name="notifications-outline" size={24} color={COLORS.white} />
             <View style={styles.notificationBadge}>
               <Text style={styles.notificationCount}>3</Text>
@@ -263,6 +272,8 @@ export const HomeScreen: React.FC = () => {
           />
         </View>
       </ScrollView>
+      
+      {/* TODO: Add NotificationModal component when created */}
     </View>
   );
 };
