@@ -1,10 +1,24 @@
 import React, { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { API, getImageUrl, formatPrice, isAuthenticated, type Cart as CartType } from '@/lib/api';
+import { getImageUrl, formatPrice } from '@/lib/api';
 import { Button } from '@/components/ui/button';
 
+// Định nghĩa type CartItem và Cart
+type CartItem = {
+  food_id: number;
+  title: string;
+  price: number;
+  quantity: number;
+  image?: string; // Thêm image để hiển thị
+};
+
+type Cart = {
+  items: CartItem[];
+  total_price: number;
+};
+
 const Cart: React.FC = () => {
-  const [cart, setCart] = useState<CartType | null>(null);
+  const [cart, setCart] = useState<Cart | null>(null);
   const [loading, setLoading] = useState(true);
   const navigate = useNavigate();
 
@@ -13,19 +27,80 @@ const Cart: React.FC = () => {
     loadCart();
   }, []);
 
+  // Kiểm tra đăng nhập (giả lập, vì không có API)
   const checkAuthentication = () => {
-    if (!isAuthenticated()) {
-      alert('Vui lòng đăng nhập để xem giỏ hàng');
-      navigate('/login');
-      return;
-    }
+    // Giả sử luôn đăng nhập cho dữ liệu cứng
+    // Nếu cần kiểm tra thực tế, bạn có thể thêm logic kiểm tra token trong localStorage
+    return true;
   };
 
-  const loadCart = async () => {
+  const loadCart = () => {
     try {
       setLoading(true);
-      const cartData = await API.get<CartType>('/cart/');
-      setCart(cartData);
+      // Lấy dữ liệu từ localStorage (được lưu từ Items.tsx)
+      const cartData = JSON.parse(localStorage.getItem('cart') || '[]');
+      
+      // Tạo dữ liệu minh họa cứng để bổ sung thông tin hình ảnh
+      const mockFoods = [
+        {
+          id: 1,
+          title: "Cơm gà xối mỡ",
+          price: 35000,
+          image: "/images/com-ga.jpg",
+        },
+        {
+          id: 2,
+          title: "Canh chua cá",
+          price: 45000,
+          image: "/images/canh-chua.jpg",
+        },
+        {
+          id: 3,
+          title: "Pizza Hải Sản",
+          price: 120000,
+          image: "/images/pizza-seafood.jpg",
+        },
+        {
+          id: 4,
+          title: "Pizza Phô Mai",
+          price: 99000,
+          image: "/images/pizza-cheese.jpg",
+        },
+        {
+          id: 5,
+          title: "Mỳ Ý Bò Bằm",
+          price: 85000,
+          image: "/images/spaghetti.jpg",
+        },
+        {
+          id: 6,
+          title: "Gà Rán Giòn",
+          price: 45000,
+          image: "/images/fried-chicken.jpg",
+        },
+        {
+          id: 7,
+          title: "Burger Bò",
+          price: 55000,
+          image: "/images/burger-beef.jpg",
+        },
+      ];
+
+      // Bổ sung thông tin hình ảnh cho cart items
+      const enrichedCartItems = cartData.map((item: CartItem) => {
+        const food = mockFoods.find((f) => f.id === item.food_id);
+        return {
+          ...item,
+          image: food ? food.image : '/images/placeholder.jpg',
+        };
+      });
+
+      const total_price = enrichedCartItems.reduce(
+        (sum: number, item: CartItem) => sum + item.price * item.quantity,
+        0
+      );
+
+      setCart({ items: enrichedCartItems, total_price });
     } catch (error) {
       console.error('Error loading cart:', error);
       alert('Lỗi khi tải giỏ hàng: ' + (error instanceof Error ? error.message : String(error)));
@@ -39,70 +114,53 @@ const Cart: React.FC = () => {
     setCart({ items: [], total_price: 0 });
   };
 
-  const updateQuantity = async (foodId: number, newQuantity: number) => {
-    if (newQuantity < 1) {
-      await removeFromCart(foodId);
-      return;
-    }
-
+  const updateQuantity = (foodId: number, newQuantity: number) => {
     try {
-      await API.put(`/cart/items/${foodId}/`, {
-        quantity: newQuantity
-      });
-      
-      // Reload cart to get updated data
-      await loadCart();
-      // Update cart count in header (if function exists)
-      if ((window as any).updateCartCount) {
-        (window as any).updateCartCount();
+      const cartData = JSON.parse(localStorage.getItem('cart') || '[]');
+      if (newQuantity < 1) {
+        removeFromCart(foodId);
+        return;
       }
-      
+
+      const updatedCart = cartData.map((item: CartItem) =>
+        item.food_id === foodId ? { ...item, quantity: newQuantity } : item
+      );
+
+      localStorage.setItem('cart', JSON.stringify(updatedCart));
+      loadCart(); // Tải lại giỏ hàng
     } catch (error) {
       console.error('Error updating quantity:', error);
       alert('Lỗi khi cập nhật số lượng: ' + (error instanceof Error ? error.message : String(error)));
     }
   };
 
-  const removeFromCart = async (foodId: number) => {
+  const removeFromCart = (foodId: number) => {
     if (!confirm('Bạn có chắc muốn xóa món này khỏi giỏ hàng?')) {
       return;
     }
 
     try {
-      await API.delete(`/cart/items/${foodId}/remove/`);
-      
-      // Reload cart to get updated data
-      await loadCart();
-      // Update cart count in header (if function exists)
-      if ((window as any).updateCartCount) {
-        (window as any).updateCartCount();
-      }
-      
+      const cartData = JSON.parse(localStorage.getItem('cart') || '[]');
+      const updatedCart = cartData.filter((item: CartItem) => item.food_id !== foodId);
+
+      localStorage.setItem('cart', JSON.stringify(updatedCart));
+      loadCart(); // Tải lại giỏ hàng
       alert('Đã xóa món ăn khỏi giỏ hàng');
-      
     } catch (error) {
       console.error('Error removing item:', error);
       alert('Lỗi khi xóa món ăn: ' + (error instanceof Error ? error.message : String(error)));
     }
   };
 
-  const clearCart = async () => {
+  const clearCart = () => {
     if (!confirm('Bạn có chắc muốn xóa tất cả món ăn trong giỏ hàng?')) {
       return;
     }
 
     try {
-      await API.delete('/cart/clear/');
-      
-      // Show empty cart
+      localStorage.setItem('cart', JSON.stringify([]));
       showEmptyCart();
-      // Update cart count in header (if function exists)
-      if ((window as any).updateCartCount) {
-        (window as any).updateCartCount();
-      }
-      
       alert('Đã xóa tất cả món ăn trong giỏ hàng');
-      
     } catch (error) {
       console.error('Error clearing cart:', error);
       alert('Lỗi khi xóa giỏ hàng: ' + (error instanceof Error ? error.message : String(error)));
@@ -115,7 +173,6 @@ const Cart: React.FC = () => {
       return;
     }
 
-    // Redirect to checkout page
     navigate('/checkout');
   };
 
@@ -123,7 +180,7 @@ const Cart: React.FC = () => {
     return new Intl.NumberFormat('vi-VN', {
       style: 'currency',
       currency: 'VND',
-      minimumFractionDigits: 0
+      minimumFractionDigits: 0,
     }).format(amount);
   };
 
@@ -186,28 +243,26 @@ const Cart: React.FC = () => {
       <div className="bg-white rounded-2xl shadow-lg overflow-hidden">
         <div className="p-5">
           {cart.items.map((item) => (
-            <div 
-              key={item.food.id}
+            <div
+              key={item.food_id}
               className="flex items-center p-5 border-b border-gray-100 last:border-b-0 hover:bg-gray-50 transition-colors"
             >
               <img
-                src={`http://localhost:8000/media/${item.food.image}`}
-                alt={item.food.name}
+                src={getImageUrl(item.image || '/images/placeholder.jpg')}
+                alt={item.title}
                 className="w-20 h-20 rounded-lg object-cover mr-5"
                 onError={(e) => {
-                  (e.target as HTMLImageElement).style.display = 'none';
+                  (e.target as HTMLImageElement).src = '/images/placeholder.jpg';
                 }}
               />
-              
               <div className="flex-1">
-                <div className="text-lg font-bold text-gray-800 mb-1">{item.food.name}</div>
-                <div className="text-orange-500 font-bold text-lg">{formatCurrency(item.food.price)}</div>
+                <div className="text-lg font-bold text-gray-800 mb-1">{item.title}</div>
+                <div className="text-orange-500 font-bold text-lg">{formatCurrency(item.price)}</div>
               </div>
-
               <div className="flex items-center mx-5">
                 <button
                   className="bg-orange-500 text-white border-0 w-9 h-9 rounded-full cursor-pointer text-lg flex items-center justify-center hover:bg-orange-600 transition-colors"
-                  onClick={() => updateQuantity(item.food.id, item.quantity - 1)}
+                  onClick={() => updateQuantity(item.food_id, item.quantity - 1)}
                 >
                   −
                 </button>
@@ -216,26 +271,23 @@ const Cart: React.FC = () => {
                 </span>
                 <button
                   className="bg-orange-500 text-white border-0 w-9 h-9 rounded-full cursor-pointer text-lg flex items-center justify-center hover:bg-orange-600 transition-colors"
-                  onClick={() => updateQuantity(item.food.id, item.quantity + 1)}
+                  onClick={() => updateQuantity(item.food_id, item.quantity + 1)}
                 >
                   +
                 </button>
               </div>
-
               <div className="text-xl font-bold text-orange-500 ml-5 min-w-24 text-right">
-                {formatCurrency(item.price)}
+                {formatCurrency(item.price * item.quantity)}
               </div>
-
               <button
                 className="bg-red-500 text-white border-0 px-4 py-2 rounded-full cursor-pointer ml-4 hover:bg-red-600 transition-colors"
-                onClick={() => removeFromCart(item.food.id)}
+                onClick={() => removeFromCart(item.food_id)}
               >
                 Xóa
               </button>
             </div>
           ))}
         </div>
-
         <div className="bg-gray-50 p-6 border-t-2 border-orange-500">
           <div className="flex justify-between mb-4 text-lg">
             <span>Tổng số món:</span>
@@ -253,7 +305,6 @@ const Cart: React.FC = () => {
             <span>Tổng cộng:</span>
             <span>{formatCurrency(getTotal())}</span>
           </div>
-
           <div className="flex gap-4 mt-6">
             <button
               className="flex-1 py-4 px-8 border-0 rounded-full text-lg font-bold cursor-pointer transition-all bg-gray-500 text-white hover:bg-gray-600"
