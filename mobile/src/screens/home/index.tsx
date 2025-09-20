@@ -4,45 +4,60 @@ import {
   Bell,
   ChevronRight,
   Heart,
-  Search, ShoppingCart,
-  User
+  Search,
+  ShoppingCart,
+  User,
+  Menu,
 } from "lucide-react-native";
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
+  Alert,
   Dimensions,
   FlatList,
   Image,
   ScrollView,
   StyleSheet,
-  Text, TextInput, TouchableOpacity,
-  View
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
 } from "react-native";
 
-// import BottomBar from "@/components/BottomBar";
 import FoodCustomizationPopup from "@/components/FoodCustomizationPopup";
 import { FoodTile } from "@/components/FoodTile";
 import { RestaurantCard } from "@/components/RestaurantCard";
 import { Fonts } from "@/constants/Fonts";
 import { useDatabase } from "@/hooks/useDatabase";
+import Sidebar from "@/components/sidebar";
+import db from "@/assets/database.json";
 
 const { width } = Dimensions.get("window");
-
+const SESSION_KEY = "auth.session";
 
 type Nav = any;
 
 export default function HomeScreen() {
   const navigation = useNavigation<Nav>();
-  
+
   const {
-    getCategories, getRestaurants, getFoods, getFoodsByCategory,
-    getRestaurantsByCategory, getBanners, requireImage
+    getCategories,
+    getRestaurants,
+    getFoods,
+    getFoodsByCategory,
+    getRestaurantsByCategory,
+    getBanners,
+    requireImage,
   } = useDatabase();
+
+  const [roles, setRoles] = useState<string[]>(["customer"]);
+  const [currentRole, setCurrentRole] = useState<string>("customer");
 
   const [activeDiscountIndex, setActiveDiscountIndex] = useState(0);
   const [favorites, setFavorites] = useState<any[]>([]);
   const [popupOpen, setPopupOpen] = useState(false);
   const [selectedFood, setSelectedFood] = useState<any>(null);
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
 
   const categories = getCategories();
   const allRestaurants = getRestaurants();
@@ -53,12 +68,12 @@ export default function HomeScreen() {
     () => (selectedCategory ? getFoodsByCategory(selectedCategory) : allFoods.slice(0, 8)),
     [selectedCategory, allFoods]
   );
-
   const filteredRestaurants = useMemo(
     () => (selectedCategory ? getRestaurantsByCategory(selectedCategory) : []),
     [selectedCategory, allRestaurants]
   );
 
+  // ===== Load favorites
   useEffect(() => {
     (async () => {
       const saved = await AsyncStorage.getItem("favorites");
@@ -66,6 +81,44 @@ export default function HomeScreen() {
     })();
   }, []);
 
+  // ===== Load roles & activeRole từ SESSION (fallback dev khi chưa có)
+  useEffect(() => {
+    (async () => {
+      try {
+        const raw = await AsyncStorage.getItem(SESSION_KEY);
+        if (raw) {
+          const s = JSON.parse(raw);
+          const validRoles = (Array.isArray(s.roles) ? s.roles : []).filter((r: string) =>
+            ["customer", "seller", "shipper", "admin"].includes(r)
+          );
+          const roleSet = validRoles.length ? validRoles : ["customer"];
+          const nextActive =
+            roleSet.includes(s.activeRole) && s.activeRole ? s.activeRole : roleSet[0];
+          setRoles(roleSet);
+          setCurrentRole(nextActive);
+          return;
+        }
+
+        // Fallback: lấy user mock
+        const activeUserId = db?.dev?.activeUserId ?? db?.auth?.sessions?.[0]?.userId ?? 1;
+        const activeUser = (db?.users || []).find((u: any) => u.id === activeUserId);
+        const nextRoles = Array.from(
+          new Set(
+            ([...(activeUser?.roles || []), "customer"] as string[]).filter((r) =>
+              ["customer", "seller", "shipper", "admin"].includes(r)
+            )
+          )
+        );
+        setRoles(nextRoles.length ? nextRoles : ["customer"]);
+        setCurrentRole(nextRoles.includes("customer") ? "customer" : nextRoles[0] || "customer");
+      } catch {
+        setRoles(["customer"]);
+        setCurrentRole("customer");
+      }
+    })();
+  }, []);
+
+  // ===== Helpers
   const saveFav = async (next: any[]) => {
     setFavorites(next);
     await AsyncStorage.setItem("favorites", JSON.stringify(next));
@@ -84,12 +137,60 @@ export default function HomeScreen() {
     setActiveDiscountIndex(idx);
   };
 
+  // Đổi role: kiểm tra hợp lệ và ghi SESSION (fire-and-forget để trả về void)
+  const handleChangeRole = (r: string) => {
+    const allow = ["customer", "seller", "shipper", "admin"];
+    const switchable =
+      (db?.auth?.rolePolicy?.switchableRoles as string[]) ||
+      ["customer", "shipper", "seller"];
+
+    if (!allow.includes(r)) return;
+    if (!roles.includes(r)) {
+      Alert.alert("Không thể chuyển", "Tài khoản của bạn không có vai trò này.");
+      return;
+    }
+    if (!switchable.includes(r) && r !== "customer") {
+      Alert.alert("Không thể chuyển", "Vai trò này không được phép chuyển trực tiếp.");
+      return;
+    }
+
+    setCurrentRole(r);
+    setSidebarOpen(false);
+
+    AsyncStorage.getItem(SESSION_KEY)
+      .then((raw) => {
+        const prev = raw ? JSON.parse(raw) : {};
+        const next = {
+          ...prev,
+          roles,
+          activeRole: r,
+          lastSwitchedAt: new Date().toISOString(),
+        };
+        return AsyncStorage.setItem(SESSION_KEY, JSON.stringify(next));
+      })
+      .catch(() => {});
+  };
+
+  // Điều hướng dùng chung cho Sidebar
+  const go = (screen: string) => navigation.navigate(screen as never);
+
   return (
     <View style={styles.screen}>
-      <ScrollView contentContainerStyle={{ paddingBottom: 96 }} showsVerticalScrollIndicator={false}>
+      <ScrollView
+        contentContainerStyle={{ paddingBottom: 96 }}
+        showsVerticalScrollIndicator={false}
+      >
         {/* Header */}
         <View style={styles.headerWrap}>
-          <View style={styles.searchRow}>
+          <View style={styles.headerRow}>
+            <TouchableOpacity
+              onPress={() => setSidebarOpen(true)}
+              style={styles.menuButton}
+            >
+              <Menu size={22} color="#e95322" />
+            </TouchableOpacity>
+
+            {/* Search */}
             <View style={{ flex: 1, position: "relative" }}>
               <TextInput
                 placeholder="Tìm kiếm"
@@ -109,10 +210,18 @@ export default function HomeScreen() {
               <ShoppingCart size={24} color="#e95322" />
             </TouchableOpacity>
 
-            <View style={styles.headerIcon}><Bell size={24} color="#e95322" /></View>
-            <View style={styles.headerIcon}><User size={24} color="#e95322" /></View>
+            {/* Bell */}
+            <TouchableOpacity style={styles.headerIcon}>
+              <Bell size={24} color="#e95322" />
+            </TouchableOpacity>
+
+            {/* User */}
+            <TouchableOpacity style={styles.headerIcon}>
+              <User size={24} color="#e95322" />
+            </TouchableOpacity>
           </View>
 
+          {/* Hàng dưới: greeting */}
           <View>
             <Text style={styles.hello}>Xin chào!</Text>
             <Text style={styles.ask}>Hôm nay bạn muốn ăn gì?</Text>
@@ -127,13 +236,36 @@ export default function HomeScreen() {
               return (
                 <TouchableOpacity
                   key={c.id}
-                  onPress={() => setSelectedCategory(active ? null : c.name)}
+                  onPress={() =>
+                    setSelectedCategory(active ? null : c.name)
+                  }
                   style={styles.catItem}
                 >
-                  <View style={[styles.catIcon, { backgroundColor: active ? "#e95322" : "#f3e9b5" }]}>
-                    <Text style={{ fontSize: 20, fontFamily: Fonts.LeagueSpartanBold }}>{c.icon}</Text>
+                  <View
+                    style={[
+                      styles.catIcon,
+                      {
+                        backgroundColor: active ? "#e95322" : "#f3e9b5",
+                      },
+                    ]}
+                  >
+                    <Text
+                      style={{
+                        fontSize: 20,
+                        fontFamily: Fonts.LeagueSpartanBold,
+                      }}
+                    >
+                      {c.icon}
+                    </Text>
                   </View>
-                  <Text style={[styles.catLabel, { color: active ? "#e95322" : "#391713" }]}>{c.name}</Text>
+                  <Text
+                    style={[
+                      styles.catLabel,
+                      { color: active ? "#e95322" : "#391713" },
+                    ]}
+                  >
+                    {c.name}
+                  </Text>
                 </TouchableOpacity>
               );
             })}
@@ -142,7 +274,13 @@ export default function HomeScreen() {
         </View>
 
         {/* Restaurants */}
-        <View style={{ backgroundColor: "#fff", paddingHorizontal: 24, paddingBottom: 20 }}>
+        <View
+          style={{
+            backgroundColor: "#fff",
+            paddingHorizontal: 24,
+            paddingBottom: 20,
+          }}
+        >
           <View style={styles.sectionHeader}>
             <Text style={styles.sectionTitle}>Đang mở cửa</Text>
 
@@ -156,7 +294,11 @@ export default function HomeScreen() {
           </View>
 
           <FlatList
-            data={selectedCategory ? filteredRestaurants : allRestaurants.slice(0, 4)}
+            data={
+              selectedCategory
+                ? filteredRestaurants
+                : allRestaurants.slice(0, 4)
+            }
             horizontal
             keyExtractor={(item) => String(item.id)}
             showsHorizontalScrollIndicator={false}
@@ -165,7 +307,9 @@ export default function HomeScreen() {
               <RestaurantCard
                 item={item}
                 requireImage={requireImage}
-                onPress={() => navigation.navigate("RestaurantDetail", { id: item.id })}
+                onPress={() =>
+                  navigation.navigate("RestaurantDetail", { id: item.id })
+                }
               />
             )}
           />
@@ -185,7 +329,11 @@ export default function HomeScreen() {
           </View>
 
           <FlatList
-            data={[7, 8, 9, 10].map((id) => allFoods.find((f) => f.id === id)).filter(Boolean) as any[]}
+            data={
+              [7, 8, 9, 10]
+                .map((id) => allFoods.find((f) => f.id === id))
+                .filter(Boolean) as any[]
+            }
             horizontal
             keyExtractor={(i) => String(i.id)}
             ItemSeparatorComponent={() => <View style={{ width: 16 }} />}
@@ -194,14 +342,34 @@ export default function HomeScreen() {
               <View style={{ width: 128 }}>
                 <TouchableOpacity
                   style={{ position: "relative" }}
-                  onPress={() => navigation.navigate("FoodDetail", { id: item.id })}
+                  onPress={() =>
+                    navigation.navigate("FoodDetail", { id: item.id })
+                  }
                 >
-                  <Image source={requireImage(item.image)} style={{ width: "100%", height: 96, borderRadius: 16 }} />
-                  <TouchableOpacity onPress={() => toggleFavorite(item.id)} style={styles.heartBtn}>
+                  <Image
+                    source={requireImage(item.image)}
+                    style={{
+                      width: "100%",
+                      height: 96,
+                      borderRadius: 16,
+                    }}
+                  />
+                  <TouchableOpacity
+                    onPress={() => toggleFavorite(item.id)}
+                    style={styles.heartBtn}
+                  >
                     <Heart
                       size={12}
-                      color={favorites.some((f) => f.id === item.id) ? "#e95322" : "#9ca3af"}
-                      fill={favorites.some((f) => f.id === item.id) ? "#e95322" : "transparent"}
+                      color={
+                        favorites.some((f) => f.id === item.id)
+                          ? "#e95322"
+                          : "#9ca3af"
+                      }
+                      fill={
+                        favorites.some((f) => f.id === item.id)
+                          ? "#e95322"
+                          : "transparent"
+                      }
                     />
                   </TouchableOpacity>
                   <View style={styles.pricePill}>
@@ -228,16 +396,39 @@ export default function HomeScreen() {
               {banners.map((b) => (
                 <View key={b.id} style={{ width: width - 48 }}>
                   <View style={styles.banner}>
-                    <View style={{ flex: 1, padding: 16, justifyContent: "center" }}>
-                      <Text style={{ color: "#fff", fontSize: 14, marginBottom: 6, fontFamily: Fonts.LeagueSpartanRegular }}>
+                    <View
+                      style={{
+                        flex: 1,
+                        padding: 16,
+                        justifyContent: "center",
+                      }}
+                    >
+                      <Text
+                        style={{
+                          color: "#fff",
+                          fontSize: 14,
+                          marginBottom: 6,
+                          fontFamily: Fonts.LeagueSpartanRegular,
+                        }}
+                      >
                         {b.title}
                       </Text>
-                      <Text style={{ color: "#fff", fontSize: 24, fontFamily: Fonts.LeagueSpartanBold }}>
+                      <Text
+                        style={{
+                          color: "#fff",
+                          fontSize: 24,
+                          fontFamily: Fonts.LeagueSpartanBold,
+                        }}
+                      >
                         {b.discount}
                       </Text>
                     </View>
                     <View style={{ flex: 1 }}>
-                      <Image source={requireImage(b.image)} style={{ width: "100%", height: "100%" }} resizeMode="cover" />
+                      <Image
+                        source={requireImage(b.image)}
+                        style={{ width: "100%", height: "100%" }}
+                        resizeMode="cover"
+                      />
                     </View>
                   </View>
                 </View>
@@ -246,18 +437,38 @@ export default function HomeScreen() {
 
             <View style={styles.dots}>
               {banners.map((b, i) => (
-                <View key={b.id} style={[styles.dotBar, { opacity: i === activeDiscountIndex ? 1 : 0.3 }]} />
+                <View
+                  key={b.id}
+                  style={[
+                    styles.dotBar,
+                    { opacity: i === activeDiscountIndex ? 1 : 0.3 },
+                  ]}
+                />
               ))}
             </View>
           </View>
         </View>
 
         {/* Recommend */}
-        <View style={{ backgroundColor: "#fff", paddingHorizontal: 24, marginBottom: 16 }}>
+        <View
+          style={{
+            backgroundColor: "#fff",
+            paddingHorizontal: 24,
+            marginBottom: 16,
+          }}
+        >
           <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>{selectedCategory ? selectedCategory : "Đề xuất"}</Text>
+            <Text style={styles.sectionTitle}>
+              {selectedCategory ? selectedCategory : "Đề xuất"}
+            </Text>
             {selectedCategory && (
-              <Text style={{ color: "#e95322", fontSize: 13, fontFamily: Fonts.LeagueSpartanSemiBold }}>
+              <Text
+                style={{
+                  color: "#e95322",
+                  fontSize: 13,
+                  fontFamily: Fonts.LeagueSpartanSemiBold,
+                }}
+              >
                 {filteredFoods.length} món ăn
               </Text>
             )}
@@ -271,20 +482,33 @@ export default function HomeScreen() {
                 requireImage={requireImage}
                 isFav={!!favorites.find((x) => x.id === item.id)}
                 onToggleFav={() => toggleFavorite(item.id)}
-                onOpen={() => { setSelectedFood(item); setPopupOpen(true); }}
-                onPress={() => navigation.navigate("FoodDetail", { id: item.id })}
+                onOpen={() => {
+                  setSelectedFood(item);
+                  setPopupOpen(true);
+                }}
+                onPress={() =>
+                  navigation.navigate("FoodDetail", { id: item.id })
+                }
               />
             ))}
           </View>
         </View>
       </ScrollView>
 
-
-      <FoodCustomizationPopup isOpen={popupOpen} onClose={() => setPopupOpen(false)} foodItem={selectedFood || {}} />
+      {/* Popup tùy chỉnh món */}
+      <FoodCustomizationPopup
+        isOpen={popupOpen}
+        onClose={() => setPopupOpen(false)}
+        foodItem={selectedFood || {}}
+      />
+      {/* Sidebar */}
+      <Sidebar
+        isOpen={sidebarOpen}
+        onClose={() => setSidebarOpen(false)}
+      />
     </View>
   );
 }
-
 
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: "#fff" },
@@ -295,7 +519,20 @@ const styles = StyleSheet.create({
     paddingBottom: 40,
     paddingTop: 40,
   },
-  searchRow: { flexDirection: "row", alignItems: "center", gap: 12, marginBottom: 16 },
+
+  headerRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    marginBottom: 16,
+  },
+
+  menuButton: {
+    backgroundColor: "#fff",
+    borderRadius: 999,
+    padding: 8,
+  },
+
   searchInput: {
     width: "100%",
     backgroundColor: "#fff",
@@ -308,14 +545,33 @@ const styles = StyleSheet.create({
   },
   searchIcon: {
     position: "absolute",
-    right: 4, top: 4, bottom: 4,
-    justifyContent: "center", alignItems: "center",
-    backgroundColor: "#e95322", borderRadius: 999, paddingHorizontal: 10
+    right: 4,
+    top: 4,
+    bottom: 4,
+    justifyContent: "center",
+    alignItems: "center",
+    backgroundColor: "#e95322",
+    borderRadius: 999,
+    paddingHorizontal: 10,
   },
-  headerIcon: { backgroundColor: "#fff", borderRadius: 999, padding: 8 },
 
-  hello: { color: "#fff", marginBottom: 4, fontSize: 32, fontFamily: Fonts.LeagueSpartanBlack },
-  ask: { color: "#e95322", fontSize: 16, fontFamily: Fonts.LeagueSpartanSemiBold },
+  headerIcon: {
+    backgroundColor: "#fff",
+    borderRadius: 999,
+    padding: 8,
+  },
+
+  hello: {
+    color: "#fff",
+    marginBottom: 4,
+    fontSize: 32,
+    fontFamily: Fonts.LeagueSpartanBlack,
+  },
+  ask: {
+    color: "#e95322",
+    fontSize: 16,
+    fontFamily: Fonts.LeagueSpartanSemiBold,
+  },
 
   catWrap: {
     backgroundColor: "#fff",
@@ -327,23 +583,79 @@ const styles = StyleSheet.create({
   },
   catRow: { flexDirection: "row", justifyContent: "space-between" },
   catItem: { alignItems: "center" },
-  catIcon: { width: 48, height: 64, borderRadius: 999, alignItems: "center", justifyContent: "center", marginBottom: 8 },
+  catIcon: {
+    width: 48,
+    height: 64,
+    borderRadius: 999,
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 8,
+  },
   catLabel: { fontSize: 12, fontFamily: Fonts.LeagueSpartanSemiBold },
-  separator: { width: "100%", height: 1, backgroundColor: "#f3e9b5", marginTop: 20 },
+  separator: {
+    width: "100%",
+    height: 1,
+    backgroundColor: "#f3e9b5",
+    marginTop: 20,
+  },
 
-  sectionHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 12 },
+  sectionHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 12,
+  },
   sectionTitle: { color: "#391713", fontSize: 18, fontFamily: Fonts.LeagueSpartanBold },
   linkRow: { flexDirection: "row", alignItems: "center" },
   linkText: { color: "#e95322", fontFamily: Fonts.LeagueSpartanSemiBold },
 
-  banner: { backgroundColor: "#e95322", borderRadius: 24, overflow: "hidden", flexDirection: "row", height: 128 },
-  dots: { flexDirection: "row", justifyContent: "center", marginTop: 12, gap: 8 },
-  dotBar: { width: 24, height: 4, borderRadius: 4, backgroundColor: "#e95322" },
+  banner: {
+    backgroundColor: "#e95322",
+    borderRadius: 24,
+    overflow: "hidden",
+    flexDirection: "row",
+    height: 128,
+  },
+  dots: {
+    flexDirection: "row",
+    justifyContent: "center",
+    marginTop: 12,
+    gap: 8,
+  },
+  dotBar: {
+    width: 24,
+    height: 4,
+    borderRadius: 4,
+    backgroundColor: "#e95322",
+  },
 
-  grid: { flexDirection: "row", flexWrap: "wrap", justifyContent: "space-between" },
+  grid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    justifyContent: "space-between",
+  },
 
-  heartBtn: { position: "absolute", right: 8, top: 8, backgroundColor: "#fff", borderRadius: 999, padding: 6, elevation: 1 },
-  pricePill: { position: "absolute", left: 8, bottom: 8, backgroundColor: "#e95322", paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8 },
-  pricePillText: { color: "#fff", fontSize: 12, fontFamily: Fonts.LeagueSpartanBold },
+  heartBtn: {
+    position: "absolute",
+    right: 8,
+    top: 8,
+    backgroundColor: "#fff",
+    borderRadius: 999,
+    padding: 6,
+    elevation: 1,
+  },
+  pricePill: {
+    position: "absolute",
+    left: 8,
+    bottom: 8,
+    backgroundColor: "#e95322",
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 8,
+  },
+  pricePillText: {
+    color: "#fff",
+    fontSize: 12,
+    fontFamily: Fonts.LeagueSpartanBold,
+  },
 });
-

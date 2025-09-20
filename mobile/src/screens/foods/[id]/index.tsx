@@ -227,7 +227,7 @@ export default function FoodDetailScreen() {
             <Text style={styles.title}>{food.name}</Text>
             {restaurant ? (
               <TouchableOpacity
-                onPress={() => navigation.navigate("RestaurantDetailScreen", { id: String(restaurant.id) })}
+                onPress={() => navigation.navigate("RestaurantDetail", { id: String(restaurant.id) })}
                 activeOpacity={0.8}
               >
                 <Text style={styles.restaurant}>{restaurant.name} →</Text>
@@ -433,7 +433,7 @@ export default function FoodDetailScreen() {
                 quantity, size: selectedSize, toppings: selectedToppings, totalPrice,
               };
               await AsyncStorage.setItem("checkoutItem", JSON.stringify(checkoutItem));
-              navigation.navigate("CheckoutScreen");
+              navigation.navigate("Checkout");
             }}
             activeOpacity={0.9}
             style={styles.btnOrange}
