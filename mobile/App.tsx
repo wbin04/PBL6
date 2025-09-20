@@ -221,6 +221,10 @@ import WalletScreen from "@/screens/wallet";
 import ChangeWalletPasswordScreen from "@/screens/wallet/resetpassword";
 import ShipperProfileScreen from "@/screens/profile";
 import WalletTransactionsScreen from "@/screens/wallet/transactions";
+import NotificationSettingsScreen from "@/screens/notification";
+import ShipperStatsScreen from "@/screens/statistics";
+import TwoFactorAuthScreen from "@/screens/TwoFactorAuth";
+import WithdrawalMethodsScreen from "@/screens/withdrawalMethod";
 import Sidebar from "@/components/sidebar";
 
 SplashScreen.preventAutoHideAsync().catch(() => {});
@@ -278,7 +282,7 @@ function MainTabs() {
         />
         <Tab.Screen
           name="ShipperStats"
-          component={FavoritesScreen }
+          component={ShipperStatsScreen }
           options={{ tabBarIcon: ({ color }) => <BarChart3 color={color} size={24} /> }}
         />
         <Tab.Screen
@@ -363,6 +367,9 @@ export default function App() {
             <Stack.Screen name="ChangeWalletPassword" component={ChangeWalletPasswordScreen} />
             <Stack.Screen name="ShipperProfile" component={ShipperProfileScreen} />
             <Stack.Screen name="WalletTransactions" component={WalletTransactionsScreen} />
+            <Stack.Screen name="NotificationSetting" component={NotificationSettingsScreen} />
+            <Stack.Screen name="TwoFASetting" component={TwoFactorAuthScreen} />
+            <Stack.Screen name="WithdrawMethods" component={WithdrawalMethodsScreen} />
           </Stack.Navigator>
 
           <Sidebar
