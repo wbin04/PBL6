@@ -10,15 +10,18 @@ import {
   TextInput,
   TouchableOpacity,
   View,
+  ActivityIndicator,
+  RefreshControl,
 } from "react-native";
 import { ArrowLeft, Search, ShoppingCart, User } from "lucide-react-native";
+import { useDispatch, useSelector } from 'react-redux';
 
-import RestaurantCard1, { Restaurant } from "@/components/RestaurantCard1";
+// Import StoreCard component thay vì RestaurantCard1
+import { StoreCard } from "@/components";
 import { Fonts } from "@/constants/Fonts";
-import db from "@/assets/database.json";
-import { IMAGE_MAP } from "@/assets/imageMap";
-
-// import BottomBar from "@/components/BottomBar";
+import { RootState, AppDispatch } from '@/store';
+import { fetchStoresWithStats } from '@/store/slices/storesSlice';
+import { Store } from '@/types';
 
 const TABS = ["Tất cả", "Burger", "Pizza", "Lành mạnh"] as const;
 
@@ -27,33 +30,35 @@ const ITEM_PADDING = 22;
 
 export default function RestaurantsIndex() {
   const navigation = useNavigation<any>(); 
+  const dispatch = useDispatch<AppDispatch>();
+  const { stores, loading } = useSelector((state: RootState) => state.stores);
 
   const [q, setQ] = useState("");
   const [tab, setTab] = useState<(typeof TABS)[number]>("Tất cả");
   const [favorites, setFavorites] = useState<number[]>([]);
   const [headerH, setHeaderH] = useState(0);
+  const [refreshing, setRefreshing] = useState(false);
 
   useEffect(() => {
+    // Load stores from API
+    dispatch(fetchStoresWithStats());
+    
+    // Load favorites from storage
     AsyncStorage.getItem("fav_restaurants").then((r) =>
       setFavorites(r ? JSON.parse(r) : [])
     );
-  }, []);
+  }, [dispatch]);
 
-  const allRestaurants = (db as any).restaurants as Restaurant[];
-
-  const filtered = useMemo<Restaurant[]>(() => {
+  const filtered = useMemo<Store[]>(() => {
     const qnorm = q.trim().toLowerCase();
-    return allRestaurants.filter((r) => {
-      const nameHit = r.name.toLowerCase().includes(qnorm);
-      const cats = Array.isArray(r.categories)
-        ? r.categories
-        : r.categories
-        ? String(r.categories).split("•").map((s) => s.trim())
-        : [];
-      const tabHit = tab === "Tất cả" ? true : cats.includes(tab);
-      return nameHit && tabHit;
+    return stores.filter((store) => {
+      const nameHit = store.store_name.toLowerCase().includes(qnorm);
+      const descHit = store.description?.toLowerCase().includes(qnorm) || false;
+      // TODO: Implement category filtering based on store food categories
+      const tabHit = tab === "Tất cả" ? true : true; // For now, show all for non-"Tất cả" tabs
+      return (nameHit || descHit) && tabHit;
     });
-  }, [q, tab, allRestaurants]);
+  }, [q, tab, stores]);
 
   const toggleFav = (id: number) => {
     setFavorites((prev) => {
@@ -68,6 +73,26 @@ export default function RestaurantsIndex() {
     if (h !== headerH) setHeaderH(h);
   };
 
+  const onRefresh = async () => {
+    setRefreshing(true);
+    try {
+      await dispatch(fetchStoresWithStats()).unwrap();
+    } catch (error) {
+      console.error('Error refreshing stores:', error);
+    } finally {
+      setRefreshing(false);
+    }
+  };
+
+  const renderStoreItem = ({ item }: { item: Store }) => (
+    <View style={{ paddingHorizontal: ITEM_PADDING, marginBottom: 16 }}>
+      <StoreCard 
+        store={item}
+        onPress={() => navigation.navigate("StoreDetail", { storeId: item.id })}
+      />
+    </View>
+  );
+
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: "#fff" }}>
       <View style={styles.fixedHeader} onLayout={onHeaderLayout}>
@@ -77,7 +102,7 @@ export default function RestaurantsIndex() {
               <ArrowLeft size={18} color="#3a1a12" />
             </TouchableOpacity>
 
-            <Text style={styles.headerTitle}>Nhà hàng</Text>
+            <Text style={styles.headerTitle}>Cửa hàng</Text>
 
             <View style={{ flexDirection: "row", gap: 10 }}>
               <TouchableOpacity
@@ -98,7 +123,7 @@ export default function RestaurantsIndex() {
           <View style={styles.searchRow}>
             <View style={styles.searchBox}>
               <TextInput
-                placeholder="Tìm kiếm nhà hàng..."
+                placeholder="Tìm kiếm cửa hàng..."
                 placeholderTextColor="#9CA3AF"
                 value={q}
                 onChangeText={setQ}
@@ -130,30 +155,47 @@ export default function RestaurantsIndex() {
 
         <View style={styles.foundWrap}>
           <Text style={styles.foundText}>
-            Tìm thấy <Text style={styles.foundNum}>{filtered.length}</Text> nhà hàng
+            Tìm thấy <Text style={styles.foundNum}>{filtered.length}</Text> cửa hàng
           </Text>
         </View>
       </View>
 
+      {/* Loading indicator */}
+      {loading && !refreshing && (
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color="#EB552D" />
+          <Text style={styles.loadingText}>Đang tải danh sách cửa hàng...</Text>
+        </View>
+      )}
+
       {/* Danh sách */}
       <FlatList
-        contentContainerStyle={{ paddingBottom: 110, paddingTop: headerH }}
+        contentContainerStyle={{ 
+          paddingBottom: 110, 
+          paddingTop: headerH + 16,
+          flexGrow: 1 
+        }}
         data={filtered}
-        keyExtractor={(i) => String(i.id)}
-        renderItem={({ item }) => (
-          <View style={{ paddingHorizontal: ITEM_PADDING }}>
-            <RestaurantCard1
-              item={item}
-              images={IMAGE_MAP}
-              isFavorite={favorites.includes(item.id)}
-              onToggleFavorite={() => toggleFav(item.id)}
-              onPress={() => navigation.navigate("RestaurantDetail", { id: item.id })}
-            />
-          </View>
-        )}
+        keyExtractor={(item) => String(item.id)}
+        renderItem={renderStoreItem}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            colors={["#EB552D"]}
+            tintColor="#EB552D"
+          />
+        }
+        ListEmptyComponent={
+          !loading ? (
+            <View style={styles.emptyContainer}>
+              <Text style={styles.emptyText}>
+                {q.trim() ? "Không tìm thấy cửa hàng nào" : "Chưa có cửa hàng nào"}
+              </Text>
+            </View>
+          ) : null
+        }
       />
-
-      {/* <BottomBar /> */}
     </SafeAreaView>
   );
 }
@@ -276,5 +318,29 @@ const styles = StyleSheet.create({
   foundNum: {
     color: "#111827",
     fontFamily: Fonts.LeagueSpartanBold,
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    paddingTop: 100,
+  },
+  loadingText: {
+    marginTop: 16,
+    fontSize: 16,
+    color: "#6B7280",
+    fontFamily: Fonts.LeagueSpartanRegular,
+  },
+  emptyContainer: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    paddingTop: 100,
+  },
+  emptyText: {
+    fontSize: 16,
+    color: "#6B7280",
+    fontFamily: Fonts.LeagueSpartanRegular,
+    textAlign: "center",
   },
 });

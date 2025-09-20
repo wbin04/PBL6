@@ -11,9 +11,14 @@ class RatingService {
 
   async getRatingsForFood(foodId: number): Promise<FoodRating[]> {
     try {
+      console.log('getRatingsForFood called with foodId:', foodId);
+      console.log('Making API call to:', `${this.baseURL}/`);
+      console.log('With params:', { food: foodId });
       const response = await apiClient.get<FoodRating[]>(`${this.baseURL}/`, {
         params: { food: foodId }
       });
+      console.log('getRatingsForFood response:', response);
+      console.log('Number of ratings returned:', response?.length || 0);
       return response;
     } catch (error) {
       console.error('Error fetching ratings for food:', error);

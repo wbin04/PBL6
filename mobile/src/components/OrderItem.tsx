@@ -45,8 +45,14 @@ const OrderItem: React.FC<OrderItemProps> = ({
   };
 
   const formatDate = (dateString: string) => {
+    // Tạo đối tượng Date từ chuỗi thời gian
     const date = new Date(dateString);
-    return date.toLocaleDateString('vi-VN', {
+    
+    // Thêm 7 giờ vào thời gian UTC để chuyển sang múi giờ Việt Nam (UTC+7)
+    const vietnamTime = new Date(date.getTime() + 7 * 60 * 60 * 1000);
+    
+    // Định dạng thời gian theo kiểu Việt Nam
+    return vietnamTime.toLocaleDateString('vi-VN', {
       day: '2-digit',
       month: '2-digit',
       year: 'numeric',
@@ -68,7 +74,11 @@ const OrderItem: React.FC<OrderItemProps> = ({
       <View style={styles.orderHeader}>
         <View style={styles.orderInfo}>
           <Text style={styles.orderId}>Đơn hàng #{order.id}</Text>
-          <Text style={styles.orderDate}>{formatDate(order.created_date)}</Text>
+          <Text style={styles.orderDate}>
+            {order.created_date_display 
+              ? order.created_date_display 
+              : formatDate(order.created_date)}
+          </Text>
         </View>
         <View style={[styles.statusBadge, { backgroundColor: getStatusColor(order.order_status) }]}>
           <Text style={styles.statusText}>{getStatusText(order.order_status)}</Text>

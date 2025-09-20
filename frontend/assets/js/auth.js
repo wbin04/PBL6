@@ -10,7 +10,7 @@ function getCurrentUser() {
 
 function getUserRole() {
     const user = getCurrentUser();
-    return user?.role?.role_name || null;
+    return user?.role_id || null;
 }
 
 function logout() {

@@ -1,5 +1,8 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { useNavigation } from "@react-navigation/native";
+import * as SecureStore from 'expo-secure-store';
+import { formatPriceWithCurrency } from "@/utils/priceUtils";
+import { useNavigation, useRoute, useFocusEffect } from "@react-navigation/native";
+import { STORAGE_KEYS } from "@/constants";
 import {
   Banknote,
   ChevronLeft,
@@ -14,8 +17,9 @@ import {
   Truck,
   X,
 } from "lucide-react-native";
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState, useCallback } from "react";
 import {
+  Alert,
   FlatList,
   Image,
   KeyboardAvoidingView,
@@ -32,6 +36,43 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { IMAGE_MAP, type ImageName } from "@/assets/imageMap";
 import { Fonts } from "@/constants/Fonts";
+import { API_CONFIG, ENDPOINTS } from "@/constants";
+import { CartItem as APICartItem } from "@/types";
+
+// User profile interface
+interface UserProfile {
+  id: number;
+  username: string;
+  email: string;
+  fullname?: string;
+  phone_number?: string;
+  address?: string;
+}
+
+// Enhanced API CartItem interface to match actual API response
+interface APICartItemWithSize {
+  id: number;
+  food_id: number;
+  food_option_id?: number;
+  quantity: number;
+  item_note?: string;
+  subtotal: number;
+  food: {
+    id: number;
+    title: string;
+    price: number;
+    image: string;
+    store: {
+      id: number;
+      store_name: string;
+    };
+  };
+  size?: {
+    id: number;
+    size_name: string;
+    price: number;
+  };
+}
 
 type CartItem = {
   id: number;
@@ -93,9 +134,20 @@ type Nav = any;
 
 export default function CheckoutScreen() {
   const navigation = useNavigation<Nav>();
+  const route = useRoute<any>();
+  const { selectedIds, selectedCartItems } = (route?.params ?? {}) as { 
+    selectedIds: number[]; 
+    selectedCartItems?: any[];
+  };
   const insets = useSafeAreaInsets();
 
+  // Debug route params immediately
+  console.log('CheckoutScreen - DIRECT route params check:', route?.params?.selectedCartItems?.length || 0);
+  console.log('CheckoutScreen - COMPLETE route params:', JSON.stringify(route?.params, null, 2));
+  
   const [selectedItems, setSelectedItems] = useState<CartItem[]>([]);
+  const [isLoadingProfile, setIsLoadingProfile] = useState(true);
+
   const [deliveryFee] = useState<number>(20000);
   const [tax] = useState<number>(0);
   const [selectedVouchers, setSelectedVouchers] = useState<SelectedVouchers>({});
@@ -105,34 +157,14 @@ export default function CheckoutScreen() {
   const [selectedBankAccount, setSelectedBankAccount] = useState("****5678");
   const [promoCode, setPromoCode] = useState("");
   const [showPromoInput, setShowPromoInput] = useState(false);
-  const [showAddressModal, setShowAddressModal] = useState(false);
   const [showOrderNotification, setShowOrderNotification] = useState(false);
 
   const [customerInfo, setCustomerInfo] = useState({
-    name: "Nguyễn Văn A",
-    phone: "0123456789",
-    address: "123 Đường ABC, Phường XYZ, Quận 1, TP.HCM",
+    name: "",
+    phone: "",
+    address: "",
     note: "",
   });
-
-  const savedAddresses = [
-    {
-      id: 1,
-      name: "Nhà riêng",
-      fullName: "Nguyễn Văn A",
-      phone: "0123456789",
-      address: "123 Đường ABC, Phường XYZ, Quận 1, TP.HCM",
-      isDefault: true,
-    },
-    {
-      id: 2,
-      name: "Văn phòng",
-      fullName: "Nguyễn Văn A",
-      phone: "0123456789",
-      address: "456 Đường DEF, Phường UVW, Quận 3, TP.HCM",
-      isDefault: false,
-    },
-  ];
 
   const paymentMethods: PaymentMethod[] = [
     { id: "cod", name: "Tiền mặt khi nhận hàng", icon: "cod", type: "cod" },
@@ -140,34 +172,163 @@ export default function CheckoutScreen() {
     { id: "bank", name: "Tài khoản ngân hàng", icon: "bank", type: "ewallet" },
   ];
 
-  useEffect(() => {
-    (async () => {
-      try {
-        const savedCart = await AsyncStorage.getItem("cart");
-        const savedSelected = await AsyncStorage.getItem("selectedItems");
-        if (savedCart && savedSelected) {
-          const cart: CartItem[] = JSON.parse(savedCart);
-          const selected: string[] = JSON.parse(savedSelected);
-          const selectedCartItems = cart.filter((item) => {
-            const key = `${item.id}-${item.size}-${item.toppings.join(",")}`;
-            return selected.includes(key);
-          });
-          setSelectedItems(selectedCartItems);
-        }
-      } catch (e) {
-        console.warn("Load cart error", e);
+  // Function to fetch user profile
+  const fetchUserProfile = async () => {
+    try {
+      setIsLoadingProfile(true);
+      console.log('Fetching user profile...');
+      
+      const token = await SecureStore.getItemAsync(STORAGE_KEYS.ACCESS_TOKEN);
+      console.log('Token found:', !!token);
+      
+      if (!token) {
+        console.error('No user token found');
+        setIsLoadingProfile(false);
+        return;
       }
-    })();
-  }, []);
 
-  useEffect(() => {
-    (async () => {
-      try {
-        const savedVouchers = await AsyncStorage.getItem("selectedVouchers");
-        if (savedVouchers) setSelectedVouchers(JSON.parse(savedVouchers));
-      } catch {}
-    })();
-  }, []);
+      const url = `${API_CONFIG.BASE_URL}${ENDPOINTS.PROFILE}`;
+      console.log('Profile API URL:', url);
+
+      const response = await fetch(url, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+      });
+
+      console.log('Profile API response status:', response.status);
+
+      if (response.ok) {
+        const userData: UserProfile = await response.json();
+        console.log('User profile loaded:', userData);
+        
+        setCustomerInfo({
+          name: userData.fullname || userData.username || '',
+          phone: userData.phone_number || '',
+          address: userData.address || '',
+          note: '',
+        });
+      } else {
+        console.error('Failed to fetch user profile:', response.status);
+        const errorText = await response.text();
+        console.error('Error response:', errorText);
+      }
+    } catch (error) {
+      console.error('Error fetching user profile:', error);
+    } finally {
+      setIsLoadingProfile(false);
+    }
+  };
+
+// Set selectedItems from route params - using both useEffect and useFocusEffect
+useEffect(() => {
+  console.log('CheckoutScreen - useEffect triggered');
+  console.log('CheckoutScreen - Setting items from route params');
+
+  // Access route params directly and safely
+  const routeParams = route?.params || {};
+  const { selectedCartItems: paramSelectedCartItems } = routeParams;
+
+  console.log('CheckoutScreen - Route params selectedCartItems:', paramSelectedCartItems?.length || 0);
+  console.log('CheckoutScreen - Full route params selectedCartItems:', paramSelectedCartItems);
+
+  if (paramSelectedCartItems && Array.isArray(paramSelectedCartItems) && paramSelectedCartItems.length > 0) {
+    console.log('CheckoutScreen - Converting', paramSelectedCartItems.length, 'items to checkout format');
+
+    const checkoutItems: CartItem[] = paramSelectedCartItems.map((item: APICartItemWithSize) => ({
+      id: item.id,
+      name: item.food.title,
+      restaurant: item.food.store?.store_name || 'Unknown Restaurant',
+      price: item.subtotal / item.quantity,
+      image: item.food.image,
+      quantity: item.quantity,
+      size: item.size?.size_name || 'Regular',
+      toppings: [], // Add toppings logic if needed
+      totalPrice: item.subtotal,
+    }));
+
+    console.log('CheckoutScreen - Converted checkout items:', checkoutItems.length, 'items');
+    console.log('CheckoutScreen - Checkout items details:', checkoutItems.map(item => ({
+      id: item.id,
+      name: item.name,
+      quantity: item.quantity,
+      totalPrice: item.totalPrice
+    })));
+
+    setSelectedItems(checkoutItems);
+    console.log('CheckoutScreen - State set with', checkoutItems.length, 'items');
+  } else {
+    console.log('CheckoutScreen - No valid selectedCartItems in route params');
+    setSelectedItems([]);
+  }
+}, [route.params?.selectedCartItems]);
+
+useFocusEffect(
+  useCallback(() => {
+    console.log('CheckoutScreen - useFocusEffect triggered');
+    console.log('CheckoutScreen - Setting items from route params');
+
+    // Access route params directly and safely
+    const routeParams = route?.params || {};
+    const { selectedCartItems: paramSelectedCartItems } = routeParams;
+
+    console.log('CheckoutScreen - Route params selectedCartItems:', paramSelectedCartItems?.length || 0);
+    console.log('CheckoutScreen - Full route params selectedCartItems:', paramSelectedCartItems);
+
+    if (paramSelectedCartItems && Array.isArray(paramSelectedCartItems) && paramSelectedCartItems.length > 0) {
+      console.log('CheckoutScreen - Converting', paramSelectedCartItems.length, 'items to checkout format');
+
+      const checkoutItems: CartItem[] = paramSelectedCartItems.map((item: APICartItemWithSize) => ({
+        id: item.id,
+        name: item.food.title,
+        restaurant: item.food.store?.store_name || 'Unknown Restaurant',
+        price: item.subtotal / item.quantity,
+        image: item.food.image,
+        quantity: item.quantity,
+        size: item.size?.size_name || 'Regular',
+        toppings: [], // Add toppings logic if needed
+        totalPrice: item.subtotal,
+      }));
+
+      console.log('CheckoutScreen - Converted checkout items:', checkoutItems.length, 'items');
+      console.log('CheckoutScreen - Checkout items details:', checkoutItems.map(item => ({
+        id: item.id,
+        name: item.name,
+        quantity: item.quantity,
+        totalPrice: item.totalPrice
+      })));
+
+      setSelectedItems(checkoutItems);
+      console.log('CheckoutScreen - State set with', checkoutItems.length, 'items');
+    } else {
+      console.log('CheckoutScreen - No valid selectedCartItems in route params');
+      setSelectedItems([]);
+    }
+  }, [route.params])
+);
+
+// Separate useEffect for one-time operations
+useEffect(() => {
+  // Load user profile when component mounts
+  fetchUserProfile();
+  
+  // Load saved vouchers
+  (async () => {
+    try {
+      const savedVouchers = await AsyncStorage.getItem("selectedVouchers");
+      if (savedVouchers) setSelectedVouchers(JSON.parse(savedVouchers));
+    } catch {}
+  })();
+}, []);
+
+// Reload user profile when screen comes into focus (after returning from Profile screen)
+useFocusEffect(
+  useCallback(() => {
+    fetchUserProfile();
+  }, [])
+);
 
   const getSubtotal = useMemo(
     () => () => selectedItems.reduce((sum, it) => sum + it.totalPrice, 0),
@@ -250,23 +411,82 @@ export default function CheckoutScreen() {
     if (type === "bank") navigation.navigate("BankPayment");
   };
 
-  const handleAddressSelect = (addr: (typeof savedAddresses)[number]) => {
-    setCustomerInfo((old) => ({
-      ...old,
-      name: addr.fullName,
-      phone: addr.phone,
-      address: addr.address,
-    }));
-    setShowAddressModal(false);
-  };
+
 
   const handlePlaceOrder = async () => {
-    setShowOrderNotification(true);
-    setTimeout(async () => {
+    try {
+      // Validate required fields
+      if (!customerInfo.name || !customerInfo.phone || !customerInfo.address) {
+        Alert.alert('Lỗi', 'Vui lòng cập nhật đầy đủ thông tin giao hàng trong Profile');
+        return;
+      }
+
+      // Get user token
+      const token = await SecureStore.getItemAsync(STORAGE_KEYS.ACCESS_TOKEN);
+      if (!token) {
+        console.error('No user token found');
+        return;
+      }
+
+      setShowOrderNotification(true);
+
+      // Map payment method to backend format
+      const paymentMethodMap = {
+        'cod': 'cash',
+        'card': 'vnpay',
+        'bank': 'momo'
+      };
+
+      // Prepare order data
+      const orderData = {
+        payment_method: paymentMethodMap[selectedPayment] || 'cash',
+        receiver_name: customerInfo.name,
+        phone_number: customerInfo.phone,
+        ship_address: customerInfo.address,
+        note: customerInfo.note || '',
+        // If vouchers are selected, include them
+        ...(Object.keys(selectedVouchers).length > 0 && {
+          promo_ids: Object.values(selectedVouchers).filter(v => v).map((v: Voucher) => v.id),
+          discount_amount: Object.values(selectedVouchers).reduce((total, v) => total + (v?.value || 0), 0)
+        })
+      };
+
+      console.log('Placing order with data:', orderData);
+
+      // Call order API
+      const response = await fetch(`${API_CONFIG.BASE_URL}/orders/`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(orderData)
+      });
+
+      if (response.ok) {
+        const result = await response.json();
+        console.log('Order created successfully:', result);
+        
+        // Clear saved vouchers
+        await AsyncStorage.removeItem("selectedVouchers");
+        
+        // Show success notification
+        setTimeout(() => {
+          setShowOrderNotification(false);
+          // Navigate to orders screen
+          navigation.navigate("Orders");
+        }, 1500);
+      } else {
+        const errorData = await response.json();
+        console.error('Failed to create order:', response.status, errorData);
+        setShowOrderNotification(false);
+        Alert.alert('Lỗi', errorData.error || 'Có lỗi xảy ra khi đặt hàng');
+      }
+    } catch (error) {
+      console.error('Error creating order:', error);
       setShowOrderNotification(false);
-      await AsyncStorage.multiRemove(["cart", "selectedItems", "selectedVouchers"]);
-      navigation.navigate("Home");
-    }, 1500);
+      Alert.alert('Lỗi', 'Có lỗi xảy ra khi đặt hàng');
+    }
   };
 
   return (
@@ -300,13 +520,24 @@ export default function CheckoutScreen() {
                 </View>
 
                 <View style={{ flex: 1 }}>
-                  <Text style={styles.addrNamePhone}>
-                    {customerInfo.name} - {customerInfo.phone}
-                  </Text>
-                  <Text style={styles.addrDetail}>{customerInfo.address}</Text>
+                  {isLoadingProfile ? (
+                    <>
+                      <Text style={styles.addrNamePhone}>Đang tải thông tin...</Text>
+                      <Text style={styles.addrDetail}>Vui lòng đợi</Text>
+                    </>
+                  ) : (
+                    <>
+                      <Text style={styles.addrNamePhone}>
+                        {customerInfo.name || 'Chưa có tên'} - {customerInfo.phone || 'Chưa có SĐT'}
+                      </Text>
+                      <Text style={styles.addrDetail}>
+                        {customerInfo.address || 'Chưa có địa chỉ - Vui lòng cập nhật trong Profile'}
+                      </Text>
+                    </>
+                  )}
                 </View>
 
-                <TouchableOpacity onPress={() => navigation.navigate("AddressList")} hitSlop={10}>
+                <TouchableOpacity onPress={() => navigation.navigate("Profile")} hitSlop={10}>
                   <ChevronRight size={18} color="#9ca3af" />
                 </TouchableOpacity>
               </View>
@@ -325,10 +556,12 @@ export default function CheckoutScreen() {
 
           {/* Món ăn đã chọn */}
           <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Món ăn đã chọn</Text>
+            <Text style={styles.sectionTitle}>Món ăn đã chọn ({selectedItems.length} items)</Text>
 
             <View>
-              {selectedItems.map((item) => (
+              {selectedItems.map((item) => {
+                console.log('Rendering item:', item.id, item.name);
+                return (
                 <View
                   key={`${item.id}-${item.size}-${item.toppings.join(",")}`}
                   style={styles.cartItemRow}
@@ -343,10 +576,11 @@ export default function CheckoutScreen() {
                   </View>
                   <View style={{ alignItems: "flex-end" }}>
                     <Text style={styles.cartItemQty}>x{item.quantity}</Text>
-                    <Text style={styles.cartItemPrice}>{item.totalPrice.toLocaleString()}đ</Text>
+                    <Text style={styles.cartItemPrice}>{formatPriceWithCurrency(item.totalPrice)}</Text>
                   </View>
                 </View>
-              ))}
+                );
+              })}
             </View>
           </View>
 
@@ -362,7 +596,7 @@ export default function CheckoutScreen() {
               <View style={styles.divider} />
               {!showPromoInput ? (
                 <TouchableOpacity
-                  onPress={() => navigation.navigate("Discount")}
+                  onPress={() => setShowPromoInput(true)}
                   style={styles.promoRow}
                 >
                   <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
@@ -517,52 +751,6 @@ export default function CheckoutScreen() {
           </TouchableOpacity>
         </View>
       </KeyboardAvoidingView>
-
-      <Modal visible={showAddressModal} transparent animationType="fade" onRequestClose={() => setShowAddressModal(false)}>
-        <View style={styles.modalOverlay}>
-          <View style={[styles.modalSheet, { paddingBottom: insets.bottom + 16 }]}>
-            <View style={styles.modalHead}>
-              <Text style={styles.modalTitle}>Chọn địa chỉ</Text>
-              <TouchableOpacity onPress={() => setShowAddressModal(false)}>
-                <X size={22} color="#9ca3af" />
-              </TouchableOpacity>
-            </View>
-
-            <FlatList
-              data={savedAddresses}
-              keyExtractor={(it) => String(it.id)}
-              ItemSeparatorComponent={() => <View style={{ height: 12 }} />}
-              renderItem={({ item }) => (
-                <TouchableOpacity onPress={() => handleAddressSelect(item)} style={styles.addrItem} activeOpacity={0.9}>
-                  <View style={{ flex: 1 }}>
-                    <View style={{ flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 2 }}>
-                      <Text style={styles.addrItemName}>{item.name}</Text>
-                      {item.isDefault && <Text style={styles.addrBadge}>Mặc định</Text>}
-                    </View>
-                    <Text style={styles.addrItemText}>
-                      {item.fullName} - {item.phone}
-                    </Text>
-                    <Text style={styles.addrItemText}>{item.address}</Text>
-                  </View>
-                </TouchableOpacity>
-              )}
-              style={{ marginBottom: 12 }}
-            />
-
-            <TouchableOpacity
-              onPress={() => {
-                setShowAddressModal(false);
-                navigation.navigate("AddressAdd");
-              }}
-              style={styles.addAddrBtn}
-              activeOpacity={0.9}
-            >
-              <Plus size={18} color="#6b7280" />
-              <Text style={styles.addAddrText}>Thêm địa chỉ mới</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      </Modal>
 
       {showOrderNotification ? (
         <View pointerEvents="none" style={styles.toast}>

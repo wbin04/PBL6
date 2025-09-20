@@ -1,4 +1,5 @@
 import { Fonts } from "@/constants/Fonts";
+import { formatPriceWithCurrency } from "@/utils/priceUtils";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useRouter } from "expo-router";
 import { Check, Minus, Plus, ShoppingCart, X, Zap } from "lucide-react-native";
@@ -255,7 +256,7 @@ export default function FoodCustomizationPopup({
                       { fontFamily: Fonts.LeagueSpartanBold },
                     ]}
                   >
-                    {basePrice.toLocaleString()}đ
+                    {formatPriceWithCurrency(basePrice)}
                   </Text>
                 </View>
               </View>
@@ -320,7 +321,7 @@ export default function FoodCustomizationPopup({
                         {s.name}
                       </Text>
                       {s.price > 0 && (
-                        <Text style={styles.sizeSub}>+{s.price.toLocaleString()}đ</Text>
+                        <Text style={styles.sizeSub}>+{formatPriceWithCurrency(s.price)}</Text>
                       )}
                     </TouchableOpacity>
                   );
@@ -355,7 +356,7 @@ export default function FoodCustomizationPopup({
                       >
                         {t.name}
                       </Text>
-                      <Text style={styles.toppingPrice}>+{t.price.toLocaleString()}đ</Text>
+                      <Text style={styles.toppingPrice}>+{formatPriceWithCurrency(t.price)}</Text>
                     </TouchableOpacity>
                   );
                 })}
@@ -375,7 +376,7 @@ export default function FoodCustomizationPopup({
             <Text
               style={[styles.totalValue, { fontFamily: Fonts.LeagueSpartanBold }]}
             >
-              {calculateTotalPrice.toLocaleString()}đ
+              {formatPriceWithCurrency(calculateTotalPrice)}
             </Text>
           </View>
           <View style={styles.actionRow}>

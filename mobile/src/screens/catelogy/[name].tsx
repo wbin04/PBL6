@@ -9,6 +9,7 @@ import { Button } from "@/components/Button1";
 import { Card } from "@/components/card";
 import { Sheet, SheetContent } from "@/components/sheet";
 import { useToast } from "@/components/use-toast";
+import { formatPriceWithCurrency } from "@/utils/priceUtils";
 
 import db from "@/assets/database.json";
 import { IMAGE_MAP } from "@/assets/imageMap";
@@ -82,7 +83,7 @@ export default function CategoryScreen() {
           </Pressable>
 
           <View style={styles.ratingBadge}>
-            <Text style={styles.ratingText}>{item.rating.toFixed(1)}</Text>
+            <Text style={styles.ratingText}>{item.average_rating?.toFixed(1) || '0.0'}</Text>
             <Star size={12} color="#FACC15" fill="#FACC15" />
           </View>
         </View>
@@ -97,7 +98,7 @@ export default function CategoryScreen() {
         </Text>
 
         <View style={styles.rowBetween}>
-          <Text style={styles.price}>{item.price}</Text>
+          <Text style={styles.price}>{formatPriceWithCurrency(item.price)}</Text>
           <Button size="sm" className="h-8 px-2 rounded-lg" onPress={() => openCustomize(item)}>
             <Plus size={16} color="#fff" />
           </Button>

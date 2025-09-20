@@ -18,16 +18,27 @@ export const login = createAsyncThunk(
   'auth/login',
   async (credentials: LoginRequest, { rejectWithValue }) => {
     try {
+      console.log('AuthSlice: Starting login with credentials:', { email: credentials.email });
       const response = await authService.login(credentials);
+      console.log('AuthSlice: Login response received:', response);
       
       // Store tokens securely
       await SecureStore.setItemAsync(STORAGE_KEYS.ACCESS_TOKEN, response.access);
       await SecureStore.setItemAsync(STORAGE_KEYS.REFRESH_TOKEN, response.refresh);
       await SecureStore.setItemAsync(STORAGE_KEYS.USER, JSON.stringify(response.user));
       
+      console.log('AuthSlice: Tokens and user data stored successfully');
       return response;
     } catch (error: any) {
-      return rejectWithValue(error.message);
+      console.error('AuthSlice: Login error:', error);
+      // Handle different error types
+      if (error.message) {
+        return rejectWithValue(error.message);
+      } else if (typeof error === 'string') {
+        return rejectWithValue(error);
+      } else {
+        return rejectWithValue('Đã xảy ra lỗi không xác định');
+      }
     }
   }
 );

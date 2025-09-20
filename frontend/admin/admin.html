@@ -243,9 +243,15 @@
                 </div>
                 <div class="form-group">
                     <label for="food-image">Hình ảnh món ăn:</label>
-                    <!-- Preview existing or selected image -->
-                    <img id="food-image-preview" src="" alt="Preview" style="display:none; max-width:100%; height:auto; margin-bottom:1rem;">
+                    <!-- Preview container -->
+                    <div class="image-preview-container" id="image-preview-container">
+                        <img id="food-image-preview" src="" alt="Preview" style="display:none;">
+                        <button type="button" class="remove-preview-btn" id="remove-preview-btn" style="display:none;" title="Xóa ảnh">
+                            <i class="fas fa-times"></i>
+                        </button>
+                    </div>
                     <input type="file" id="food-image" name="image_file" accept="image/*">
+                    <small class="form-text" id="file-info">Chọn ảnh để xem trước (Tối đa 5MB)</small>
                 </div>
                 <div class="modal-actions">
                     <button type="button" class="btn btn-secondary close-modal">Hủy</button>

@@ -18,11 +18,16 @@ def rating_list_create(request):
         from django.db.models import F
         food_id = request.GET.get('food')
         order_id = request.GET.get('order')
+        print(f"DEBUG - GET params: food={food_id}, order={order_id}")
+        print(f"DEBUG - All GET params: {request.GET}")
         qs = RatingFood.objects.all()
+        print(f"DEBUG - Initial queryset count: {qs.count()}")
         if food_id:
             qs = qs.filter(food_id=food_id)
+            print(f"DEBUG - After food filter, count: {qs.count()}")
         if order_id:
             qs = qs.filter(order_id=order_id)
+            print(f"DEBUG - After order filter, count: {qs.count()}")
         # Fetch raw values and manually map to avoid annotation conflicts
         raw = qs.values('user__username', 'rating', 'content')
         data = [

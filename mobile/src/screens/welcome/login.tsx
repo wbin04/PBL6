@@ -12,70 +12,66 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+import { useDispatch, useSelector } from 'react-redux';
+import { RootState, AppDispatch } from '@/store';
+import { login } from '@/store/slices/authSlice';
 
 import BottomBar from "@/components/BottomBar";
 import { Colors } from "@/constants/Colors";
 import { Fonts } from "@/constants/Fonts";
+import { VALIDATION } from '@/constants';
 
 export default function LoginScreen() {
   const navigation = useNavigation<any>(); 
+  const dispatch = useDispatch<AppDispatch>();
+  const { loading, error } = useSelector((state: RootState) => state.auth);
+  
   const [showPassword, setShowPassword] = useState(false);
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
+  const [email, setEmail] = useState("bin@gmail.com"); // Test data
+  const [password, setPassword] = useState("123"); // Test data
 
-  // Mock user data for testing
-  const users = [
-    {
-      email: "customer@example.com",
-      password: "123456",
-      role_id: 1,
-      name: "John Smith",
-    },
-    {
-      email: "admin@example.com", 
-      password: "123456",
-      role_id: 2,
-      name: "Samantha",
-    },
-  ];
-
-  const goHome = () => {
-    navigation.navigate("MainTabs", { screen: "Home" });
-  };
-
-  const goAdminHome = () => {
-    navigation.navigate("AdminHome");
-  };
-
-  const handleLogin = () => {
-    console.log("Đăng nhập:", { email, password });
-    
-    // Tìm user với email và password khớp
-    const user = users.find(u => u.email === email && u.password === password);
-    
-    if (!user) {
-      Alert.alert("Lỗi đăng nhập", "Email hoặc mật khẩu không đúng!");
-      return;
+  const validateForm = () => {
+    if (!email.trim()) {
+      Alert.alert('Lỗi', 'Vui lòng nhập email');
+      return false;
     }
+    
+    if (!VALIDATION.EMAIL_REGEX.test(email)) {
+      Alert.alert('Lỗi', 'Email không hợp lệ');
+      return false;
+    }
+    
+    if (!password.trim()) {
+      Alert.alert('Lỗi', 'Vui lòng nhập mật khẩu');
+      return false;
+    }
+    
+    if (password.length < VALIDATION.PASSWORD_MIN_LENGTH) {
+      Alert.alert('Lỗi', `Mật khẩu phải có ít nhất ${VALIDATION.PASSWORD_MIN_LENGTH} ký tự`);
+      return false;
+    }
+    
+    return true;
+  };
 
-    // Kiểm tra role_id và điều hướng phù hợp
-    if (user.role_id === 1) {
-      // Customer - đi tới home của khách hàng
-      console.log("Đăng nhập với role Customer");
-      goHome();
-    } else if (user.role_id === 2) {
-      // Admin - đi tới home của admin
-      console.log("Đăng nhập với role Admin");
-      goAdminHome();
-    } else {
-      Alert.alert("Lỗi", "Role không hợp lệ!");
+  const handleLogin = async () => {
+    if (!validateForm()) return;
+    
+    try {
+      console.log('Attempting login with:', { email, password });
+      await dispatch(login({ email: email.trim(), password })).unwrap();
+      console.log('Login successful, navigation will happen automatically');
+      // Navigation sẽ tự động xảy ra thông qua AppNavigator khi isAuthenticated = true
+    } catch (err: any) {
+      console.error('Login error caught in handleLogin:', err);
+      const message = typeof err === 'string' ? err : (err.message ?? 'Đã xảy ra lỗi không xác định');
+      Alert.alert('Lỗi đăng nhập', message);
     }
   };
 
   const handleSocialLogin = (provider: string) => {
     console.log(`Đăng nhập với ${provider}`);
-    Alert.alert("Đăng nhập MXH", `Đăng nhập bằng ${provider}`);
-    goHome(); 
+    Alert.alert("Đăng nhập MXH", `Chức năng đăng nhập bằng ${provider} đang được phát triển`);
   };
 
   return (
@@ -143,8 +139,14 @@ export default function LoginScreen() {
           </View>
 
           {/* Login button */}
-          <TouchableOpacity style={styles.primaryBtn} onPress={handleLogin}>
-            <Text style={styles.primaryText}>Đăng nhập</Text>
+          <TouchableOpacity 
+            style={[styles.primaryBtn, loading && { opacity: 0.7 }]} 
+            onPress={handleLogin}
+            disabled={loading}
+          >
+            <Text style={styles.primaryText}>
+              {loading ? 'Đang đăng nhập...' : 'Đăng nhập'}
+            </Text>
           </TouchableOpacity>
 
           {/* Social Login */}

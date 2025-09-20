@@ -14,11 +14,12 @@ import { useRoute, useNavigation, RouteProp } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { Ionicons } from '@expo/vector-icons';
 import { useDispatch, useSelector } from 'react-redux';
+import * as SecureStore from 'expo-secure-store';
 import { RootState, AppDispatch } from '@/store';
 import { addToCart } from '@/store/slices/cartSlice';
 import { menuService, cartService } from '@/services';
 import { FoodDetail, RootStackParamList } from '@/types';
-import { COLORS, SPACING, BORDER_RADIUS, SHADOWS, API_CONFIG } from '@/constants';
+import { COLORS, SPACING, BORDER_RADIUS, SHADOWS, API_CONFIG, STORAGE_KEYS } from '@/constants';
 
 type FoodDetailRouteProp = RouteProp<RootStackParamList, 'FoodDetail'>;
 type FoodDetailNavigationProp = NativeStackNavigationProp<RootStackParamList, 'FoodDetail'>;
@@ -27,7 +28,7 @@ const FoodDetailScreen: React.FC = () => {
   const route = useRoute<FoodDetailRouteProp>();
   const navigation = useNavigation<FoodDetailNavigationProp>();
   const dispatch = useDispatch<AppDispatch>();
-  const { user } = useSelector((state: RootState) => state.auth);
+  const { user, isAuthenticated, loading: authLoading } = useSelector((state: RootState) => state.auth);
 
   const [foodDetail, setFoodDetail] = useState<FoodDetail | null>(null);
   const [loading, setLoading] = useState(true);
@@ -59,6 +60,9 @@ const FoodDetailScreen: React.FC = () => {
   };
 
   const handleAddToCart = async () => {
+    console.log('handleAddToCart called - user:', user ? 'logged in' : 'not logged in');
+    console.log('User details:', user ? { id: user.id, username: user.username } : 'No user');
+    
     if (!foodDetail || !user) {
       Alert.alert('Thông báo', 'Bạn cần đăng nhập để thêm món vào giỏ hàng');
       return;
@@ -71,6 +75,28 @@ const FoodDetailScreen: React.FC = () => {
 
     try {
       setAddingToCart(true);
+      
+      // Debug authentication state
+      console.log('=== CART DEBUG ===');
+      console.log('Auth state - isAuthenticated:', isAuthenticated);
+      console.log('Auth state - user:', user ? 'exists' : 'null');
+      console.log('Auth state - authLoading:', authLoading);
+      
+      // Check tokens in SecureStore
+      const accessToken = await SecureStore.getItemAsync(STORAGE_KEYS.ACCESS_TOKEN);
+      const refreshToken = await SecureStore.getItemAsync(STORAGE_KEYS.REFRESH_TOKEN);
+      console.log('SecureStore - Access token exists:', !!accessToken);
+      console.log('SecureStore - Refresh token exists:', !!refreshToken);
+      if (accessToken) {
+        console.log('Token preview:', accessToken.substring(0, 30) + '...');
+      }
+      console.log('=== END CART DEBUG ===');
+      
+      console.log('Adding main item to cart via API:', { 
+        food_id: foodDetail.id, 
+        quantity 
+      });
+      
       const result = await dispatch(addToCart({ 
         food_id: foodDetail.id, 
         quantity 

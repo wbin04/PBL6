@@ -248,7 +248,7 @@ export default function RestaurantDetail() {
             isFav={favFoods.includes(item.id)}
             onToggleFav={() => toggleFavFood(item.id)}
             onOpen={() => openCustomize(item)} 
-            onPress={() => navigation.navigate("FoodDetail", { id: item.id })}
+            onPress={() => navigation.navigate("FoodDetail", { foodId: item.id })}
           />
         )}
       />

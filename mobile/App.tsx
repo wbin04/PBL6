@@ -202,6 +202,7 @@ import CartScreen from "@/screens/cart";
 import CheckoutScreen from "@/screens/CheckoutScreen";
 import RestaurantDetail from "@/screens/restaurants/[id]";
 import FoodDetailScreen from "@/screens/foods/[id]";
+import { StoreDetailScreen } from "@/screens/StoreDetailScreen";
 import FoodReviewsScreen from "@/screens/foods/[id]/reviews";
 import CardPaymentScreen from "@/screens/payment/card";
 import BankPaymentScreen from "@/screens/payment/bank";
@@ -221,8 +222,9 @@ import { ProfileScreen } from "@/screens/ProfileScreen";
 import AdminHomeScreen from "@/screens/AdminHomeScreen";
 
 // Redux
-import { Provider } from "react-redux";
-import { store } from "@/store";
+import { Provider, useSelector, useDispatch } from "react-redux";
+import { store, RootState, AppDispatch } from "@/store";
+import { loadUserFromStorage } from '@/store/slices/authSlice';
 
 SplashScreen.preventAutoHideAsync().catch(() => {});
 
@@ -296,6 +298,62 @@ function MainTabs() {
   );
 }
 
+function AppNavigator() {
+  const dispatch = useDispatch<AppDispatch>();
+  const { isAuthenticated, loading, user } = useSelector((state: RootState) => state.auth);
+
+  useEffect(() => {
+    // Load user from storage on app start
+    dispatch(loadUserFromStorage());
+  }, [dispatch]);
+
+  // Show loading screen while checking authentication
+  if (loading) {
+    return null; // or a loading screen component
+  }
+
+  return (
+    <NavigationContainer>
+      <StatusBar style="auto" />
+      <Stack.Navigator screenOptions={{ headerShown: false }}>
+        {isAuthenticated ? (
+          // Authenticated user screens
+          <>
+            <Stack.Screen name="MainTabs" component={MainTabs} />
+            <Stack.Screen name="Checkout" component={CheckoutScreen} />
+            <Stack.Screen name="Cart" component={CartScreen} />
+            <Stack.Screen name="RestaurantDetail" component={RestaurantDetail} />
+            <Stack.Screen name="StoreDetail" component={StoreDetailScreen} />
+            <Stack.Screen name="FoodDetail" component={FoodDetailScreen} />
+            <Stack.Screen name="FoodReviews" component={FoodReviewsScreen} />
+            <Stack.Screen name="CardPayment" component={CardPaymentScreen} />
+            <Stack.Screen name="BankPayment" component={BankPaymentScreen} />
+            <Stack.Screen name="AddressList" component={AddressListScreen} />
+            <Stack.Screen name="AddAddress" component={AddAddressScreen} />
+            <Stack.Screen name="Cancel" component={CancelScreen} />
+            <Stack.Screen name="Tracking" component={TrackingScreen} />
+            <Stack.Screen name="MapTracking" component={MapTrackingScreen} />
+            <Stack.Screen name="AddressSelection" component={AddressSelectionScreen} />
+            <Stack.Screen name="AddressPicker" component={AddressPickerScreen} />
+            <Stack.Screen name="Review" component={ReviewScreen} />
+            <Stack.Screen name="CancelDetail" component={CancelDetailScreen} />
+            <Stack.Screen name="Profile" component={ProfileScreen} />
+            {user?.role === 'Quản lý' && (
+              <Stack.Screen name="AdminHome" component={AdminHomeScreen} />
+            )}
+          </>
+        ) : (
+          // Non-authenticated user screens
+          <>
+            <Stack.Screen name="Login" component={LoginScreen} />
+            <Stack.Screen name="Register" component={RegisterScreen} />
+          </>
+        )}
+      </Stack.Navigator>
+    </NavigationContainer>
+  );
+}
+
 export default function App() {
   const [loaded] = useFonts(fontAssets);
 
@@ -309,34 +367,7 @@ export default function App() {
     <Provider store={store}>
       <GestureHandlerRootView style={{ flex: 1 }}>
         <SafeAreaProvider>
-          <NavigationContainer>
-            <StatusBar style="auto" />
-            <Stack.Navigator screenOptions={{ headerShown: false }} initialRouteName="MainTabs">
-              <Stack.Screen name="Login" component={LoginScreen} />
-              <Stack.Screen name="Register" component={RegisterScreen} />
-
-              <Stack.Screen name="MainTabs" component={MainTabs} />
-
-              <Stack.Screen name="Checkout" component={CheckoutScreen} />
-              <Stack.Screen name="Cart" component={CartScreen} />
-              <Stack.Screen name="RestaurantDetail" component={RestaurantDetail} />
-              <Stack.Screen name="FoodDetail" component={FoodDetailScreen} />
-              <Stack.Screen name="FoodReviews" component={FoodReviewsScreen} />
-              <Stack.Screen name="CardPayment" component={CardPaymentScreen} />
-              <Stack.Screen name="BankPayment" component={BankPaymentScreen} />
-              <Stack.Screen name="AddressList" component={AddressListScreen} />
-              <Stack.Screen name="AddAddress" component={AddAddressScreen} />
-              <Stack.Screen name="Cancel" component={CancelScreen} />
-              <Stack.Screen name="Tracking" component={TrackingScreen} />
-              <Stack.Screen name="MapTracking" component={MapTrackingScreen} />
-              <Stack.Screen name="AddressSelection" component={AddressSelectionScreen} />
-              <Stack.Screen name="AddressPicker" component={AddressPickerScreen} />
-              <Stack.Screen name="Review" component={ReviewScreen} />
-              <Stack.Screen name="CancelDetail" component={CancelDetailScreen} />
-              <Stack.Screen name="Profile" component={ProfileScreen} />
-              <Stack.Screen name="AdminHome" component={AdminHomeScreen} />
-            </Stack.Navigator>
-          </NavigationContainer>
+          <AppNavigator />
         </SafeAreaProvider>
       </GestureHandlerRootView>
     </Provider>

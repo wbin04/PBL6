@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -8,30 +8,83 @@ import {
   TextInput,
   Image,
   StatusBar,
+  Alert,
+  ActivityIndicator,
 } from 'react-native';
 import { ChevronLeft, Camera } from 'lucide-react-native';
 import { useNavigation } from '@react-navigation/native';
+import { useDispatch, useSelector } from 'react-redux';
 import { Fonts } from '@/constants/Fonts';
+import { RootState, AppDispatch } from '@/store';
+import { updateProfile, clearError } from '@/store/slices/authSlice';
+import { User } from '@/types';
 
 type Nav = any;
 
 export const ProfileScreen: React.FC = () => {
   const navigation = useNavigation<Nav>();
+  const dispatch = useDispatch<AppDispatch>();
+  const { user, loading, error } = useSelector((state: RootState) => state.auth);
   
   const [profileData, setProfileData] = useState({
-    fullName: 'John Smith',
-    dateOfBirth: '09 / 10 / 1991',
-    email: 'johnsmith@example.com',
-    phoneNumber: '+123 567 89000',
+    fullname: '',
+    email: '',
+    phone_number: '',
+    address: '',
   });
+  const [isUpdating, setIsUpdating] = useState(false);
 
-  const handleUpdateProfile = () => {
-    // Handle profile update logic here
-    console.log('Updating profile...', profileData);
-    // You can add API call or navigation back here
+  // Load user data when component mounts
+  useEffect(() => {
+    if (user) {
+      setProfileData({
+        fullname: user.fullname || '',
+        email: user.email || '',
+        phone_number: user.phone_number || '',
+        address: user.address || '',
+      });
+    }
+  }, [user]);
+
+  // Clear error when component unmounts
+  useEffect(() => {
+    return () => {
+      dispatch(clearError());
+    };
+  }, [dispatch]);
+
+  const handleUpdateProfile = async () => {
+    if (!profileData.fullname.trim()) {
+      Alert.alert('Lỗi', 'Vui lòng nhập họ tên');
+      return;
+    }
+
+    if (!profileData.email.trim()) {
+      Alert.alert('Lỗi', 'Vui lòng nhập email');
+      return;
+    }
+
+    setIsUpdating(true);
+    try {
+      await dispatch(updateProfile(profileData)).unwrap();
+      Alert.alert(
+        'Thành công',
+        'Cập nhật thông tin cá nhân thành công!',
+        [
+          {
+            text: 'OK',
+            onPress: () => navigation.goBack(),
+          },
+        ]
+      );
+    } catch (error: any) {
+      Alert.alert('Lỗi', error || 'Có lỗi xảy ra khi cập nhật thông tin');
+    } finally {
+      setIsUpdating(false);
+    }
   };
 
-  const handleInputChange = (field: string, value: string) => {
+  const handleInputChange = (field: keyof typeof profileData, value: string) => {
     setProfileData(prev => ({
       ...prev,
       [field]: value,
@@ -47,7 +100,7 @@ export const ProfileScreen: React.FC = () => {
         <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
           <ChevronLeft size={24} color="#fff" />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>My profile</Text>
+        <Text style={styles.headerTitle}>Thông tin cá nhân</Text>
         <View style={styles.placeholder} />
       </View>
 
@@ -56,37 +109,31 @@ export const ProfileScreen: React.FC = () => {
         <View style={styles.avatarSection}>
           <View style={styles.avatarContainer}>
             <Image
-              source={require('@/assets/images/gourmet-burger.png')}
+              source={user?.fullname ? 
+                { uri: `https://ui-avatars.com/api/?name=${encodeURIComponent(user.fullname)}&background=e95322&color=fff&size=200` } :
+                require('@/assets/images/gourmet-burger.png')
+              }
               style={styles.avatar}
             />
             <TouchableOpacity style={styles.cameraButton}>
               <Camera size={16} color="#fff" />
             </TouchableOpacity>
           </View>
+          {user?.fullname && (
+            <Text style={styles.userName}>{user.fullname}</Text>
+          )}
         </View>
 
         {/* Form Fields */}
         <View style={styles.formContainer}>
           {/* Full Name */}
           <View style={styles.fieldContainer}>
-            <Text style={styles.fieldLabel}>Full Name</Text>
+            <Text style={styles.fieldLabel}>Họ và tên</Text>
             <TextInput
               style={styles.textInput}
-              value={profileData.fullName}
-              onChangeText={(value) => handleInputChange('fullName', value)}
-              placeholder="Enter your full name"
-              placeholderTextColor="#999"
-            />
-          </View>
-
-          {/* Date of Birth */}
-          <View style={styles.fieldContainer}>
-            <Text style={styles.fieldLabel}>Date of Birth</Text>
-            <TextInput
-              style={styles.textInput}
-              value={profileData.dateOfBirth}
-              onChangeText={(value) => handleInputChange('dateOfBirth', value)}
-              placeholder="DD / MM / YYYY"
+              value={profileData.fullname}
+              onChangeText={(value) => handleInputChange('fullname', value)}
+              placeholder="Nhập họ và tên của bạn"
               placeholderTextColor="#999"
             />
           </View>
@@ -98,7 +145,7 @@ export const ProfileScreen: React.FC = () => {
               style={styles.textInput}
               value={profileData.email}
               onChangeText={(value) => handleInputChange('email', value)}
-              placeholder="Enter your email"
+              placeholder="Nhập email của bạn"
               placeholderTextColor="#999"
               keyboardType="email-address"
               autoCapitalize="none"
@@ -107,22 +154,51 @@ export const ProfileScreen: React.FC = () => {
 
           {/* Phone Number */}
           <View style={styles.fieldContainer}>
-            <Text style={styles.fieldLabel}>Phone Number</Text>
+            <Text style={styles.fieldLabel}>Số điện thoại</Text>
             <TextInput
               style={styles.textInput}
-              value={profileData.phoneNumber}
-              onChangeText={(value) => handleInputChange('phoneNumber', value)}
-              placeholder="Enter your phone number"
+              value={profileData.phone_number}
+              onChangeText={(value) => handleInputChange('phone_number', value)}
+              placeholder="Nhập số điện thoại của bạn"
               placeholderTextColor="#999"
               keyboardType="phone-pad"
             />
           </View>
+
+          {/* Address */}
+          <View style={styles.fieldContainer}>
+            <Text style={styles.fieldLabel}>Địa chỉ</Text>
+            <TextInput
+              style={styles.textInput}
+              value={profileData.address}
+              onChangeText={(value) => handleInputChange('address', value)}
+              placeholder="Nhập địa chỉ của bạn"
+              placeholderTextColor="#999"
+              multiline
+              numberOfLines={2}
+            />
+          </View>
         </View>
+
+        {/* Error Message */}
+        {error && (
+          <View style={styles.errorContainer}>
+            <Text style={styles.errorText}>{error}</Text>
+          </View>
+        )}
 
         {/* Update Button */}
         <View style={styles.buttonContainer}>
-          <TouchableOpacity style={styles.updateButton} onPress={handleUpdateProfile}>
-            <Text style={styles.updateButtonText}>Update Profile</Text>
+          <TouchableOpacity 
+            style={[styles.updateButton, (isUpdating || loading) && styles.updateButtonDisabled]} 
+            onPress={handleUpdateProfile}
+            disabled={isUpdating || loading}
+          >
+            {isUpdating ? (
+              <ActivityIndicator size="small" color="#fff" />
+            ) : (
+              <Text style={styles.updateButtonText}>Cập nhật thông tin</Text>
+            )}
           </TouchableOpacity>
         </View>
       </ScrollView>
@@ -190,6 +266,13 @@ const styles = StyleSheet.create({
     borderWidth: 3,
     borderColor: '#fff',
   },
+  userName: {
+    marginTop: 12,
+    fontSize: 18,
+    fontFamily: Fonts.LeagueSpartanBold,
+    color: '#333',
+    textAlign: 'center',
+  },
   formContainer: {
     paddingHorizontal: 24,
   },
@@ -217,12 +300,25 @@ const styles = StyleSheet.create({
     paddingTop: 20,
     paddingBottom: 40,
   },
+  errorContainer: {
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+  },
+  errorText: {
+    color: '#e95322',
+    fontSize: 14,
+    fontFamily: Fonts.LeagueSpartanMedium,
+    textAlign: 'center',
+  },
   updateButton: {
     backgroundColor: '#e95322',
     borderRadius: 12,
     paddingVertical: 16,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  updateButtonDisabled: {
+    backgroundColor: '#cccccc',
   },
   updateButtonText: {
     color: '#fff',

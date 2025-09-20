@@ -4,6 +4,7 @@ import { Heart, Star } from "lucide-react-native";
 import { ThemedText } from "@/components/ThemedText";
 import { useToast } from "@/components/use-toast";
 import { Fonts } from "@/constants/Fonts";
+import { formatPriceWithCurrency } from "@/utils/priceUtils";
 
 export function FoodTile({
   item,
@@ -106,7 +107,7 @@ export function FoodTile({
                 fontSize: 12,
               }}
             >
-              {item.rating}
+              {item.average_rating?.toFixed(1) || '0.0'}
             </ThemedText>
             <Star size={12} color="#facc15" fill="#facc15" />
           </View>
@@ -155,7 +156,7 @@ export function FoodTile({
                 fontSize: 18,
               }}
             >
-              {item.price}
+              {formatPriceWithCurrency(item.price)}
             </ThemedText>
 
             <TouchableOpacity

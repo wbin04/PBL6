@@ -62,47 +62,120 @@ function showCartContent() {
 function displayCartItems(items) {
     const cartItemsEl = document.getElementById('cart-items');
     
-    cartItemsEl.innerHTML = items.map(item => `
-        <div class="cart-item" data-food-id="${item.food.id}">
-            <img src="http://localhost:8000/media/${item.food.image}" 
-                 alt="${item.food.title}" 
-                 class="item-image" 
-                 onerror="this.style.display='none'">
-            
-            <div class="item-details">
-                <div class="item-name">${item.food.title}</div>
-                <div class="item-price">${formatCurrency(item.food.price)}</div>
-            </div>
+    // Group items by store
+    const itemsByStore = {};
+    items.forEach(item => {
+        const storeId = item.food.store.id; // Store info is now nested in food.store
+        if (!itemsByStore[storeId]) {
+            itemsByStore[storeId] = {
+                store: item.food.store, // Store info from food.store object
+                items: []
+            };
+        }
+        itemsByStore[storeId].items.push(item);
+    });
+    
+    // Generate HTML for each store group
+    const storeGroupsHTML = Object.keys(itemsByStore).map(storeId => {
+        const storeGroup = itemsByStore[storeId];
+        const store = storeGroup.store;
+        const storeItems = storeGroup.items;
+        
+        // Calculate store subtotal
+        const storeSubtotal = storeItems.reduce((sum, item) => sum + item.subtotal, 0);
+        
+        const storeItemsHTML = storeItems.map(item => `
+            <div class="cart-item" data-food-id="${item.food.id}">
+                <img src="http://localhost:8000/media/${item.food.image}" 
+                     alt="${item.food.title}" 
+                     class="item-image" 
+                     onerror="this.style.display='none'">
+                
+                <div class="item-details">
+                    <div class="item-name">${item.food.title}</div>
+                    <div class="item-price">${formatCurrency(item.food.price)}</div>
+                    <div class="item-note-section">
+                        <textarea class="item-note-input" 
+                                  placeholder="Thêm ghi chú cho món này (VD: không cay, thêm rau...)"
+                                  rows="2"
+                                  onblur="updateItemNote(${item.food.id}, this.value)"
+                                  onchange="updateItemNote(${item.food.id}, this.value)">${item.item_note || ''}</textarea>
+                    </div>
+                </div>
 
-            <div class="quantity-controls">
-                <button class="quantity-btn" onclick="updateQuantity(${item.food.id}, ${item.quantity - 1})">
-                    −
+                <div class="quantity-controls">
+                    <button class="quantity-btn" onclick="updateQuantity(${item.food.id}, ${item.quantity - 1})">
+                        −
+                    </button>
+                    <span class="quantity-display">${item.quantity}</span>
+                    <button class="quantity-btn" onclick="updateQuantity(${item.food.id}, ${item.quantity + 1})">
+                        +
+                    </button>
+                </div>
+
+                <div class="item-total">
+                    ${formatCurrency(item.subtotal)}
+                </div>
+
+                <button class="remove-btn" onclick="removeFromCart(${item.food.id})">
+                    Xóa
                 </button>
-                <span class="quantity-display">${item.quantity}</span>
-                <button class="quantity-btn" onclick="updateQuantity(${item.food.id}, ${item.quantity + 1})">
-                    +
-                </button>
             </div>
-
-            <div class="item-total">
-                ${formatCurrency(item.subtotal)}
+        `).join('');
+        
+        return `
+            <div class="store-group">
+                <div class="store-header">
+                    <img src="http://localhost:8000/media/${store.image}" 
+                         alt="${store.store_name}" 
+                         class="store-logo"
+                         onerror="this.style.display='none'">
+                    <div class="store-info">
+                        <h3 class="store-name">${store.store_name}</h3>
+                    </div>
+                </div>
+                <div class="store-items">
+                    ${storeItemsHTML}
+                </div>
+                <div class="store-shipping">
+                    <div class="shipping-fee">
+                        <span>Phí vận chuyển: </span>
+                        <span class="shipping-amount">${formatCurrency(15000)}</span>
+                    </div>
+                    <div class="store-total">
+                        <span>Tổng cửa hàng: </span>
+                        <span class="store-total-amount">${formatCurrency(storeSubtotal + 15000)}</span>
+                    </div>
+                </div>
             </div>
-
-            <button class="remove-btn" onclick="removeFromCart(${item.food.id})">
-                Xóa
-            </button>
-        </div>
-    `).join('');
+        `;
+    }).join('');
+    
+    cartItemsEl.innerHTML = storeGroupsHTML;
 }
 
 function updateCartSummary(cart) {
     const totalItems = cart.items.reduce((sum, item) => sum + item.quantity, 0);
     const subtotal = cart.total_money;
-    const deliveryFee = subtotal > 0 ? 15000 : 0;
-    const total = parseInt(subtotal) + deliveryFee;
+    
+    // Calculate number of stores for delivery fee
+    const storeIds = new Set();
+    cart.items.forEach(item => {
+        storeIds.add(item.food.store.id);
+    });
+    const numberOfStores = storeIds.size;
+    const totalDeliveryFee = numberOfStores * 15000;
+    const total = parseInt(subtotal) + totalDeliveryFee;
 
     document.getElementById('total-items').textContent = totalItems;
     document.getElementById('subtotal').textContent = formatCurrency(subtotal);
+    
+    // Update delivery fee display
+    const deliveryFeeEl = document.getElementById('delivery-fee');
+    if (deliveryFeeEl) {
+        deliveryFeeEl.textContent = formatCurrency(totalDeliveryFee);
+    }
+    
     document.getElementById('total-amount').textContent = formatCurrency(total);
 }
 
@@ -124,6 +197,26 @@ async function updateQuantity(foodId, newQuantity) {
     } catch (error) {
         console.error('Error updating quantity:', error);
         alert('Lỗi khi cập nhật số lượng: ' + error.message);
+    }
+}
+
+async function updateItemNote(foodId, note) {
+    try {
+        await API.put(`/cart/items/${foodId}/`, {
+            item_note: note
+        });
+        
+        // Update current cart data without full reload
+        if (currentCart && currentCart.items) {
+            const item = currentCart.items.find(item => item.food.id === foodId);
+            if (item) {
+                item.item_note = note;
+            }
+        }
+        
+    } catch (error) {
+        console.error('Error updating item note:', error);
+        alert('Lỗi khi cập nhật ghi chú: ' + error.message);
     }
 }
 
@@ -189,6 +282,7 @@ function formatCurrency(amount) {
 window.cartPage = {
     loadCart,
     updateQuantity,
+    updateItemNote,
     removeFromCart,
     clearCart,
     proceedToCheckout

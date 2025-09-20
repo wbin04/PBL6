@@ -1,14 +1,30 @@
+import React, { useEffect, useState, useMemo } from "react";
 import { LinearGradient } from "expo-linear-gradient";
 import { useNavigation, useRoute } from "@react-navigation/native";
 import { ArrowLeft, CheckCircle2, Flag, MoreHorizontal, Star, ThumbsUp } from "lucide-react-native";
-import React, { useMemo, useState } from "react";
-import { FlatList, Modal, Platform, Pressable, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import { FlatList, Modal, Platform, Pressable, StyleSheet, Text, TouchableOpacity, View, ActivityIndicator } from "react-native";
 
 import { Colors } from "@/constants/Colors";
 import { Fonts } from "@/constants/Fonts";
-import { useDatabase } from "@/hooks/useDatabase";
+import { API_CONFIG } from "@/constants";
+import { ratingService } from "@/services";
 
 type SortBy = "Mới nhất" | "Cũ nhất" | "Đánh giá cao" | "Đánh giá thấp" | "Hữu ích nhất";
+
+interface FoodData {
+  id: number;
+  title: string;
+  average_rating: number;
+  rating_count: number;
+}
+
+interface ReviewData {
+  id: number;
+  username: string;
+  rating: number;
+  content: string;
+  created_date?: string;
+}
 
 export default function FoodReviewsScreen() {
   const navigation = useNavigation<any>();
@@ -16,38 +32,33 @@ export default function FoodReviewsScreen() {
   const { id } = (route?.params ?? {}) as { id?: string };
   const foodId = Number(id ?? NaN);
 
-  const { getFoodById, getRestaurantById } = useDatabase();
-
-  if (!Number.isFinite(foodId)) {
-    return <View style={styles.center}><Text style={styles.msg}>Thiếu tham số id.</Text></View>;
-  }
-
-  const food = getFoodById(foodId);
-  if (!food) {
-    return <View style={styles.center}><Text style={styles.msg}>Không tìm thấy món ăn #{foodId}.</Text></View>;
-  }
-
-  const restaurant = food.restaurantId ? getRestaurantById(food.restaurantId) : null;
-  const rawReviews = (food.reviews && food.reviews.length > 0)
-    ? food.reviews
-    : (restaurant?.reviews ?? []);
-
-  const ratingSummary = Number.isFinite(food.rating) ? food.rating : 0;
-  const totalReviews = rawReviews.length;
-
-  const baseReviews = rawReviews.map((r, idx) => ({
-    id: idx + 1,
-    user: r.user,
-    avatar: (r.user?.[0] ?? "?").toUpperCase(),
-    rating: Math.max(1, Math.min(5, Math.round(Number(r.rating) || 0))),
-    comment: r.comment,
-    date: "gần đây",
-    helpful: (idx * 7) % 23,
-    verified: idx % 2 === 0,
-  }));
-
+  const [food, setFood] = useState<FoodData | null>(null);
+  const [reviews, setReviews] = useState<ReviewData[]>([]);
+  const [loading, setLoading] = useState(true);
   const [sortBy, setSortBy] = useState<SortBy>("Mới nhất");
   const [sortOpen, setSortOpen] = useState(false);
+
+  // Debug reviews state changes
+  useEffect(() => {
+    console.log('Reviews state changed:', reviews);
+  }, [reviews]);
+
+  // Transform reviews data
+  const baseReviews = useMemo(() => {
+    console.log('Raw reviews for transformation:', reviews);
+    const transformed = reviews.map((r, index) => ({
+      id: index + 1,
+      user: r.username,
+      avatar: (r.username?.[0] ?? "?").toUpperCase(),
+      rating: Math.max(1, Math.min(5, Math.round(Number(r.rating) || 0))),
+      comment: r.content,
+      date: "gần đây",
+      helpful: Math.floor(Math.random() * 23),
+      verified: Math.random() > 0.5,
+    }));
+    console.log('Transformed reviews:', transformed);
+    return transformed;
+  }, [reviews]);
 
   const sorted = useMemo(() => {
     const arr = [...baseReviews];
@@ -66,6 +77,98 @@ export default function FoodReviewsScreen() {
     return d;
   }, [baseReviews]);
 
+  const ratingSummary = useMemo(() => {
+    if (baseReviews.length === 0) return 0;
+    const sum = baseReviews.reduce((acc, review) => acc + review.rating, 0);
+    const average = sum / baseReviews.length;
+    console.log('Rating summary calculation:', { baseReviews: baseReviews.length, sum, average });
+    return average;
+  }, [baseReviews]);
+  
+  const totalReviews = baseReviews.length; // Use actual reviews count
+  console.log('Current state:', { food, totalReviews, ratingSummary });
+
+  useEffect(() => {
+    const fetchData = async () => {
+      try {
+        setLoading(true);
+        
+        // Fetch food details
+        console.log('Fetching food details for ID:', foodId);
+        const foodResponse = await fetch(`${API_CONFIG.BASE_URL}/menu/items/${foodId}/`);
+        if (!foodResponse.ok) {
+          console.error('Failed to fetch food details');
+          navigation.goBack();
+          return;
+        }
+        
+        const foodData = await foodResponse.json();
+        console.log('Food data received:', foodData);
+        setFood(foodData);
+
+        // Fetch reviews from ratings API
+        try {
+          console.log('Fetching ratings from API...');
+          // Use ratingService to get ratings filtered by food ID
+          const ratingsData = await ratingService.getRatingsForFood(foodId);
+          console.log('Ratings response:', ratingsData);
+          console.log('Number of ratings returned:', ratingsData?.length || 0);
+          
+          // API returns array directly: [{username, rating, content}, ...]
+          let reviewsArray = [];
+          if (Array.isArray(ratingsData)) {
+            reviewsArray = ratingsData;
+            console.log('Using direct array format');
+          } else {
+            console.log('Unknown data format, using empty array');
+            reviewsArray = [];
+          }
+            
+          console.log('Final reviews array to set:', reviewsArray);
+          setReviews(reviewsArray);
+          
+          // Verify state was set
+          setTimeout(() => {
+            console.log('Reviews state after setTimeout:', reviews);
+          }, 100);
+        } catch (ratingsError) {
+          console.error('Error fetching ratings:', ratingsError);
+          setReviews([]);
+        }
+        
+      } catch (error) {
+        console.error('Error fetching data:', error);
+        navigation.goBack();
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    if (Number.isFinite(foodId)) {
+      fetchData();
+    } else {
+      console.log('Invalid foodId:', foodId);
+      navigation.goBack();
+    }
+  }, [foodId, navigation]);
+
+  if (loading) {
+    return (
+      <View style={styles.center}>
+        <ActivityIndicator size="large" color="#e95322" />
+        <Text style={styles.msg}>Đang tải...</Text>
+      </View>
+    );
+  }
+
+  if (!food) {
+    return (
+      <View style={styles.center}>
+        <Text style={styles.msg}>Không tìm thấy món ăn #{foodId}.</Text>
+      </View>
+    );
+  }
+
   return (
     <View style={{ flex: 1, backgroundColor: Colors.light.background }}>
       <LinearGradient colors={["#f59e0b", "#e95322"]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={styles.header}>
@@ -73,7 +176,7 @@ export default function FoodReviewsScreen() {
           <TouchableOpacity onPress={() => navigation.goBack()} style={styles.iconBtn}><ArrowLeft size={20} color="#fff" /></TouchableOpacity>
           <View style={{ flex: 1 }}>
             <Text style={styles.headerTitle}>Đánh giá</Text>
-            <Text style={styles.headerSubtitle}>{food.name}</Text>
+            <Text style={styles.headerSubtitle}>{food.title}</Text>
           </View>
           <TouchableOpacity onPress={() => setSortOpen(true)} style={styles.iconBtn}><MoreHorizontal size={20} color="#fff" /></TouchableOpacity>
         </View>
@@ -91,13 +194,16 @@ export default function FoodReviewsScreen() {
 
           <View style={{ flex: 1, marginLeft: 12 }}>
             {[5, 4, 3, 2, 1].map((n) => {
-              const pct = totalReviews ? (dist[n] / totalReviews) * 100 : 0;
+              const count = dist[n] || 0;
+              const pct = totalReviews ? (count / totalReviews) * 100 : 0;
               return (
                 <View key={n} style={styles.distRow}>
                   <Text style={styles.distNum}>{n}</Text>
                   <Star size={12} color="#fff" fill="#fff" />
-                  <View style={styles.distBarBg}><View style={[styles.distBarFill, { width: `${pct}%` }]} /></View>
-                  <Text style={styles.distCount}>{dist[n]}</Text>
+                  <View style={styles.distBarBg}>
+                    <View style={[styles.distBarFill, { width: `${pct}%` }]} />
+                  </View>
+                  <Text style={styles.distCount}>{count}</Text>
                 </View>
               );
             })}

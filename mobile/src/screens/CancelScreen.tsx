@@ -25,22 +25,41 @@ export default function CancelScreen() {
   // Get orderId and callback function from route params
   const { orderId, onOrderCancelled } = route.params as { 
     orderId: string; 
-    onOrderCancelled: (orderId: string, status: 'Đã hủy') => void;
+    onOrderCancelled: (orderId: string, status: 'Đã hủy', cancelReason?: string) => void;
   };
 
   const handleCancelOrder = async () => {
+    // Validate that a reason is selected or entered
+    if (selected === null && !otherReason.trim()) {
+      Alert.alert("Thông báo", "Vui lòng chọn lý do hủy đơn hoặc nhập lý do khác");
+      return;
+    }
+
     try {
-      // Cập nhật trạng thái đơn hàng thành "Đã hủy"
-      onOrderCancelled(orderId, 'Đã hủy');
+      // Get the selected reason
+      let cancelReason = "";
+      if (selected !== null) {
+        cancelReason = reasons[selected];
+      } else if (otherReason.trim()) {
+        cancelReason = otherReason.trim();
+      }
+
+      console.log('=== CANCEL ORDER DEBUG ===');
+      console.log('Selected index:', selected);
+      console.log('Other reason:', otherReason.trim());
+      console.log('Final cancel reason:', cancelReason);
+      console.log('Order ID:', orderId);
+      console.log('=== END CANCEL ORDER DEBUG ===');
+
+      // Cập nhật trạng thái đơn hàng thành "Đã hủy" với lý do
+      await onOrderCancelled(orderId, 'Đã hủy', cancelReason);
       
       // Navigate back to ManageOrdersScreen  
       navigation.goBack();
       
-      // Show success message after navigation
-      setTimeout(() => {
-        Alert.alert("Thành công", "Đơn hàng đã được hủy thành công");
-      }, 500);
+      console.log('Cancel order callback completed successfully');
     } catch (error) {
+      console.error('Cancel order callback failed:', error);
       Alert.alert("Lỗi", "Không thể hủy đơn hàng. Vui lòng thử lại.");
     }
   };

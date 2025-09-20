@@ -1,4 +1,5 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import * as SecureStore from 'expo-secure-store';
 import { useNavigation, useRoute } from "@react-navigation/native";
 import {
   ArrowLeft, Clock, Heart, Minus, MoreHorizontal, Plus,
@@ -11,57 +12,88 @@ import {
 } from "react-native";
 
 import { Fonts } from "@/constants/Fonts";
-import { useDatabase } from "@/hooks/useDatabase";
+import { API_CONFIG, STORAGE_KEYS } from "@/constants";
+import { parsePrice, formatPriceWithCurrency } from "@/utils/priceUtils";
+import { cartService } from "@/services";
 
 const { width } = Dimensions.get("window");
 const ORANGE = "#e95322";
 const BROWN = "#391713";
 
-// Parse "85.000 VNĐ" -> 85000
-const parsePrice = (priceStr?: string) => {
-  if (!priceStr) return 0;
-  const digits = priceStr.replace(/[^\d]/g, "");
-  return Number.parseInt(digits || "0", 10);
+// Helper function to build image URLs
+const getImageUrl = (imagePath: string) => {
+  if (!imagePath) return null;
+  if (imagePath.startsWith('http')) return imagePath;
+  return `${API_CONFIG.BASE_URL.replace('/api', '')}/media/${imagePath}`;
 };
 
 export default function FoodDetailScreen() {
   const navigation = useNavigation<any>();
   const route = useRoute<any>();
-  const { id } = (route?.params ?? {}) as { id: string | number };
+  const { foodId } = (route?.params ?? {}) as { foodId: number };
+  const id = foodId;
 
-  const {
-    getFoodById, getRestaurantById,
-    getFoodsByRestaurantId, getFoodsByCategory, requireImage
-  } = useDatabase();
+  // State for food data
+  const [food, setFood] = useState<any>(null);
+  const [restaurant, setRestaurant] = useState<any>(null);
+  const [similarFoods, setSimilarFoods] = useState<any[]>([]);
+  const [toppings, setToppings] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [loadingToppings, setLoadingToppings] = useState(false);
 
-  const food = useMemo(() => getFoodById(Number(id)), [id]);
-  const restaurant = useMemo(
-    () => (food?.restaurantId ? getRestaurantById(food.restaurantId) : null),
-    [food?.restaurantId]
-  );
-
+  // Fetch food data from API
   useEffect(() => {
-    if (!food) navigation.goBack();
-  }, [food]);
+    const fetchFoodData = async () => {
+      try {
+        setLoading(true);
+        
+        // Fetch food details
+        const foodResponse = await fetch(`${API_CONFIG.BASE_URL}/menu/items/${id}/`);
+        if (!foodResponse.ok) {
+          console.error('Failed to fetch food details');
+          navigation.goBack();
+          return;
+        }
+        
+        const foodData = await foodResponse.json();
+        setFood(foodData);
+
+        // Fetch similar foods (same category)
+        if (foodData.category?.id) {
+          const similarResponse = await fetch(`${API_CONFIG.BASE_URL}/menu/categories/${foodData.category.id}/foods/`);
+          if (similarResponse.ok) {
+            const similarData = await similarResponse.json();
+            // Filter out current food and limit to 10
+            const filtered = similarData.results?.filter((f: any) => f.id !== foodData.id).slice(0, 10) || [];
+            setSimilarFoods(filtered);
+          }
+        }
+        
+      } catch (error) {
+        console.error('Error fetching food data:', error);
+        navigation.goBack();
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    if (id) {
+      fetchFoodData();
+    }
+  }, [id, navigation]);
 
   const gallery = useMemo(() => {
     if (!food) return [];
-    const arr = [requireImage(food.image)];
-    if (restaurant?.image) arr.push(requireImage(restaurant.image));
-    return arr;
-  }, [food, restaurant]);
-
-  const similarItems = useMemo(() => {
-    if (!food) return [];
-    const list = food.restaurantId
-      ? getFoodsByRestaurantId(food.restaurantId).filter((f) => f.id !== food.id)
-      : getFoodsByCategory(food.category).filter((f) => f.id !== food.id);
-    return list.slice(0, 10);
+    const images = [];
+    if (food.image) {
+      images.push({ uri: getImageUrl(food.image) });
+    }
+    return images.length > 0 ? images : [{ uri: 'https://via.placeholder.com/400x260' }];
   }, [food]);
 
   const [quantity, setQuantity] = useState(1);
-  const [selectedSize, setSelectedSize] = useState<"Nhỏ" | "Vừa" | "Lớn">("Vừa");
-  const [selectedToppings, setSelectedToppings] = useState<string[]>([]);
+  const [selectedSizeId, setSelectedSizeId] = useState<number | null>(null);
+  const [selectedToppings, setSelectedToppings] = useState<Record<number, number>>({}); // {toppingId: quantity}
   const [isFavorite, setIsFavorite] = useState(false);
   const [showAdded, setShowAdded] = useState(false);
   const [currentImage, setCurrentImage] = useState(0);
@@ -89,76 +121,316 @@ export default function FoodDetailScreen() {
       setIsFavorite(false);
     } else {
       next = [...arr, {
-        id: food.id, name: food.name, restaurant: food.restaurant,
-        rating: food.rating, price: food.price, image: food.image,
+        id: food.id,
+        name: food.title || food.name,
+        restaurant: food.store?.store_name || food.restaurant,
+        rating: food.average_rating?.toFixed(1) ?? '0.0',
+        price: food.price,
+        image: food.image,
       }];
       setIsFavorite(true);
     }
     await AsyncStorage.setItem("favorites", JSON.stringify(next));
   };
 
-  const sizes = [
-    { name: "Nhỏ", price: 0 },
-    { name: "Vừa", price: 0 },
-    { name: "Lớn", price: 10000 },
-  ] as const;
+  const sizes = food?.sizes || [];
+  
+  // Sort sizes by price ascending (cheapest first)
+  const sortedSizes = useMemo(() => {
+    return [...sizes].sort((a, b) => parseFloat(a.price) - parseFloat(b.price));
+  }, [sizes]);
+  
+  // Helper functions for size management
+  const getSelectedSize = () => {
+    if (!selectedSizeId) return null;
+    return sortedSizes.find(s => s.id === selectedSizeId) || null;
+  };
+  
+  const getBasePrice = () => {
+    const basePrice = parseFloat(food?.price || '0');
+    return basePrice;
+  };
+  
+  const getSizePrice = () => {
+    const selectedSize = getSelectedSize();
+    return selectedSize ? parseFloat(selectedSize.price) : 0;
+  };
+  
+  // Auto-select first size (cheapest) if available and none selected
+  useEffect(() => {
+    if (sortedSizes.length > 0 && selectedSizeId === null) {
+      setSelectedSizeId(sortedSizes[0].id);
+    }
+  }, [sortedSizes, selectedSizeId]);
 
-  const toppings = [
-    { name: "Thêm phô mai", price: 8000 },
-    { name: "Thêm trứng", price: 5000 },
-    { name: "Thêm gà rán", price: 15000 },
-    { name: "Thêm thịt bò", price: 20000 },
-  ];
+  // Fetch toppings when food is loaded
+  useEffect(() => {
+    const fetchToppings = async () => {
+      if (!food?.store?.id) return;
+      
+      try {
+        setLoadingToppings(true);
+        const response = await fetch(`${API_CONFIG.BASE_URL}/menu/items/?category=8&store=${food.store.id}`);
+        if (response.ok) {
+          const data = await response.json();
+          setToppings(data.results || []);
+        } else {
+          console.error('Failed to fetch toppings');
+          setToppings([]);
+        }
+      } catch (error) {
+        console.error('Error fetching toppings:', error);
+        setToppings([]);
+      } finally {
+        setLoadingToppings(false);
+      }
+    };
 
-  const toggleTopping = (t: string) => {
-    setSelectedToppings((prev) => prev.includes(t) ? prev.filter((x) => x !== t) : [...prev, t]);
+    fetchToppings();
+  }, [food?.store?.id]);
+
+  const toggleTopping = (toppingId: number) => {
+    setSelectedToppings((prev) => {
+      const newToppings = { ...prev };
+      if (newToppings[toppingId]) {
+        delete newToppings[toppingId]; // Remove if exists
+      } else {
+        newToppings[toppingId] = 1; // Add with quantity 1
+      }
+      return newToppings;
+    });
+  };
+
+  const updateToppingQuantity = (toppingId: number, quantity: number) => {
+    if (quantity <= 0) {
+      setSelectedToppings((prev) => {
+        const newToppings = { ...prev };
+        delete newToppings[toppingId];
+        return newToppings;
+      });
+    } else {
+      setSelectedToppings((prev) => ({
+        ...prev,
+        [toppingId]: quantity
+      }));
+    }
   };
 
   const basePrice = useMemo(() => parsePrice(food?.price), [food?.price]);
 
   const totalPrice = useMemo(() => {
-    let total = basePrice;
-    const sizePlus = sizes.find((s) => s.name === selectedSize)?.price ?? 0;
-    total += sizePlus;
-    selectedToppings.forEach((t) => {
-      total += toppings.find((x) => x.name === t)?.price ?? 0;
-    });
-    return total * quantity;
-  }, [basePrice, selectedSize, selectedToppings, quantity]);
+    // Calculate base price and size price multiplied by main item quantity
+    const mainItemPrice = (basePrice + getSizePrice()) * quantity;
+    
+    // Calculate toppings price (already includes topping quantities, don't multiply by main quantity)
+    const toppingsPrice = Object.entries(selectedToppings).reduce((acc, [toppingIdStr, toppingQuantity]) => {
+      const toppingId = parseInt(toppingIdStr);
+      const topping = toppings.find(t => t.id === toppingId);
+      return acc + (topping ? parseFloat(topping.price) * toppingQuantity : 0);
+    }, 0);
+    
+    return mainItemPrice + toppingsPrice;
+  }, [basePrice, selectedSizeId, selectedToppings, quantity, toppings]);
+
+  // Show loading state
+  if (loading) {
+    return (
+      <View style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}>
+        <Text style={{ fontSize: 16, fontFamily: Fonts.LeagueSpartanRegular }}>Đang tải...</Text>
+      </View>
+    );
+  }
+
+  if (!food) return null;
 
   const handleAddToCart = async () => {
     if (!food) return;
-    const cartItem = {
-      id: food.id,
-      name: food.name,
-      restaurant: food.restaurant,
-      price: basePrice +
-        (sizes.find((s) => s.name === selectedSize)?.price ?? 0) +
-        selectedToppings.reduce((s, t) => s + (toppings.find((x) => x.name === t)?.price ?? 0), 0),
-      originalPrice: basePrice,
-      image: food.image,
-      quantity,
-      size: selectedSize,
-      toppings: selectedToppings,
-      totalPrice,
-    };
-    const saved = await AsyncStorage.getItem("cart");
-    const cart = saved ? JSON.parse(saved) : [];
-    const idx = cart.findIndex(
-      (it: any) =>
-        it.id === cartItem.id &&
-        it.size === cartItem.size &&
-        JSON.stringify([...it.toppings].sort()) === JSON.stringify([...cartItem.toppings].sort())
-    );
-    if (idx >= 0) {
-      cart[idx].quantity += cartItem.quantity;
-      cart[idx].totalPrice += cartItem.totalPrice;
-    } else {
-      cart.push(cartItem);
+    
+    try {
+      const selectedSize = getSelectedSize();
+      
+      // Add main food item
+      const mainItemData = {
+        food_id: food.id,
+        quantity: quantity,
+        food_option_id: selectedSizeId,
+        item_note: null
+      };
+      
+      console.log('Adding main item to cart via API:', mainItemData);
+      
+      // Try using the cartService which handles auth properly
+      try {
+        const result = await cartService.addToCart(mainItemData);
+        console.log('Main item added via service:', result);
+        
+        // Add each topping as a separate item using the service
+        const toppingPromises = Object.entries(selectedToppings).map(async ([toppingIdStr, toppingQuantity]) => {
+          const toppingId = parseInt(toppingIdStr);
+          
+          const toppingData = {
+            food_id: toppingId,
+            quantity: toppingQuantity,
+            item_note: `Topping for ${food.title}`
+          };
+          
+          try {
+            const toppingResult = await cartService.addToCart(toppingData);
+            console.log('Topping added via service:', toppingResult);
+            return toppingResult;
+          } catch (toppingError) {
+            console.error('Failed to add topping via service:', toppingId, toppingError);
+            return null;
+          }
+        });
+        
+        // Wait for all toppings to be added
+        await Promise.all(toppingPromises);
+        
+        setShowAdded(true);
+        setTimeout(() => setShowAdded(false), 1800);
+        return;
+      } catch (serviceError) {
+        console.error('Error using cart service, falling back to direct API call:', serviceError);
+      }
+      
+      // Fallback to direct API call with manually added token
+      const token = await SecureStore.getItemAsync(STORAGE_KEYS.ACCESS_TOKEN);
+      
+      if (!token) {
+        console.error('No authentication token found! User might not be logged in.');
+        await handleAddToCartFallback();
+        return;
+      }
+      
+      // Include Authorization header with token
+      const mainResponse = await fetch(`${API_CONFIG.BASE_URL}/cart/add/`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify(mainItemData)
+      });
+      
+      if (mainResponse.ok) {
+        const mainResult = await mainResponse.json();
+        console.log('Main item added:', mainResult);
+        
+        // Add each topping as a separate item
+        const toppingPromises = Object.entries(selectedToppings).map(async ([toppingIdStr, toppingQuantity]) => {
+          const toppingId = parseInt(toppingIdStr);
+          
+          const toppingData = {
+            food_id: toppingId,
+            quantity: toppingQuantity,
+            item_note: `Topping for ${food.title}`
+          };
+          
+          // Also include Authorization header for topping requests
+          const toppingResponse = await fetch(`${API_CONFIG.BASE_URL}/cart/add/`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${token}`
+            },
+            body: JSON.stringify(toppingData)
+          });
+          
+          if (toppingResponse.ok) {
+            const toppingResult = await toppingResponse.json();
+            console.log('Topping added:', toppingResult);
+            return toppingResult;
+          } else {
+            console.error('Failed to add topping:', toppingId);
+            return null;
+          }
+        });
+        
+        // Wait for all toppings to be added
+        await Promise.all(toppingPromises);
+        
+        setShowAdded(true);
+        setTimeout(() => setShowAdded(false), 1800);
+      } else {
+        console.error('Main item API error:', mainResponse.status, mainResponse.statusText);
+        // Fallback to AsyncStorage
+        await handleAddToCartFallback();
+      }
+    } catch (error) {
+      console.error('Error adding to cart:', error);
+      // Fallback to AsyncStorage
+      await handleAddToCartFallback();
     }
-    await AsyncStorage.setItem("cart", JSON.stringify(cart));
-    setShowAdded(true);
-    setTimeout(() => setShowAdded(false), 1800);
+  };
+
+  const handleAddToCartFallback = async () => {
+    if (!food) return;
+    
+    console.log('Using fallback cart storage method');
+    
+    // Last resort: fall back to AsyncStorage
+    try {
+      const selectedSize = getSelectedSize();
+      
+      // Calculate toppings price (don't multiply by main quantity)
+      const toppingsPrice = Object.entries(selectedToppings).reduce((acc, [toppingIdStr, toppingQuantity]) => {
+        const toppingId = parseInt(toppingIdStr);
+        const topping = toppings.find(t => t.id === toppingId);
+        return acc + (topping ? parseFloat(topping.price) * toppingQuantity : 0);
+      }, 0);
+      
+      const toppingNames = Object.entries(selectedToppings).map(([toppingIdStr, toppingQuantity]) => {
+        const toppingId = parseInt(toppingIdStr);
+        const topping = toppings.find(t => t.id === toppingId);
+        return topping ? `${topping.title} (x${toppingQuantity})` : '';
+      }).filter(name => name);
+      
+      // Main item price includes base + size, multiplied by quantity
+      const mainItemPrice = (basePrice + getSizePrice()) * quantity;
+      
+      const cartItem = {
+        id: food.id,
+        name: food.title,
+        restaurant: food.store?.store_name,
+        price: mainItemPrice + toppingsPrice, // Total price for this cart item
+        originalPrice: basePrice,
+        image: food.image,
+        quantity,
+        size: selectedSize?.size_name || null,
+        sizeId: selectedSizeId,
+        toppings: toppingNames,
+        toppingQuantities: selectedToppings,
+        totalPrice,
+      };
+      
+      try {
+        const existingCart = await AsyncStorage.getItem('@cart');
+        const currentCart = existingCart ? JSON.parse(existingCart) : [];
+        
+        const existingIndex = currentCart.findIndex((item: any) => 
+          item.id === cartItem.id && 
+          item.sizeId === cartItem.sizeId &&
+          JSON.stringify(item.toppingQuantities) === JSON.stringify(cartItem.toppingQuantities)
+        );
+        
+        if (existingIndex !== -1) {
+          currentCart[existingIndex].quantity += cartItem.quantity;
+          currentCart[existingIndex].price += cartItem.price;
+        } else {
+          currentCart.push(cartItem);
+        }
+        
+        await AsyncStorage.setItem('@cart', JSON.stringify(currentCart));
+        console.log('Saved to local cart storage');
+        setShowAdded(true);
+        setTimeout(() => setShowAdded(false), 1800);
+      } catch (error) {
+        console.error('Error saving to cart:', error);
+      }
+    } catch (error) {
+      console.error('Error in fallback cart handling:', error);
+    }
   };
 
   if (!food) return null;
@@ -190,7 +462,7 @@ export default function FoodDetailScreen() {
             scrollEventThrottle={16}
           >
             {gallery.map((src, idx) => (
-              <Image key={idx} source={src} style={styles.heroImg} resizeMode="cover" />
+              <Image key={idx} source={{ uri: src.uri || 'https://via.placeholder.com/400x260' }} style={styles.heroImg} resizeMode="cover" />
             ))}
           </ScrollView>
 
@@ -224,32 +496,31 @@ export default function FoodDetailScreen() {
 
         <View style={{ paddingHorizontal: 24, paddingTop: 16 }}>
           <View style={{ marginBottom: 16 }}>
-            <Text style={styles.title}>{food.name}</Text>
-            {restaurant ? (
-              <TouchableOpacity
-                onPress={() => navigation.navigate("RestaurantDetailScreen", { id: String(restaurant.id) })}
-                activeOpacity={0.8}
-              >
-                <Text style={styles.restaurant}>{restaurant.name} →</Text>
-              </TouchableOpacity>
-            ) : (
-              <Text style={[styles.restaurant, { color: "#6b7280" }]}>{food.restaurant}</Text>
-            )}
+            <Text style={styles.title}>{food?.title || 'Món ăn'}</Text>
+            <Text style={[styles.restaurant, { color: "#6b7280" }]}>{food?.store?.store_name || 'Nhà hàng'}</Text>
           </View>
 
           {/* rating */}
-          <View style={styles.ratingRow}>
-            <Star size={16} color={ORANGE} fill={ORANGE} />
-            <Text style={styles.ratingText}>{food.rating.toFixed(1)}</Text>
-            {restaurant?.reviewCount ? (
-              <Text style={styles.ratingSub}>({restaurant.reviewCount}+ đánh giá)</Text>
-            ) : null}
-          </View>
+          {food?.rating_count && food.rating_count > 0 ? (
+            <TouchableOpacity 
+              style={styles.ratingRow}
+              onPress={() => navigation.navigate("FoodReviews", { id: String(food.id) })}
+              activeOpacity={0.7}
+            >
+              <Star size={16} color={ORANGE} fill={ORANGE} />
+              <Text style={styles.ratingText}>{(food.average_rating ?? 0).toFixed(1)}</Text>
+              <Text style={styles.ratingSub}>({food.rating_count} đánh giá)</Text>
+            </TouchableOpacity>
+          ) : (
+            <View style={styles.noReviewsContainer}>
+              <Text style={styles.noReviewsText}>Chưa có đánh giá nào</Text>
+            </View>
+          )}
 
           {/* price + qty */}
           <View style={styles.priceRow}>
             <View style={{ flexDirection: "row", alignItems: "center" }}>
-              <Text style={styles.price}>{basePrice.toLocaleString()} VNĐ</Text>
+              <Text style={styles.price}>{formatPriceWithCurrency(food?.price)}</Text>
             </View>
 
             <View style={styles.qtyWrap}>
@@ -264,111 +535,105 @@ export default function FoodDetailScreen() {
           </View>
 
           {/* description */}
-          {restaurant?.description ? (
+          {food?.description && (
             <View style={{ marginBottom: 18 }}>
               <Text style={styles.sectionTitle}>Mô tả</Text>
-              <Text style={styles.desc}>{restaurant.description}</Text>
+              <Text style={styles.desc}>{food.description}</Text>
             </View>
-          ) : null}
+          )}
 
           {/* size */}
-          <View style={{ marginBottom: 18 }}>
-            <Text style={styles.sectionTitle}>Chọn size</Text>
-            <View style={styles.sizeGrid}>
-              {sizes.map((s) => {
-                const active = selectedSize === s.name;
-                return (
-                  <TouchableOpacity
-                    key={s.name}
-                    onPress={() => setSelectedSize(s.name)}
-                    style={[styles.sizeItem, active && styles.sizeItemActive]}
-                    activeOpacity={0.85}
-                  >
-                    <Text style={[styles.sizeName, active && { color: BROWN }]}>{s.name}</Text>
-                    {s.price > 0 && <Text style={styles.sizePlus}>+{s.price.toLocaleString()} VNĐ</Text>}
-                  </TouchableOpacity>
-                );
-              })}
+          {sortedSizes.length > 0 && (
+            <View style={{ marginBottom: 18 }}>
+              <Text style={styles.sectionTitle}>Chọn size</Text>
+              <View style={styles.sizeGrid}>
+                {sortedSizes.map((s: any) => {
+                  const active = selectedSizeId === s.id;
+                  const price = parseFloat(s.price);
+                  return (
+                    <TouchableOpacity
+                      key={s.id}
+                      onPress={() => setSelectedSizeId(s.id)}
+                      style={[styles.sizeItem, active && styles.sizeItemActive]}
+                      activeOpacity={0.85}
+                    >
+                      <Text style={[styles.sizeName, active && { color: BROWN }]}>{s.size_name}</Text>
+                      {price > 0 && <Text style={styles.sizePlus}>+{price.toLocaleString('vi-VN')} VND</Text>}
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
             </View>
-          </View>
+          )}
 
           {/* toppings */}
-          <View style={{ marginBottom: 18 }}>
-            <Text style={styles.sectionTitle}>Thêm topping</Text>
-            <View>
-              {toppings.map((t) => {
-                const active = selectedToppings.includes(t.name);
-                return (
-                  <TouchableOpacity
-                    key={t.name}
-                    onPress={() => toggleTopping(t.name)}
-                    style={[styles.topItem, active && styles.topItemActive]}
-                    activeOpacity={0.85}
-                  >
-                    <Text style={styles.topName}>{t.name}</Text>
-                    <Text style={styles.topPrice}>+{t.price.toLocaleString()} VNĐ</Text>
-                  </TouchableOpacity>
-                );
-              })}
+          {toppings.length > 0 && (
+            <View style={{ marginBottom: 18 }}>
+              <Text style={styles.sectionTitle}>Thêm topping</Text>
+              <View>
+                {toppings.map((t: any) => {
+                  const active = selectedToppings[t.id] > 0;
+                  const currentQuantity = selectedToppings[t.id] || 0;
+                  const price = parseFloat(t.price);
+                  return (
+                    <View
+                      key={t.id}
+                      style={[styles.topItem, active && styles.topItemActive]}
+                    >
+                      <TouchableOpacity
+                        onPress={() => toggleTopping(t.id)}
+                        style={{ flex: 1 }}
+                        activeOpacity={0.85}
+                      >
+                        <Text style={styles.topName}>{t.title}</Text>
+                        <Text style={styles.topPrice}>+{price.toLocaleString('vi-VN')} VND</Text>
+                      </TouchableOpacity>
+                      
+                      {active && (
+                        <View style={styles.qtyWrap}>
+                          <TouchableOpacity 
+                            onPress={() => updateToppingQuantity(t.id, Math.max(0, currentQuantity - 1))} 
+                            style={styles.qtyBtnGray} 
+                            activeOpacity={0.85}
+                          >
+                            <Minus size={16} color={BROWN} />
+                          </TouchableOpacity>
+                          <Text style={styles.qtyText}>{currentQuantity}</Text>
+                          <TouchableOpacity 
+                            onPress={() => updateToppingQuantity(t.id, currentQuantity + 1)} 
+                            style={styles.qtyBtnGray} 
+                            activeOpacity={0.85}
+                          >
+                            <Plus size={16} color={BROWN} />
+                          </TouchableOpacity>
+                        </View>
+                      )}
+                    </View>
+                  );
+                })}
+              </View>
             </View>
-          </View>
+          )}
 
           {/* Delivery */}
           <View style={styles.deliveryBox}>
             <View style={styles.deliveryRow}>
               <Clock size={20} color={ORANGE} />
-              <Text style={styles.deliveryMain}>Giao trong {restaurant?.time ?? "20 phút"}</Text>
+              <Text style={styles.deliveryMain}>Giao trong 20-30 phút</Text>
             </View>
             <View style={styles.deliveryRow}>
               <Truck size={20} color={ORANGE} />
               <Text style={styles.deliverySub}>
-                {restaurant?.delivery ?? "Miễn phí vận chuyển cho đơn từ 100.000 VNĐ"}
+                Miễn phí vận chuyển cho đơn từ 100.000 VND
               </Text>
             </View>
           </View>
-
-          {!!restaurant?.reviews?.length && (
-            <View style={{ marginBottom: 18 }}>
-              <Text style={styles.sectionTitle}>Đánh giá ({restaurant.reviews.length})</Text>
-              {restaurant.reviews.slice(0, 2).map((r, idx) => (
-                <View key={idx} style={styles.reviewCard}>
-                  <View style={styles.reviewHead}>
-                    <View style={styles.avatar}>
-                      <Text style={styles.avatarText}>{r.user}</Text>
-                    </View>
-                    <View style={{ flex: 1 }}>
-                      <View style={{ flexDirection: "row", alignItems: "center" }}>
-                        <Text style={styles.reviewName}>{r.user}</Text>
-                        <View style={{ flexDirection: "row", marginLeft: 8 }}>
-                          {Array.from({ length: 5 }).map((_, i) => (
-                            <Star
-                              key={i}
-                              size={12}
-                              color={i < Math.round(r.rating) ? ORANGE : "#d1d5db"}
-                              fill={i < Math.round(r.rating) ? ORANGE : "transparent"}
-                            />
-                          ))}
-                        </View>
-                      </View>
-                    </View>
-                  </View>
-                  <Text style={styles.reviewText}>{r.comment}</Text>
-                </View>
-              ))}
-              <TouchableOpacity
-                activeOpacity={0.8}
-                onPress={() => navigation.push("FoodReviews", { id: String(food.id) })}
-              >
-                <Text style={styles.moreReviews}>Xem tất cả đánh giá →</Text>
-              </TouchableOpacity>
-            </View>
-          )}
 
           {/* Similar */}
           <View>
             <Text style={styles.sectionTitle}>Món tương tự</Text>
             <FlatList
-              data={similarItems}
+              data={similarFoods}
               keyExtractor={(i) => String(i.id)}
               horizontal
               showsHorizontalScrollIndicator={false}
@@ -376,18 +641,21 @@ export default function FoodDetailScreen() {
               contentContainerStyle={{ paddingRight: 6 }}
               renderItem={({ item }) => (
                 <TouchableOpacity
-                  onPress={() => navigation.navigate("FoodDetail", { id: String(item.id) })}
+                  onPress={() => navigation.navigate("FoodDetail", { foodId: item.id })}
                   activeOpacity={0.9}
                   style={styles.similarCard}
                 >
-                  <Image source={requireImage(item.image)} style={styles.similarImg} />
+                  <Image 
+                    source={{ uri: getImageUrl(item.image) || 'https://via.placeholder.com/160x96' }} 
+                    style={styles.similarImg} 
+                  />
                   <View style={{ padding: 10 }}>
-                    <Text numberOfLines={2} style={styles.similarName}>{item.name}</Text>
+                    <Text numberOfLines={2} style={styles.similarName}>{item.title}</Text>
                     <View style={styles.similarRating}>
                       <Star size={12} color={ORANGE} fill={ORANGE} />
-                      <Text style={styles.similarRatingText}>{item.rating.toFixed(1)}</Text>
+                      <Text style={styles.similarRatingText}>{(item.average_rating ?? 0).toFixed(1)}</Text>
                     </View>
-                    <Text style={styles.similarPrice}>{parsePrice(item.price).toLocaleString()} VNĐ</Text>
+                    <Text style={styles.similarPrice}>{formatPriceWithCurrency(item.price)}</Text>
                   </View>
                 </TouchableOpacity>
               )}
@@ -403,19 +671,27 @@ export default function FoodDetailScreen() {
             <Text style={styles.sumLabel}>Số lượng:</Text>
             <Text style={styles.sumValue}>{quantity}</Text>
           </View>
-          <View style={styles.sumRow}>
-            <Text style={styles.sumLabel}>Size:</Text>
-            <Text style={styles.sumValue}>{selectedSize}</Text>
-          </View>
-          {!!selectedToppings.length && (
+          {sortedSizes.length > 0 && (
+            <View style={styles.sumRow}>
+              <Text style={styles.sumLabel}>Size:</Text>
+              <Text style={styles.sumValue}>{getSelectedSize()?.size_name || 'Chưa chọn'}</Text>
+            </View>
+          )}
+          {Object.keys(selectedToppings).length > 0 && (
             <View style={styles.sumRow}>
               <Text style={styles.sumLabel}>Topping:</Text>
-              <Text style={styles.sumValue}>{selectedToppings.join(", ")}</Text>
+              <Text style={styles.sumValue}>
+                {Object.entries(selectedToppings).map(([toppingIdStr, quantity]) => {
+                  const toppingId = parseInt(toppingIdStr);
+                  const topping = toppings.find(t => t.id === toppingId);
+                  return topping ? `${topping.title} (x${quantity})` : '';
+                }).filter(name => name).join(", ")}
+              </Text>
             </View>
           )}
           <View style={[styles.sumRow, styles.sumTotalRow]}>
             <Text style={styles.sumTotalLabel}>Tổng tiền:</Text>
-            <Text style={styles.sumTotalValue}>{totalPrice.toLocaleString()} VNĐ</Text>
+            <Text style={styles.sumTotalValue}>{totalPrice.toLocaleString('vi-VN')} VND</Text>
           </View>
         </View>
 
@@ -427,10 +703,31 @@ export default function FoodDetailScreen() {
 
           <TouchableOpacity
             onPress={async () => {
+              const toppingsPrice = Object.entries(selectedToppings).reduce((acc, [toppingIdStr, toppingQuantity]) => {
+                const toppingId = parseInt(toppingIdStr);
+                const topping = toppings.find(t => t.id === toppingId);
+                return acc + (topping ? parseFloat(topping.price) * toppingQuantity : 0);
+              }, 0);
+              
+              const toppingNames = Object.entries(selectedToppings).map(([toppingIdStr, toppingQuantity]) => {
+                const toppingId = parseInt(toppingIdStr);
+                const topping = toppings.find(t => t.id === toppingId);
+                return topping ? `${topping.title} (x${toppingQuantity})` : '';
+              }).filter(name => name);
+              
               const checkoutItem = {
-                id: food.id, name: food.name, restaurant: food.restaurant,
-                price: basePrice, originalPrice: basePrice, image: food.image,
-                quantity, size: selectedSize, toppings: selectedToppings, totalPrice,
+                id: food?.id, 
+                name: food?.title, 
+                restaurant: food?.store?.store_name,
+                price: (basePrice + getSizePrice()) * quantity + toppingsPrice, // Correct calculation
+                originalPrice: basePrice, 
+                image: food?.image,
+                quantity, 
+                size: getSelectedSize()?.size_name || null, 
+                sizeId: selectedSizeId,
+                toppings: toppingNames, 
+                toppingQuantities: selectedToppings,
+                totalPrice,
               };
               await AsyncStorage.setItem("checkoutItem", JSON.stringify(checkoutItem));
               navigation.navigate("CheckoutScreen");
@@ -606,4 +903,18 @@ const styles = StyleSheet.create({
     flexDirection: "row", gap: 8,
   },
   btnOrangeText: { color: "#fff", fontFamily: Fonts.LeagueSpartanExtraBold },
+  
+  noReviewsContainer: {
+    backgroundColor: "#f9fafb",
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 14,
+    marginBottom: 12,
+    alignItems: "center",
+  },
+  noReviewsText: {
+    color: "#6b7280",
+    fontSize: 13,
+    fontFamily: Fonts.LeagueSpartanRegular,
+  },
 });

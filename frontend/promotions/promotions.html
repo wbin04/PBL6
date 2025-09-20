@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Khuyến mãi - FastFood App</title>
+    <link rel="stylesheet" href="../assets/css/style.css">
+    <link rel="stylesheet" href="promotions.css">
+    <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js"></script>
+</head>
+<body>
+    <!-- Header -->
+    <header class="header">
+        <div class="container">
+            <a href="../index.html" class="logo">🍔 FastFood</a>
+            
+            <nav class="nav">
+                <a href="../index.html">Trang chủ</a>
+                <a href="../menu/categories.html">Thực đơn</a>
+                <a href="promotions.html" class="active">Khuyến mãi</a>
+                
+                <div id="guest-menu" class="hidden">
+                    <a href="../auth/login.html">Đăng nhập</a>
+                    <a href="../auth/register.html">Đăng ký</a>
+                </div>
+                
+                <div id="user-menu" class="hidden">
+                    <a href="../cart/cart.html" class="cart-link">
+                        🛒 Giỏ hàng
+                        <span id="cart-count" class="cart-count">0</span>
+                    </a>
+                    <a href="../orders/orders.html">Đơn hàng</a>
+                    <a href="../admin/admin.html" id="admin-link" class="hidden">Admin</a>
+                    <a href="../auth/account.html" class="account-link">Xin chào, <span id="user-name"></span></a>
+                    <a href="#" onclick="logout()">Đăng xuất</a>
+                </div>
+            </nav>
+        </div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="main">
+        <div class="container">
+            <div class="page-header">
+                <h1>🎉 Khuyến mãi đặc biệt</h1>
+                <p>Khám phá những ưu đãi hấp dẫn từ các cửa hàng</p>
+            </div>
+
+            <!-- Store Filter -->
+            <div class="filters-section">
+                <div class="filter-group">
+                    <label for="store-filter">Chọn cửa hàng:</label>
+                    <select id="store-filter" onchange="filterPromotionsByStore()">
+                        <option value="">Tất cả cửa hàng</option>
+                    </select>
+                </div>
+                <div class="filter-group">
+                    <label for="promo-type-filter">Loại khuyến mãi:</label>
+                    <select id="promo-type-filter" onchange="filterPromotionsByType()">
+                        <option value="">Tất cả loại</option>
+                        <option value="PERCENT">Giảm theo phần trăm</option>
+                        <option value="AMOUNT">Giảm số tiền</option>
+                    </select>
+                </div>
+            </div>
+
+            <!-- Promotions Grid -->
+            <div class="promotions-container">
+                <div id="promotions-grid" class="promotions-grid">
+                    <!-- Promotions will be loaded here -->
+                </div>
+                
+                <div id="no-promotions" class="no-promotions hidden">
+                    <div class="empty-state">
+                        <h3>Không có khuyến mãi nào</h3>
+                        <p>Hiện tại không có khuyến mãi phù hợp với bộ lọc của bạn.</p>
+                    </div>
+                </div>
+                
+                <div id="loading" class="loading">
+                    <div class="spinner"></div>
+                    <p>Đang tải khuyến mãi...</p>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <!-- Promotion Details Modal -->
+    <div id="promo-details-modal" class="modal hidden">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 id="modal-promo-title">Chi tiết khuyến mãi</h3>
+                <button class="modal-close" onclick="closePromoDetailsModal()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div id="modal-promo-content">
+                    <!-- Promotion details will be loaded here -->
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" onclick="closePromoDetailsModal()">Đóng</button>
+                <button class="btn btn-primary" onclick="goToMenu()">Xem thực đơn</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Scripts -->
+    <script src="../assets/js/api.js"></script>
+    <script src="../assets/js/auth.js"></script>
+    <script src="../assets/js/cart.js"></script>
+    <script src="promotions.js"></script>
+</body>
+</html>

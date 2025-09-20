@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Khuyến mãi - FastFood App</title>
+    <link rel="stylesheet" href="../assets/css/style.css">
+    <link rel="stylesheet" href="promotions.css">
+</head>
+<body>
+    <!-- Header -->
+    <header class="header">
+        <div class="container">
+            <a href="../index.html" class="logo">🍔 FastFood</a>
+            
+            <nav class="nav">
+                <a href="../index.html">Trang chủ</a>
+                <a href="../menu/categories.html">Thực đơn</a>
+                <a href="promotions.html" class="active">Khuyến mãi</a>
+                
+                <div id="guest-menu" class="hidden">
+                    <a href="../auth/login.html">Đăng nhập</a>
+                    <a href="../auth/register.html">Đăng ký</a>
+                </div>
+                
+                <div id="user-menu" class="hidden">
+                    <a href="../cart/cart.html" class="cart-link">
+                        🛒 Giỏ hàng
+                        <span id="cart-count" class="cart-count">0</span>
+                    </a>
+                    <a href="../orders/orders.html">Đơn hàng</a>
+                    <a href="../admin/admin.html" id="admin-link" class="hidden">Admin</a>
+                    <a href="../auth/account.html" class="account-link">Xin chào, <span id="user-name"></span></a>
+                    <a href="#" onclick="logout()">Đăng xuất</a>
+                </div>
+            </nav>
+        </div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="main">
+        <div class="container">
+            <div class="page-header">
+                <h1>🎉 Khuyến mãi đặc biệt</h1>
+                <p>Khám phá những ưu đãi hấp dẫn từ các cửa hàng</p>
+            </div>
+
+            <!-- Store Filter -->
+            <div class="filters-section">
+                <div class="filter-group">
+                    <label for="store-filter">Chọn cửa hàng:</label>
+                    <select id="store-filter" onchange="filterPromotionsByStore()">
+                        <option value="">Tất cả cửa hàng</option>
+                    </select>
+                </div>
+                <div class="filter-group">
+                    <label for="promo-type-filter">Loại khuyến mãi:</label>
+                    <select id="promo-type-filter" onchange="filterPromotionsByType()">
+                        <option value="">Tất cả loại</option>
+                        <option value="PERCENT">Giảm theo phần trăm</option>
+                        <option value="AMOUNT">Giảm số tiền</option>
+                    </select>
+                </div>
+            </div>
+
+            <!-- Promotions Grid -->
+            <div class="promotions-container">
+                <div id="promotions-grid" class="promotions-grid">
+                    <!-- Promotions will be loaded here -->
+                </div>
+                
+                <div id="no-promotions" class="no-promotions hidden">
+                    <div class="empty-state">
+                        <h3>Không có khuyến mãi nào</h3>
+                        <p>Hiện tại không có khuyến mãi phù hợp với bộ lọc của bạn.</p>
+                    </div>
+                </div>
+                
+                <div id="loading" class="loading">
+                    <div class="spinner"></div>
+                    <p>Đang tải khuyến mãi...</p>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <!-- Scripts -->
+    <script src="../assets/js/api.js"></script>
+    <script>
+        // Simple version without dependencies
+        let allPromotions = [];
+        let allStores = [];
+        
+        // Simple auth UI update
+        function updateAuthUI() {
+            console.log('Simple auth UI update');
+        }
+        
+        // Simple cart count update
+        function updateCartCount() {
+            console.log('Simple cart count update');
+        }
+        
+        // Simple logout function
+        function logout() {
+            console.log('Simple logout');
+        }
+        
+        async function loadData() {
+            try {
+                console.log('Loading data...');
+                
+                // Load stores
+                const stores = await API.get('/stores/');
+                allStores = stores;
+                
+                const storeFilter = document.getElementById('store-filter');
+                stores.forEach(store => {
+                    const option = document.createElement('option');
+                    option.value = store.id;
+                    option.textContent = store.store_name;
+                    storeFilter.appendChild(option);
+                });
+                
+                // Load promotions
+                const promotions = await API.get('/promotions/');
+                allPromotions = promotions;
+                
+                displayPromotions(promotions);
+                
+            } catch (error) {
+                console.error('Error loading data:', error);
+                document.getElementById('promotions-grid').innerHTML = 
+                    '<div style="text-align: center; padding: 2rem; color: red;">Lỗi: ' + error.message + '</div>';
+            }
+        }
+        
+        function displayPromotions(promotions) {
+            const grid = document.getElementById('promotions-grid');
+            const loading = document.getElementById('loading');
+            const noPromotions = document.getElementById('no-promotions');
+            
+            loading.classList.add('hidden');
+            
+            if (promotions.length === 0) {
+                grid.innerHTML = '';
+                noPromotions.classList.remove('hidden');
+                return;
+            }
+            
+            noPromotions.classList.add('hidden');
+            
+            grid.innerHTML = promotions.map(promo => {
+                const store = allStores.find(s => s.id === promo.store_id);
+                const storeName = store ? store.store_name : 'Cửa hàng';
+                
+                return `
+                    <div class="promotion-card">
+                        <div class="promotion-header">
+                            <div class="promotion-badge">${promo.category === 'PERCENT' ? 'Giảm %' : 'Giảm tiền'}</div>
+                            <h3 class="promotion-title">${promo.name}</h3>
+                        </div>
+                        <div class="promotion-body">
+                            <div class="promotion-discount">
+                                <span class="discount-value">${promo.category === 'PERCENT' ? promo.discount_value + '%' : formatCurrency(promo.discount_value)}</span>
+                                <span class="discount-type">${promo.category === 'PERCENT' ? 'Giảm giá' : 'Giảm tiền'}</span>
+                            </div>
+                            <div class="promotion-details">
+                                <div class="detail-row">
+                                    <span class="detail-label">Đơn tối thiểu:</span>
+                                    <span class="detail-value">${formatCurrency(promo.minimum_pay)}</span>
+                                </div>
+                                ${promo.max_discount_amount ? `
+                                    <div class="detail-row">
+                                        <span class="detail-label">Giảm tối đa:</span>
+                                        <span class="detail-value">${formatCurrency(promo.max_discount_amount)}</span>
+                                    </div>
+                                ` : ''}
+                            </div>
+                        </div>
+                        <div class="promotion-footer">
+                            <span class="promotion-store">📍 ${storeName}</span>
+                            <span class="promotion-status status-active">Đang hoạt động</span>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+        
+        function formatCurrency(amount) {
+            return new Intl.NumberFormat('vi-VN', {
+                style: 'currency',
+                currency: 'VND'
+            }).format(amount);
+        }
+        
+        function filterPromotionsByStore() {
+            const storeId = document.getElementById('store-filter').value;
+            const typeFilter = document.getElementById('promo-type-filter').value;
+            
+            let filtered = allPromotions.filter(promo => {
+                if (storeId && promo.store_id.toString() !== storeId) return false;
+                if (typeFilter && promo.category !== typeFilter) return false;
+                return true;
+            });
+            
+            displayPromotions(filtered);
+        }
+        
+        function filterPromotionsByType() {
+            filterPromotionsByStore(); // Reuse the same logic
+        }
+        
+        // Initialize
+        document.addEventListener('DOMContentLoaded', function() {
+            console.log('DOM loaded');
+            updateAuthUI();
+            updateCartCount();
+            loadData();
+        });
+    </script>
+</body>
+</html>

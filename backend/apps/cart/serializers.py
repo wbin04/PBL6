@@ -1,18 +1,18 @@
 from rest_framework import serializers
 from .models import Cart, Item
-from apps.menu.serializers import FoodListSerializer
+from apps.menu.serializers import FoodListSerializer, FoodSizeSerializer
 
 
 class ItemSerializer(serializers.ModelSerializer):
     food = FoodListSerializer(read_only=True)
     food_id = serializers.IntegerField(write_only=True)
+    food_option = FoodSizeSerializer(read_only=True)
+    food_option_id = serializers.IntegerField(write_only=True, required=False, allow_null=True)
     subtotal = serializers.ReadOnlyField()
     
-    # Override id to map to existing food_id, since table has no id column
-    id = serializers.IntegerField(source='food_id', read_only=True)
     class Meta:
         model = Item
-        fields = ['id', 'food', 'food_id', 'quantity', 'subtotal']
+        fields = ['id', 'food', 'food_id', 'food_option', 'food_option_id', 'quantity', 'item_note', 'subtotal']
 
 
 class CartSerializer(serializers.ModelSerializer):

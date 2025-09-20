@@ -17,6 +17,8 @@ def api_root(request):
             'payments': '/api/payments/',
             'promotions': '/api/promotions/',
             'ratings': '/api/ratings/',
+            'stores': '/api/stores/',
+            'shipper': '/api/shipper/',
             'admin': '/admin/',
         }
     })
@@ -31,6 +33,8 @@ urlpatterns = [
     path('api/payments/', include('apps.payments.urls')),
     path('api/promotions/', include('apps.promotions.urls')),
     path('api/ratings/', include('apps.ratings.urls')),
+    path('api/stores/', include('apps.stores.urls')),
+    path('api/shipper/', include('apps.shipper.urls')),
 ]
 
 if settings.DEBUG:

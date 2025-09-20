@@ -39,16 +39,35 @@ export const addToCart = createAsyncThunk(
 export const updateCartItem = createAsyncThunk(
   'cart/updateCartItem',
   async (
-    { foodId, quantity }: { foodId: number; quantity: number },
+    { itemId, quantity }: { itemId: number; quantity: number },
     { rejectWithValue, dispatch }
   ) => {
     try {
-      // Update item
-      await cartService.updateCartItem(foodId, quantity);
+      console.log('updateCartItem called with:', { itemId, quantity });
+      
+      // First get the cart to find the food_id for this item
+      const currentCart = await cartService.getCart();
+      console.log('Current cart items:', currentCart.items?.length);
+      
+      const item = currentCart.items?.find(item => item.id === itemId);
+      if (!item) {
+        console.error('Item not found in cart:', itemId);
+        throw new Error('Item not found in cart');
+      }
+      
+      console.log('Found item:', { id: item.id, foodId: item.food.id, currentQuantity: item.quantity });
+      
+      // Update item with correct data format using food_id
+      const updateResult = await cartService.updateCartItem(item.food.id, { quantity });
+      console.log('Update API result:', updateResult);
+      
       // Refetch full cart to sync state
       const updatedCart = await cartService.getCart();
+      console.log('Updated cart total items:', updatedCart.items?.length);
+      
       return updatedCart;
     } catch (error: any) {
+      console.error('updateCartItem error:', error);
       return rejectWithValue(error.message);
     }
   }
@@ -56,9 +75,16 @@ export const updateCartItem = createAsyncThunk(
 
 export const removeFromCart = createAsyncThunk(
   'cart/removeFromCart',
-  async (foodId: number, { rejectWithValue, dispatch }) => {
+  async (itemId: number, { rejectWithValue, dispatch }) => {
     try {
-      await cartService.removeFromCart(foodId);
+      // First get the cart to find the food_id for this item
+      const currentCart = await cartService.getCart();
+      const item = currentCart.items?.find(item => item.id === itemId);
+      if (!item) {
+        throw new Error('Item not found in cart');
+      }
+      
+      await cartService.removeFromCart(item.food.id);
       // Fetch updated cart after removal
       dispatch(fetchCart());
     } catch (error: any) {
@@ -124,16 +150,19 @@ const cartSlice = createSlice({
       
       // Update cart item
       .addCase(updateCartItem.pending, (state) => {
+        console.log('updateCartItem.pending');
         state.loading = true;
         state.error = null;
       })
       .addCase(updateCartItem.fulfilled, (state, action) => {
+        console.log('updateCartItem.fulfilled', action.payload);
         state.loading = false;
   // Replace cart with updated payload to ensure accurate updates
   state.cart = action.payload;
         state.error = null;
       })
       .addCase(updateCartItem.rejected, (state, action) => {
+        console.log('updateCartItem.rejected', action.payload);
         state.loading = false;
         state.error = action.payload as string;
       })
