@@ -123,3 +123,4 @@ const menuSlice = createSlice({
 
 export const { clearError, setCurrentCategory, clearFoods } = menuSlice.actions;
 export default menuSlice.reducer;
+

@@ -1,14 +1,29 @@
-export { HomeScreen } from './HomeScreen';
-export { LoginScreen } from './LoginScreen';
-export { RegisterScreen } from './RegisterScreen';
-export { ForgotPasswordScreen } from './ForgotPasswordScreen';
-export { default as MenuScreen } from './MenuScreen';
-export { default as FoodDetailScreen } from './FoodDetailScreen';
-export { default as RatingScreen } from './RatingScreen';
-export { default as CartScreen } from './CartScreen';
-export { default as OrderScreen } from './OrderScreen';
-export { default as CheckoutScreen } from './CheckoutScreen';
-export { default as OrderDetailScreen } from './OrderDetailScreen';
-export { EditOrderScreen } from './EditOrderScreen';
-export { RatingOrderScreen } from './RatingOrderScreen';
-export { ProfileScreen } from './ProfileScreen';
+// // screens/index.ts
+
+// export { default as HomeScreen } from "./home";
+// export { default as LoginScreen } from "./welcome/login";
+// export { default as RegisterScreen } from "./welcome/signup";
+
+// export { default as RestaurantsScreen } from "./restaurants";
+// export { default as RestaurantDetailScreen } from "./restaurants/[id]";
+
+// export { default as CategoryScreen } from "./catelogy/[name]";
+
+// export { default as FoodDetailScreen } from "./foods/[id]";
+// export { default as RatingScreen } from "./foods/[id]/reviews";
+
+// export { default as FavoritesScreen } from "./favorites";
+
+// export { default as CartScreen } from "./cart";
+// export { default as CheckoutScreen } from "./checkout";
+
+// export { default as AddressListScreen } from "./address";
+// export { default as AddressAddScreen } from "./address/add";
+
+// export { default as PaymentBankScreen } from "./payment/bank";
+// export { default as PaymentCardScreen } from "./payment/card";
+
+export { default as CancelScreen } from './CancelScreen';
+export { default as TrackingScreen } from './TrackingScreen';
+export { default as MapTrackingScreen } from './MapTrackingScreen';
+

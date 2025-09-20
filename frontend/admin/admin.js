@@ -47,7 +47,7 @@ class AdminPanel {
             const user = await response.json();
             
             // Check if user has admin role (role_id = 2)
-            if (!user.role || user.role !== 'Quản lý') {
+            if (!user.role_id || user.role_id !== 2) {
                 alert('Bạn không có quyền truy cập trang admin!');
                 window.location.href = '../index.html';
                 return;
@@ -145,16 +145,66 @@ class AdminPanel {
         // Preview selected image in Food form
         const foodImageInput = document.getElementById('food-image');
         const foodImagePreview = document.getElementById('food-image-preview');
+        const imagePreviewContainer = document.getElementById('image-preview-container');
+        const fileInfo = document.getElementById('file-info');
+        const removePreviewBtn = document.getElementById('remove-preview-btn');
+        
         if (foodImageInput) {
             foodImageInput.addEventListener('change', (e) => {
                 const file = e.target.files[0];
                 if (file) {
+                    // Validate file type
+                    if (!file.type.startsWith('image/')) {
+                        alert('Vui lòng chọn file hình ảnh!');
+                        e.target.value = '';
+                        fileInfo.textContent = 'Chọn ảnh để xem trước (Tối đa 5MB)';
+                        return;
+                    }
+                    
+                    // Validate file size (max 5MB)
+                    if (file.size > 5 * 1024 * 1024) {
+                        alert('Kích thước ảnh không được vượt quá 5MB!');
+                        e.target.value = '';
+                        fileInfo.textContent = 'Chọn ảnh để xem trước (Tối đa 5MB)';
+                        return;
+                    }
+                    
                     const url = URL.createObjectURL(file);
                     foodImagePreview.src = url;
                     foodImagePreview.style.display = 'block';
+                    removePreviewBtn.style.display = 'flex';
+                    imagePreviewContainer.classList.add('has-image');
+                    
+                    // Show file info
+                    const fileSize = (file.size / 1024 / 1024).toFixed(2);
+                    fileInfo.textContent = `Đã chọn: ${file.name} (${fileSize}MB)`;
+                    fileInfo.style.color = 'var(--success-color)';
+                    
+                    // Add fade in effect
+                    foodImagePreview.style.opacity = '0';
+                    setTimeout(() => {
+                        foodImagePreview.style.opacity = '1';
+                    }, 50);
                 } else {
                     foodImagePreview.style.display = 'none';
+                    removePreviewBtn.style.display = 'none';
+                    imagePreviewContainer.classList.remove('has-image');
+                    fileInfo.textContent = 'Chọn ảnh để xem trước (Tối đa 5MB)';
+                    fileInfo.style.color = '#6c757d';
                 }
+            });
+        }
+        
+        // Remove preview button
+        if (removePreviewBtn) {
+            removePreviewBtn.addEventListener('click', (e) => {
+                e.preventDefault();
+                foodImagePreview.style.display = 'none';
+                removePreviewBtn.style.display = 'none';
+                imagePreviewContainer.classList.remove('has-image');
+                foodImageInput.value = '';
+                fileInfo.textContent = 'Chọn ảnh để xem trước (Tối đa 5MB)';
+                fileInfo.style.color = '#6c757d';
             });
         }
 
@@ -432,6 +482,9 @@ class AdminPanel {
     const title = document.getElementById('food-modal-title');
     const foodImagePreview = document.getElementById('food-image-preview');
     const foodImageInput = document.getElementById('food-image');
+    const imagePreviewContainer = document.getElementById('image-preview-container');
+    const fileInfo = document.getElementById('file-info');
+    const removePreviewBtn = document.getElementById('remove-preview-btn');
         
         if (food) {
             title.textContent = 'Chỉnh sửa món ăn';
@@ -445,8 +498,17 @@ class AdminPanel {
             if (food.image) {
                 foodImagePreview.src = food.image.startsWith('http') ? food.image : this.mediaURL + '/' + food.image;
                 foodImagePreview.style.display = 'block';
+                foodImagePreview.style.opacity = '1';
+                removePreviewBtn.style.display = 'flex';
+                imagePreviewContainer.classList.add('has-image');
+                fileInfo.textContent = 'Ảnh hiện tại được hiển thị ở trên';
+                fileInfo.style.color = '#6c757d';
             } else {
                 foodImagePreview.style.display = 'none';
+                removePreviewBtn.style.display = 'none';
+                imagePreviewContainer.classList.remove('has-image');
+                fileInfo.textContent = 'Chọn ảnh để xem trước (Tối đa 5MB)';
+                fileInfo.style.color = '#6c757d';
             }
             // Clear file input
             foodImageInput.value = '';
@@ -455,7 +517,11 @@ class AdminPanel {
             document.getElementById('food-form').reset();
             document.getElementById('food-id').value = '';
             foodImagePreview.style.display = 'none';
+            removePreviewBtn.style.display = 'none';
+            imagePreviewContainer.classList.remove('has-image');
             foodImageInput.value = '';
+            fileInfo.textContent = 'Chọn ảnh để xem trước (Tối đa 5MB)';
+            fileInfo.style.color = '#6c757d';
         }
         
         // Show modal

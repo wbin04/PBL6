@@ -41,7 +41,27 @@ export interface Category {
   id: number;
   cate_name: string;
   image: string;
-  foods_count: number;
+  image_url?: string;
+  foods_count?: number;
+}
+
+export interface Store {
+  id: number;
+  store_name: string;
+  image: string;
+  description: string;
+  manager?: User;
+  // Store stats
+  average_rating?: number;
+  total_ratings?: number;
+  total_foods?: number;
+  total_orders?: number;
+}
+
+export interface FoodSize {
+  id: number;
+  size_name: string;
+  price: string;
 }
 
 export interface Food {
@@ -50,10 +70,14 @@ export interface Food {
   description: string;
   price: string;
   image: string;
+  image_url?: string;
   category_name?: string;
   availability: string;
   average_rating?: number;
   rating_count?: number;
+  category?: Category;
+  store?: Store;
+  sizes?: FoodSize[];
 }
 
 export interface FoodDetail extends Food {
@@ -82,10 +106,23 @@ export interface AddToCartRequest {
 
 // Order Types
 export interface OrderItem {
-  id: number;
+  id: string;
   food: Food;
+  food_option?: any;
   quantity: number;
+  food_price: number;
+  food_option_price?: number;
+  food_note?: string;
   subtotal: number;
+  size_display?: string;
+  price_breakdown?: Array<{
+    type: 'food' | 'size';
+    name: string;
+    display: string;
+    price: number;
+    quantity: number;
+    total: number;
+  }>;
 }
 
 export interface Order {
@@ -102,6 +139,10 @@ export interface Order {
   items: OrderItem[];
   is_rated: boolean;
   created_date: string;
+  created_date_display?: string;
+  cancel_reason?: string;
+  cancelled_date?: string;
+  cancelled_by_role?: 'Khách hàng' | 'Cửa hàng' | 'Quản lý';
 }
 
 export interface CreateOrderRequest {
@@ -111,6 +152,7 @@ export interface CreateOrderRequest {
   ship_address: string;
   note?: string;
   promo?: string;
+  total_money?: number;
 }
 
 // Promotion Types
@@ -172,14 +214,26 @@ export type RootStackParamList = {
   ForgotPassword: undefined;
   MainTabs: undefined;
   FoodDetail: { foodId: number };
+  StoreDetail: { storeId: number };
   RatingScreen: { foodId: number };
+  FoodReviews: { id: string };
   Cart: undefined;
   Checkout: { selectedIds: number[] };
   OrderDetail: { orderId: number };
   EditOrder: { orderId: number };
   RatingOrder: { orderId: number };
+  Review: { orderId: number };
+  Orders: { selectedTab?: 'Chờ xác nhận' | 'Đang giao' | 'Đã giao' | 'Đã hủy' } | undefined;
+  CancelDetail: {
+    orderId: string;
+    shopName?: string;
+    productName?: string;
+    productPrice?: string;
+    productImage?: any;
+  };
   Profile: undefined;
   EditProfile: undefined;
+  AdminHome: undefined;
 };
 
 export type MainTabParamList = {
@@ -203,6 +257,7 @@ export interface AppState {
   menu: MenuState;
   cart: CartState;
   orders: OrderState;
+  stores: StoresState;
 }
 
 export interface AuthState {
@@ -233,3 +288,11 @@ export interface OrderState {
   loading: boolean;
   error: string | null;
 }
+
+export interface StoresState {
+  stores: Store[];
+  currentStore: Store | null;
+  loading: boolean;
+  error: string | null;
+}
+

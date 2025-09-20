@@ -61,8 +61,11 @@
                 localStorage.setItem('user', JSON.stringify(response.user));
                 // Redirect based on role
                 alert('Đăng nhập thành công!');
-                if (response.user.role === 'Quản lý') {
+                const userRole = (response.user.role || '').toLowerCase();
+                if (userRole.includes('quản lý')) {
                     window.location.href = '../admin/admin.html';
+                } else if (userRole.includes('cửa hàng')) {
+                    window.location.href = '../store-manager/dashboard.html';
                 } else {
                     window.location.href = '../index.html';
                 }
@@ -73,7 +76,15 @@
         
         // Redirect if already logged in
         if (isAuthenticated()) {
-            window.location.href = '../index.html';
+            const currentUser = getCurrentUser();
+            const role = (currentUser?.role || '').toLowerCase();
+            if (role.includes('cửa hàng')) {
+                window.location.href = '../store-manager/dashboard.html';
+            } else if (role.includes('quản lý')) {
+                window.location.href = '../admin/admin.html';
+            } else {
+                window.location.href = '../index.html';
+            }
         }
     </script>
 </body>

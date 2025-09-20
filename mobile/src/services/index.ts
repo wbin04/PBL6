@@ -9,6 +9,7 @@ import {
   Category,
   Food,
   FoodDetail,
+  Store,
   Cart,
   AddToCartRequest,
   Order,
@@ -55,11 +56,14 @@ export const menuService = {
     return response.results;
   },
 
-  async getFoods(page = 1, category?: number): Promise<PaginatedResponse<Food>> {
+  async getFoods(page = 1, category?: number, store?: number): Promise<PaginatedResponse<Food>> {
     const params = new URLSearchParams();
     params.append('page', page.toString());
     if (category) {
       params.append('category', category.toString());
+    }
+    if (store) {
+      params.append('store', store.toString());
     }
     
     return apiClient.get(`${ENDPOINTS.FOODS}?${params.toString()}`);
@@ -77,17 +81,65 @@ export const menuService = {
   },
 };
 
+// Stores Service
+export const storesService = {
+  async getStores(): Promise<Store[]> {
+    return apiClient.get(ENDPOINTS.STORES_PUBLIC);
+  },
+
+  async getStoreDetail(id: number): Promise<Store> {
+    return apiClient.get(ENDPOINTS.STORE_DETAIL(id));
+  },
+
+  async getStoreFoods(storeId: number, page = 1): Promise<PaginatedResponse<Food>> {
+    const params = new URLSearchParams();
+    params.append('page', page.toString());
+    
+    const endpoint = `${ENDPOINTS.STORE_FOODS(storeId)}?${params.toString()}`;
+    console.log('storesService.getStoreFoods - API endpoint:', endpoint);
+    
+    try {
+      const result = await apiClient.get<PaginatedResponse<Food>>(endpoint);
+      console.log('storesService.getStoreFoods - API response:', result);
+      return result;
+    } catch (error) {
+      console.error('storesService.getStoreFoods - API error:', error);
+      throw error;
+    }
+  },
+
+  async getStoreStats(storeId: number): Promise<{
+    total_foods: number;
+    total_orders: number;
+    total_revenue: number;
+    average_rating: number;
+    total_ratings: number;
+  }> {
+    const endpoint = ENDPOINTS.STORE_STATS(storeId);
+    console.log('storesService.getStoreStats - API endpoint:', endpoint);
+    
+    try {
+      const result = await apiClient.get<{
+        total_foods: number;
+        total_orders: number;
+        total_revenue: number;
+        average_rating: number;
+        total_ratings: number;
+      }>(endpoint);
+      console.log('storesService.getStoreStats - API response:', result);
+      return result;
+    } catch (error) {
+      console.error('storesService.getStoreStats - API error:', error);
+      throw error;
+    }
+  },
+};
+
 // Cart Service
 export const cartService = {
   async getCart(): Promise<Cart> {
     const response = await apiClient.get<Cart>(ENDPOINTS.CART);
-    // Ensure each cart item has unique id corresponding to food id
-    if (response.items) {
-      response.items = response.items.map(item => ({
-        ...item,
-        id: item.food.id,
-      }));
-    }
+    // Cart items should use their actual id from database
     return response;
   },
 
@@ -95,8 +147,11 @@ export const cartService = {
     return apiClient.post(ENDPOINTS.ADD_TO_CART, item);
   },
 
-  async updateCartItem(foodId: number, quantity: number): Promise<Cart> {
-    return apiClient.put(ENDPOINTS.UPDATE_CART_ITEM(foodId), { quantity });
+  async updateCartItem(foodId: number, data: { quantity?: number; item_note?: string }): Promise<any> {
+    console.log('updateCartItem service called:', { foodId, data });
+    const result = await apiClient.put(ENDPOINTS.UPDATE_CART_ITEM(foodId), data);
+    console.log('updateCartItem service result:', result);
+    return result;
   },
 
   async removeFromCart(foodId: number): Promise<void> {
@@ -125,8 +180,20 @@ export const ordersService = {
     return apiClient.get(ENDPOINTS.ORDER_DETAIL(id));
   },
 
-  async updateOrderStatus(id: number, status: string): Promise<Order> {
-    return apiClient.put(ENDPOINTS.UPDATE_ORDER_STATUS(id), { order_status: status });
+  async updateOrderStatus(id: number, status: string, cancelReason?: string): Promise<Order> {
+    const data: any = { order_status: status };
+    if (cancelReason) {
+      data.cancel_reason = cancelReason;
+    }
+    return apiClient.put(ENDPOINTS.UPDATE_ORDER_STATUS(id), data);
+  },
+
+  async adminUpdateOrderStatus(id: number, status: string, cancelReason?: string): Promise<Order> {
+    const data: any = { order_status: status };
+    if (cancelReason) {
+      data.cancel_reason = cancelReason;
+    }
+    return apiClient.put(ENDPOINTS.ADMIN_UPDATE_ORDER_STATUS(id), data);
   },
 };
 
@@ -173,3 +240,4 @@ export const paymentsService = {
     });
   },
 };
+
