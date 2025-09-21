@@ -1098,6 +1098,7 @@ COPY public.cart (id, total_money, user_id) FROM stdin;
 1	0.000	5
 3	0.000	3
 2	0.000	2
+4	0.000	8
 \.
 
 
@@ -1349,6 +1350,17 @@ COPY public.order_detail (order_id, food_id, quantity, food_note, id, food_optio
 49	32	1	Thêm đá	36	16	15000.00	0.00
 49	46	1	Topping for Coke	37	\N	15000.00	\N
 49	47	3	Topping for Coke	38	\N	20000.00	\N
+50	33	1	Topping for 5Xúc xích thêm	39	\N	18000.00	\N
+50	46	1	Topping for 5Xúc xích thêm	40	\N	15000.00	\N
+50	47	1	\N	41	\N	20000.00	\N
+51	47	1	\N	42	\N	20000.00	\N
+52	47	1	\N	43	\N	20000.00	\N
+53	46	1	\N	44	\N	15000.00	\N
+54	45	1	\N	45	\N	18000.00	\N
+55	47	1	\N	46	\N	20000.00	\N
+56	43	1	Topping for 4Xúc xích thêm	47	\N	15000.00	\N
+56	44	2	Topping for 4Xúc xích thêm	48	\N	20000.00	\N
+56	45	1	Topping for 4Xúc xích thêm	49	\N	18000.00	\N
 \.
 
 
@@ -1382,11 +1394,13 @@ COPY public.orders (id, created_date, total_money, user_id, order_status, note, 
 36	2025-09-18 18:46:20.532147+07	35000.000	2	Chờ xác nhận		cash	Bin	Liên Chiểu, Đà Nẵng	1231231233	\N	\N	\N	15000	36	5	Chờ xác nhận	35000.00	0.00	35000.00	\N	\N
 37	2025-09-18 18:49:18.646445+07	35000.000	2	Chờ xác nhận		cash	Bin	Liên Chiểu, Đà Nẵng	1231231233	\N	\N	\N	15000	37	5	Chờ xác nhận	35000.00	0.00	35000.00	\N	\N
 38	2025-09-18 18:55:20.881645+07	35000.000	2	Đã hủy	ok	cash	Bin	Liên Chiểu, Đà Nẵng	1231231233	\N	\N	Thay đổi số điện thoại	15000	38	5	Chờ xác nhận	35000.00	0.00	35000.00	Khách hàng	2025-09-19 16:49:58.664405+07
+51	2025-09-21 14:12:55.687254+07	35000.000	2	Chờ xác nhận		cash	Bin	Liên Chiểu, Đà Nẵng	1231231233	\N	1	\N	15000	51	5	Đã xác nhận	35000.00	0.00	35000.00	\N	\N
 47	2025-09-19 17:04:14.899306+07	75000.000	2	Đã hủy		cash	Bin	Liên Chiểu, Đà Nẵng	1231231233	\N	\N	Thêm mã giảm giá	15000	47	5	Chờ xác nhận	75000.00	0.00	75000.00	Khách hàng	2025-09-19 17:04:26.361029+07
 43	2025-09-18 19:14:12.878399+07	93000.000	2	Đã giao	okok	cash	Bin	Liên Chiểu, Đà Nẵng	1231231233	\N	\N	\N	15000	43	5	Chờ xác nhận	93000.00	0.00	93000.00	\N	\N
 42	2025-09-18 19:13:26.308529+07	35000.000	2	Đã hủy	ngon	cash	Bin	Liên Chiểu, Đà Nẵng	1231231233	\N	\N	\N	15000	42	5	Chờ xác nhận	35000.00	0.00	35000.00	\N	\N
 41	2025-09-18 19:08:06.813251+07	35000.000	2	Đã hủy		cash	Bin	Liên Chiểu, Đà Nẵng	1231231233	\N	\N	Không muốn nhận hàng nữa	15000	41	5	Chờ xác nhận	35000.00	0.00	35000.00	\N	\N
 40	2025-09-18 19:07:13.299986+07	35000.000	2	Đã hủy		cash	Bin	Liên Chiểu, Đà Nẵng	1231231233	\N	\N	huỷ	15000	40	5	Chờ xác nhận	35000.00	0.00	35000.00	\N	\N
+54	2025-09-21 14:22:15.43575+07	33000.000	2	Đã hủy		cash	Bin	Liên Chiểu, Đà Nẵng	1231231233	\N	\N	Thay đổi thời gian giao hàng	15000	54	4	Chờ xác nhận	33000.00	0.00	33000.00	Khách hàng	2025-09-21 14:22:29.573743+07
 49	2025-09-20 15:29:30.082957+07	130000.000	2	Chờ xác nhận	gọi trước	cash	Bin2	Liên Chiểu, Đà Nẵng	1231231233	\N	\N	\N	15000	48	5	Chờ xác nhận	130000.00	0.00	130000.00	\N	\N
 48	2025-09-20 15:29:30.067759+07	55000.000	2	Đã giao	gọi trước	cash	Bin2	Liên Chiểu, Đà Nẵng	1231231233	\N	\N	\N	15000	48	1	Chờ xác nhận	55000.00	0.00	55000.00	\N	\N
 27	2025-08-31 18:46:35.032024+07	59186.000	2	Đã huỷ	xin hộp giấy	COD	Bin	Liên Chiểu, Đà Nẵng	1231231233	12	\N	Test cancellation by store	15000	27	2	Chờ xác nhận	114436.00	34915.40	79520.60	Cửa hàng	2025-09-19 16:41:17.74935+07
@@ -1394,6 +1408,11 @@ COPY public.orders (id, created_date, total_money, user_id, order_status, note, 
 45	2025-09-19 15:57:02.157826+07	35000.000	2	Đã hủy	note1	cash	Bin	Liên Chiểu, Đà Nẵng	1231231233	\N	\N	Thay đổi số điện thoại	15000	45	5	Chờ xác nhận	35000.00	0.00	35000.00	Khách hàng	2025-09-19 16:42:28.77168+07
 44	2025-09-19 15:42:47.131866+07	146000.000	2	Đã hủy		cash	Bin	Liên Chiểu, Đà Nẵng	1231231233	\N	\N	ok	15000	44	5	Chờ xác nhận	146000.00	0.00	146000.00	Khách hàng	2025-09-19 16:43:45.058926+07
 39	2025-09-18 19:00:18.777955+07	35000.000	2	Đã hủy		cash	Bin	Liên Chiểu, Đà Nẵng	1231231233	\N	\N	Kh muoon	15000	39	5	Chờ xác nhận	35000.00	0.00	35000.00	Khách hàng	2025-09-19 16:49:00.06432+07
+50	2025-09-21 14:10:30.990345+07	68000.000	2	Chờ xác nhận		cash	Bin	Liên Chiểu, Đà Nẵng	1231231233	\N	\N	\N	15000	50	5	Chờ xác nhận	68000.00	0.00	68000.00	\N	\N
+52	2025-09-21 14:15:16.597643+07	35000.000	2	Đã giao		cash	Bin	Liên Chiểu, Đà Nẵng	1231231233	\N	1	\N	15000	52	5	Đã giao	35000.00	0.00	35000.00	\N	\N
+55	2025-09-21 17:38:41.640005+07	35000.000	8	Đã giao		cash	Shipper1	Quận Tân Bình, TP.HCM	0906789012	\N	1	\N	15000	55	5	Đã giao	35000.00	0.00	35000.00	\N	\N
+56	2025-09-21 20:30:15.986044+07	88000.000	8	Đã hủy		cash	Shipper1	Quận Tân Bình, TP.HCM	0906789012	\N	\N	Không muốn nhận hàng nữa	15000	56	4	Chờ xác nhận	88000.00	0.00	88000.00	Khách hàng	2025-09-21 20:58:47.275771+07
+53	2025-09-21 14:21:24.308769+07	30000.000	2	Đã huỷ		cash	Bin	Liên Chiểu, Đà Nẵng	1231231233	\N	1	\N	15000	53	5	Đã xác nhận	30000.00	0.00	30000.00	\N	\N
 \.
 
 
@@ -1521,7 +1540,7 @@ SELECT pg_catalog.setval('public.auth_permission_id_seq', 76, true);
 -- Name: cart_id_seq; Type: SEQUENCE SET; Schema: public; Owner: postgres
 --
 
-SELECT pg_catalog.setval('public.cart_id_seq', 3, true);
+SELECT pg_catalog.setval('public.cart_id_seq', 4, true);
 
 
 --
@@ -1570,14 +1589,14 @@ SELECT pg_catalog.setval('public.food_size_id_seq', 16, true);
 -- Name: item_id_seq; Type: SEQUENCE SET; Schema: public; Owner: postgres
 --
 
-SELECT pg_catalog.setval('public.item_id_seq', 38, true);
+SELECT pg_catalog.setval('public.item_id_seq', 49, true);
 
 
 --
 -- Name: order_detail_id_seq; Type: SEQUENCE SET; Schema: public; Owner: postgres
 --
 
-SELECT pg_catalog.setval('public.order_detail_id_seq', 38, true);
+SELECT pg_catalog.setval('public.order_detail_id_seq', 49, true);
 
 
 --
@@ -1591,7 +1610,7 @@ SELECT pg_catalog.setval('public.order_promo_id_seq', 6, true);
 -- Name: orders_id_seq; Type: SEQUENCE SET; Schema: public; Owner: postgres
 --
 
-SELECT pg_catalog.setval('public.orders_id_seq', 49, true);
+SELECT pg_catalog.setval('public.orders_id_seq', 56, true);
 
 
 --
@@ -2382,3 +2401,4 @@ ALTER TABLE ONLY public.users_user_permissions
 --
 -- PostgreSQL database dump complete
 --
+

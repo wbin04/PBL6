@@ -781,6 +781,61 @@ FastFood API cung cấp các endpoints để quản lý hệ thống đặt đ�
 ```
 - **Response:** Tương tự danh sách khuyến mãi
 
+### 6.4 Validate nhiều khuyến mãi
+- **POST** `/api/promotions/validate-multiple/`
+- **Headers:** `Authorization: Bearer {access_token}`
+- **Mô tả:** Validate nhiều mã khuyến mãi cùng lúc
+- **Request Body:**
+```json
+{
+  "promo_ids": [1, 2],
+  "total_amount": "200000.00",
+  "store_id": 1
+}
+```
+- **Response:**
+```json
+{
+  "valid": true,
+  "total_discount": "35000.00",
+  "final_amount": "165000.00",
+  "applied_promos": [
+    {
+      "id": 1,
+      "name": "Giảm 10% cho đơn hàng từ 100k",
+      "applied_amount": "20000.00"
+    },
+    {
+      "id": 2,
+      "name": "Giảm 15k cho đơn hàng từ 200k",
+      "applied_amount": "15000.00"
+    }
+  ]
+}
+```
+
+### 6.5 Chi tiết khuyến mãi
+- **GET** `/api/promotions/{promo_id}/`
+- **Headers:** `Authorization: Bearer {access_token}`
+- **Response:** Tương tự item trong danh sách khuyến mãi
+
+### 6.6 Cập nhật khuyến mãi (Store Manager)
+- **PUT** `/api/promotions/{promo_id}/update/`
+- **Headers:** `Authorization: Bearer {store_manager_token}`
+- **Request Body:** Tương tự tạo khuyến mãi
+- **Response:** Tương tự danh sách khuyến mãi
+
+### 6.7 Xóa khuyến mãi (Store Manager)
+- **DELETE** `/api/promotions/{promo_id}/delete/`
+- **Headers:** `Authorization: Bearer {store_manager_token}`
+- **Response:**
+```json
+{
+  "success": true,
+  "message": "Promotion \"Khuyến mãi mới\" deleted successfully"
+}
+```
+
 ---
 
 ## 7. Ratings API (`/api/ratings/`)
@@ -1032,7 +1087,32 @@ FastFood API cung cấp các endpoints để quản lý hệ thống đặt đ�
 }
 ```
 
-### 9.6 Cập nhật trạng thái giao hàng
+### 9.6 Shipper nhận đơn hàng
+- **POST** `/api/orders/shipper/{order_id}/accept/`
+- **Headers:** `Authorization: Bearer {shipper_token}`
+- **Mô tả:** Shipper có thể tự nhận những đơn hàng chưa có shipper phụ trách
+- **Response:**
+```json
+{
+  "message": "Order accepted successfully",
+  "order": {
+    "id": 1,
+    "order_status": "Đã xác nhận",
+    "delivery_status": "Đã xác nhận",
+    "total_money": "156000.00",
+    "shipper": {
+      "id": 1,
+      "user": {
+        "fullname": "Nguyễn Văn A"
+      }
+    },
+    "receiver_name": "John Doe",
+    "ship_address": "123 Main St, Hà Nội"
+  }
+}
+```
+
+### 9.7 Cập nhật trạng thái giao hàng
 - **PUT** `/api/orders/shipper/{order_id}/status/`
 - **Headers:** `Authorization: Bearer {shipper_token}`
 - **Request Body:**
@@ -1184,6 +1264,110 @@ FastFood API cung cấp các endpoints để quản lý hệ thống đặt đ�
       "applied_amount": "15000.00"
     }
   ]
+}
+```
+
+---
+
+## 12. API Quản lý Order-Promotion (OrderPromo)
+
+### 12.1 Lấy danh sách khuyến mãi đã áp dụng cho đơn hàng
+- **GET** `/api/orders/{order_id}/promotions/`
+- **Headers:** `Authorization: Bearer {access_token}`
+- **Response:**
+```json
+[
+  {
+    "id": 1,
+    "promo": {
+      "id": 1,
+      "name": "Giảm 10% cho đơn hàng từ 100k",
+      "discount_value": 10.0,
+      "category": "PERCENT"
+    },
+    "applied_amount": "15000.00",
+    "note": "",
+    "created_at": "2025-01-01T10:00:00Z"
+  }
+]
+```
+
+### 12.2 Thêm khuyến mãi vào đơn hàng
+- **POST** `/api/orders/{order_id}/promotions/`
+- **Headers:** `Authorization: Bearer {admin_token}`
+- **Request Body:**
+```json
+{
+  "promo_id": 1,
+  "applied_amount": "15000.00",
+  "note": "Áp dụng thủ công bởi admin"
+}
+```
+- **Response:**
+```json
+{
+  "id": 1,
+  "message": "Promotion applied successfully",
+  "applied_amount": "15000.00",
+  "order_total_updated": "141000.00"
+}
+```
+
+### 12.3 Xóa khuyến mãi khỏi đơn hàng
+- **DELETE** `/api/orders/{order_id}/promotions/{promo_id}/`
+- **Headers:** `Authorization: Bearer {admin_token}`
+- **Response:**
+```json
+{
+  "message": "Promotion removed successfully",
+  "refunded_amount": "15000.00",
+  "order_total_updated": "156000.00"
+}
+```
+
+---
+
+## 13. API Thống kê và Báo cáo
+
+### 13.1 Thống kê tổng quan hệ thống (Admin)
+- **GET** `/api/admin/dashboard/stats/`
+- **Headers:** `Authorization: Bearer {admin_token}`
+- **Response:**
+```json
+{
+  "total_users": 150,
+  "total_orders": 1250,
+  "total_revenue": "125000000.00",
+  "total_stores": 12,
+  "active_shippers": 8,
+  "orders_today": 45,
+  "revenue_today": "2500000.00",
+  "top_selling_foods": [
+    {
+      "id": 1,
+      "title": "Big Mac",
+      "total_sold": 250,
+      "revenue": "22250000.00"
+    }
+  ]
+}
+```
+
+### 13.2 Thống kê cửa hàng (Store Manager)  
+- **GET** `/api/stores/{store_id}/stats/` (đã có ở mục 8.2)
+
+### 13.3 Thống kê shipper
+- **GET** `/api/shipper/stats/`
+- **Headers:** `Authorization: Bearer {shipper_token}`
+- **Response:**
+```json
+{
+  "total_delivered": 85,
+  "total_earnings": "850000.00",
+  "delivery_rate": 95.5,
+  "average_delivery_time": "25 minutes",
+  "orders_this_month": 35,
+  "earnings_this_month": "350000.00"
 }
 ```
 

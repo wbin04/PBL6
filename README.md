@@ -21,6 +21,10 @@ net start postgresql-x64-14
 # Export database ra file SQL (nếu cần xuất dữ liệu)
 pg_dump -h localhost -p 5432 -U postgres -d fastfood_db --no-owner --no-acl -C -b -f fastfood_db.sql
 
+# Hoặc
+pg_dump -U postgres -h localhost -p 5432 -E UTF8 -f "backup.sql" fastfood_db
+
+
 # Import database schema từ file SQL
 cd docs
 psql -U postgres -f fastfood_db.sql

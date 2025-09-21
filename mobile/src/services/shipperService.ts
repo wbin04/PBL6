@@ -1,12 +1,14 @@
-import { API_CONFIG, STORAGE_KEYS } from '@/constants';
+import { apiClient } from './api';
+import { STORAGE_KEYS } from '@/constants';
 import * as SecureStore from 'expo-secure-store';
 
 export interface ShipperOrder {
   id: number;
   created_date: string;
-  total_before_discount: number;
-  total_after_discount: number;
-  shipping_fee: number;
+  total_before_discount?: number | string;
+  total_after_discount?: number | string;
+  total_money?: number | string; // Backend uses this field
+  shipping_fee: number | string;
   user: {
     id: number;
     fullname: string;
@@ -23,12 +25,26 @@ export interface ShipperOrder {
     id: number;
     name: string;
   };
-  store: {
+  store?: {
     id: number;
     store_name: string;
   };
-  details: Array<{
+  store_name?: string; // Backend uses this field directly
+  store_info_id?: number;
+  details?: Array<{
     id: number;
+    food: {
+      id: number;
+      title: string;
+      price: number;
+    };
+    quantity: number;
+    food_price: number;
+    subtotal: number;
+    food_note?: string;
+  }>;
+  items?: Array<{ // Backend uses this field
+    id: string;
     food: {
       id: number;
       title: string;
@@ -65,28 +81,12 @@ class ShipperService {
     return user.id;
   }
 
-  private async getAuthHeaders() {
-    const token = await SecureStore.getItemAsync(STORAGE_KEYS.ACCESS_TOKEN);
-    return {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${token}`,
-    };
-  }
-
   // Get orders available for pickup (no shipper assigned yet)
   async getAvailableOrders(): Promise<ShipperOrder[]> {
     try {
-      const headers = await this.getAuthHeaders();
-      const response = await fetch(`${API_CONFIG.BASE_URL}/orders/?delivery_status=Chờ xác nhận&shipper__isnull=true&ordering=-created_date`, {
-        method: 'GET',
-        headers,
-      });
+      // Exclude cancelled orders by filtering out order_status="Đã hủy" and delivery_status="Đã hủy"
+      const data = await apiClient.get<any>('/orders/?delivery_status=Chờ xác nhận&shipper__isnull=true&ordering=-created_date');
 
-      if (!response.ok) {
-        throw new Error(`Failed to fetch available orders: ${response.status}`);
-      }
-
-      const data = await response.json();
       console.log('getAvailableOrders API response:', data);
       
       // Safely handle response structure
@@ -99,7 +99,14 @@ class ShipperService {
         orders = data.data;
       }
       
-      console.log('Processed available orders:', orders);
+      // Filter out any cancelled orders on client side as additional safety
+      // Handle both spellings: "Đã hủy" and "Đã huỷ"
+      orders = orders.filter((order: any) => 
+        order.order_status !== 'Đã hủy' && order.order_status !== 'Đã huỷ' &&
+        order.delivery_status !== 'Đã hủy' && order.delivery_status !== 'Đã huỷ'
+      );
+      
+      console.log('Processed available orders (after filtering cancelled):', orders);
       return orders;
     } catch (error) {
       console.error('Error fetching available orders:', error);
@@ -110,24 +117,16 @@ class ShipperService {
   // Get orders accepted by current shipper
   async getShipperOrders(delivery_status?: string): Promise<ShipperOrder[]> {
     try {
-      const headers = await this.getAuthHeaders();
       const shipperId = await this.getCurrentShipperId();
 
-      let url = `${API_CONFIG.BASE_URL}/orders/?shipper=${shipperId}&ordering=-created_date`;
+      let url = '/orders/shipper/?ordering=-created_date';
       if (delivery_status) {
         url += `&delivery_status=${encodeURIComponent(delivery_status)}`;
       }
+      
+      console.log('getShipperOrders URL:', url);
 
-      const response = await fetch(url, {
-        method: 'GET',
-        headers,
-      });
-
-      if (!response.ok) {
-        throw new Error(`Failed to fetch shipper orders: ${response.status}`);
-      }
-
-      const data = await response.json();
+      const data = await apiClient.get<any>(url);
       console.log('getShipperOrders API response:', data);
       
       // Safely handle response structure
@@ -151,24 +150,8 @@ class ShipperService {
   // Accept an order (assign current shipper and update delivery_status)
   async acceptOrder(orderId: number): Promise<ShipperOrder> {
     try {
-      const headers = await this.getAuthHeaders();
-      const shipperId = await this.getCurrentShipperId();
-
-      const response = await fetch(`${API_CONFIG.BASE_URL}/orders/${orderId}/`, {
-        method: 'PATCH',
-        headers,
-        body: JSON.stringify({
-          delivery_status: 'Đã xác nhận',
-          shipper: shipperId
-        }),
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(`Failed to accept order: ${response.status} - ${JSON.stringify(errorData)}`);
-      }
-
-      return await response.json();
+      const data = await apiClient.post<any>(`/orders/shipper/${orderId}/accept/`, {});
+      return data.order || data;
     } catch (error) {
       console.error('Error accepting order:', error);
       throw error;
@@ -178,22 +161,19 @@ class ShipperService {
   // Update delivery status (e.g., "Đã lấy hàng", "Đang giao", "Đã giao")
   async updateDeliveryStatus(orderId: number, delivery_status: string): Promise<ShipperOrder> {
     try {
-      const headers = await this.getAuthHeaders();
+      console.log(`=== UPDATE DELIVERY STATUS DEBUG ===`);
+      console.log(`Order ID: ${orderId}`);
+      console.log(`New Status: ${delivery_status}`);
+      console.log(`Request body:`, { delivery_status });
 
-      const response = await fetch(`${API_CONFIG.BASE_URL}/orders/${orderId}/`, {
-        method: 'PATCH',
-        headers,
-        body: JSON.stringify({
-          delivery_status
-        }),
+      const data = await apiClient.put<any>(`/orders/shipper/${orderId}/status/`, {
+        delivery_status: delivery_status // Send delivery_status field
       });
 
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(`Failed to update delivery status: ${response.status} - ${JSON.stringify(errorData)}`);
-      }
+      console.log(`Success response:`, data);
+      console.log(`=== END UPDATE DELIVERY STATUS DEBUG ===`);
 
-      return await response.json();
+      return data.order || data;
     } catch (error) {
       console.error('Error updating delivery status:', error);
       throw error;
@@ -203,25 +183,14 @@ class ShipperService {
   // Cancel order (update delivery_status to "Đã huỷ")
   async cancelOrder(orderId: number, reason?: string): Promise<ShipperOrder> {
     try {
-      const headers = await this.getAuthHeaders();
-
-      const response = await fetch(`${API_CONFIG.BASE_URL}/orders/${orderId}/`, {
-        method: 'PATCH',
-        headers,
-        body: JSON.stringify({
-          delivery_status: 'Đã huỷ',
-          cancel_reason: reason || 'Shipper cancelled',
-          cancelled_date: new Date().toISOString(),
-          cancelled_by_role: 'Người vận chuyển'
-        }),
+      const data = await apiClient.patch<any>(`/orders/${orderId}/`, {
+        delivery_status: 'Đã huỷ',
+        cancel_reason: reason || 'Shipper cancelled',
+        cancelled_date: new Date().toISOString(),
+        cancelled_by_role: 'Người vận chuyển'
       });
 
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(`Failed to cancel order: ${response.status} - ${JSON.stringify(errorData)}`);
-      }
-
-      return await response.json();
+      return data;
     } catch (error) {
       console.error('Error cancelling order:', error);
       throw error;

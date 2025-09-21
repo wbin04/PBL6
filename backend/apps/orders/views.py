@@ -19,13 +19,28 @@ from django.db import connection
 def order_list_create(request):
     """List orders or create new order"""
     if request.method == 'GET':
-        # List user's orders sorted by id descending
-        orders = Order.objects.filter(user=request.user).order_by('-id')
+        # Check if this is a shipper query for available orders
+        shipper_filter = request.GET.get('shipper__isnull')
+        delivery_status_filter = request.GET.get('delivery_status')
+        
+        if shipper_filter == 'true' and delivery_status_filter:
+            # This is a request for available orders (shipper use case)
+            orders = Order.objects.filter(
+                shipper__isnull=True,
+                delivery_status=delivery_status_filter
+            ).exclude(
+                Q(order_status='Đã hủy') | Q(order_status='Đã huỷ')  # Exclude cancelled orders (both spellings)
+            ).exclude(
+                Q(delivery_status='Đã hủy') | Q(delivery_status='Đã huỷ')  # Also exclude by delivery_status (both spellings)
+            ).order_by('-created_date')
+        else:
+            # List user's orders sorted by id descending (normal user use case)
+            orders = Order.objects.filter(user=request.user).order_by('-id')
 
-        # Filter by status
-        status_filter = request.GET.get('status')
-        if status_filter:
-            orders = orders.filter(order_status=status_filter)
+            # Filter by status
+            status_filter = request.GET.get('status')
+            if status_filter:
+                orders = orders.filter(order_status=status_filter)
         
         # Pagination
         page = request.GET.get('page', 1)
@@ -577,12 +592,41 @@ def shipper_orders(request):
         return Response({'error': 'User is not a shipper'}, status=status.HTTP_403_FORBIDDEN)
     
     # Get orders assigned to this shipper
-    orders = Order.objects.filter(shipper=shipper).order_by('-id')
+    orders = Order.objects.filter(shipper=shipper).order_by('-created_date')
     
-    # Filter by status
-    status_filter = request.GET.get('status')
+    # Filter by delivery status or order status
+    status_filter = request.GET.get('delivery_status') or request.GET.get('status') 
     if status_filter:
-        orders = orders.filter(order_status=status_filter)
+        if status_filter == 'Đã hủy' or status_filter == 'Đã huỷ':
+            # For cancelled tab, show orders where EITHER delivery_status OR order_status is cancelled
+            # Handle both spellings: "Đã hủy" and "Đã huỷ"
+            # This handles cases where customer cancels after shipper acceptance (delivery_status="Đã xác nhận", order_status="Đã huỷ")
+            orders = Order.objects.filter(
+                Q(delivery_status='Đã hủy') | Q(order_status='Đã hủy') |
+                Q(delivery_status='Đã huỷ') | Q(order_status='Đã huỷ'),
+                shipper=shipper
+            ).order_by('-created_date')
+            print(f"DEBUG: Filtering cancelled orders for shipper {shipper.id}")
+        else:
+            # For other statuses, filter by delivery_status and exclude cancelled orders
+            if status_filter == 'Đã xác nhận':
+                # For accepted orders, show only those that are not cancelled by customer
+                orders = orders.filter(
+                    delivery_status=status_filter
+                ).exclude(
+                    Q(order_status='Đã hủy') | Q(order_status='Đã huỷ')  # Exclude customer-cancelled orders (both spellings)
+                )
+                print(f"DEBUG: Filtering accepted orders (excluding customer-cancelled) for shipper {shipper.id}")
+            else:
+                # For other statuses, filter normally
+                try:
+                    orders = orders.filter(delivery_status=status_filter)
+                    print(f"DEBUG: Filtering by delivery_status: {status_filter}")
+                except:
+                    orders = orders.filter(order_status=status_filter)
+                    print(f"DEBUG: Filtering by order_status: {status_filter}")
+    
+    print(f"DEBUG: Found {orders.count()} orders for shipper {shipper.id}")
     
     # Pagination
     page = request.GET.get('page', 1)
@@ -616,27 +660,46 @@ def update_delivery_status(request, order_id):
     except Order.DoesNotExist:
         return Response({'error': 'Order not found or not assigned to you'}, status=status.HTTP_404_NOT_FOUND)
     
-    new_status = request.data.get('order_status')
+    new_status = request.data.get('delivery_status') or request.data.get('order_status')
     
-    # Shipper can only update between 'Đang giao' and 'Đã giao'
+    # Define valid delivery status transitions for shipper
     valid_transitions = {
-        'Đang giao': ['Đã giao'],
-        'Đã giao': []  # Cannot change from delivered
+        'Chờ xác nhận': ['Đã xác nhận'],   # Can accept pending orders
+        'Đã xác nhận': ['Đã lấy hàng'],    # After accepting, can pick up
+        'Đã lấy hàng': ['Đang giao'],      # After pickup, start delivery  
+        'Đang giao': ['Đã giao'],          # After delivery start, mark as delivered
+        'Đã giao': []                       # Cannot change from delivered
     }
     
-    current_status = order.order_status
+    current_status = order.delivery_status  # Use delivery_status instead of order_status
     if current_status not in valid_transitions:
         return Response({
-            'error': f'Cannot update status from {current_status}'
+            'error': f'Cannot update delivery status from {current_status}'
         }, status=status.HTTP_400_BAD_REQUEST)
     
     if new_status not in valid_transitions[current_status]:
         return Response({
-            'error': f'Invalid status transition from {current_status} to {new_status}'
+            'error': f'Invalid delivery status transition from {current_status} to {new_status}'
         }, status=status.HTTP_400_BAD_REQUEST)
     
-    order.order_status = new_status
+    order.delivery_status = new_status  # Update delivery_status instead of order_status
+    
+    # Also update order_status based on delivery_status for consistency
+    if new_status == 'Đã lấy hàng':
+        order.order_status = 'Đã lấy hàng'
+    elif new_status == 'Đang giao':
+        order.order_status = 'Đang giao'  
+    elif new_status == 'Đã giao':
+        order.order_status = 'Đã giao'
+    
+    print(f"DEBUG: Updating order {order.id}")
+    print(f"DEBUG: Before save - delivery_status: {order.delivery_status}, order_status: {order.order_status}")
+    
     order.save()
+    
+    # Refresh from database to verify
+    order.refresh_from_db()
+    print(f"DEBUG: After save - delivery_status: {order.delivery_status}, order_status: {order.order_status}")
     
     serializer = OrderSerializer(order)
     return Response({
@@ -696,3 +759,46 @@ def admin_update_order_status(request, pk):
         return Response({'error': 'Order not found'}, status=status.HTTP_404_NOT_FOUND)
     except Exception as e:
         return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def shipper_accept_order(request, order_id):
+    """Allow shipper to accept an available order"""
+    from apps.shipper.models import Shipper
+    
+    try:
+        shipper = Shipper.objects.get(user=request.user)
+    except Shipper.DoesNotExist:
+        return Response({'error': 'User is not a shipper'}, status=status.HTTP_403_FORBIDDEN)
+    
+    try:
+        # Find order that has no shipper assigned and is waiting for confirmation
+        order = Order.objects.get(
+            id=order_id, 
+            shipper__isnull=True,
+            delivery_status='Chờ xác nhận'
+        )
+    except Order.DoesNotExist:
+        return Response({
+            'error': 'Order not found or already assigned to another shipper'
+        }, status=status.HTTP_404_NOT_FOUND)
+    
+    # Assign shipper and update status
+    order.shipper = shipper
+    order.delivery_status = 'Đã xác nhận'
+    
+    print(f"DEBUG: Accepting order {order.id}")
+    print(f"DEBUG: Before save - shipper: {order.shipper}, delivery_status: {order.delivery_status}")
+    
+    order.save()
+    
+    # Refresh from database to verify
+    order.refresh_from_db()
+    print(f"DEBUG: After save - shipper: {order.shipper}, delivery_status: {order.delivery_status}")
+    
+    serializer = OrderSerializer(order)
+    return Response({
+        'message': 'Order accepted successfully',
+        'order': serializer.data
+    })
