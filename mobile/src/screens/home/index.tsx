@@ -93,6 +93,11 @@ export default function HomeScreen() {
   const categoriesFlatListRef = useRef<FlatList>(null);
   const storesFlatListRef = useRef<FlatList>(null);
 
+  // Role and sidebar states
+  const [roles, setRoles] = useState<string[]>(["customer"]);
+  const [currentRole, setCurrentRole] = useState<string>("customer");
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+
   // Load data on mount
   useEffect(() => {
     console.log('HomeScreen: Loading initial data...');
@@ -206,8 +211,8 @@ export default function HomeScreen() {
         }
 
         // Fallback: lấy user mock
-        const activeUserId = db?.dev?.activeUserId ?? db?.auth?.sessions?.[0]?.userId ?? 1;
-        const activeUser = (db?.users || []).find((u: any) => u.id === activeUserId);
+        const activeUserId = (db as any)?.auth?.sessions?.[0]?.userId ?? 1;
+        const activeUser = (db as any)?.users?.find((u: any) => u.id === activeUserId);
         const nextRoles = Array.from(
           new Set(
             ([...(activeUser?.roles || []), "customer"] as string[]).filter((r) =>
@@ -273,9 +278,7 @@ export default function HomeScreen() {
   // Đổi role: kiểm tra hợp lệ và ghi SESSION (fire-and-forget để trả về void)
   const handleChangeRole = (r: string) => {
     const allow = ["customer", "seller", "shipper", "admin"];
-    const switchable =
-      (db?.auth?.rolePolicy?.switchableRoles as string[]) ||
-      ["customer", "shipper", "seller"];
+    const switchable = ["customer", "shipper", "seller"];
 
     if (!allow.includes(r)) return;
     if (!roles.includes(r)) {

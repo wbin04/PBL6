@@ -1,4 +1,4 @@
-import React, { useMemo, useState, useCallback } from "react";
+import React, { useMemo, useState, useCallback, useEffect } from "react";
 import {
   View,
   Text,
@@ -8,6 +8,7 @@ import {
   StyleSheet,
   Linking,
   Alert,
+  RefreshControl,
 } from "react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import {
@@ -26,12 +27,12 @@ import {
 
 import Sidebar from "@/components/sidebar";
 import { Fonts } from "@/constants/Fonts";
-import { useDatabase } from "@/hooks/useDatabase";
+import { shipperService, type ShipperOrder } from "@/services/shipperService";
 
-type UITabStatus = "new" | "accepted" | "delivered" | "cancelled";
+type UITabStatus = "new" | "accepted" | "delivering" | "delivered" | "cancelled";
 
 type UIOrder = {
-  id: string;
+  id: number;
   restaurant: string;
   customer: string;
   address: string;
@@ -43,24 +44,27 @@ type UIOrder = {
   status: UITabStatus;
   callCount?: number;
   arrived?: boolean;
+  order_status: string;
+  delivery_status: string;
+  raw: ShipperOrder;
 };
 
-// DB -> Tab UI
-const mapDbStatusToTab = (dbStatus: string): UITabStatus => {
-  switch (dbStatus) {
-    case "pending":
-    case "preparing":
+// Backend delivery_status -> Tab UI mapping
+const mapDeliveryStatusToTab = (delivery_status: string, order_status: string): UITabStatus => {
+  switch (delivery_status) {
+    case "Chờ xác nhận":
       return "new";
-    case "delivering":
+    case "Đã xác nhận":
       return "accepted";
-    case "delivered":
-    case "completed":
+    case "Đã lấy hàng":
+    case "Đang giao":
+      return "delivering";
+    case "Đã giao":
       return "delivered";
-    case "cancelled":
-    case "failed":
-    case "refunded":
-    default:
+    case "Đã huỷ":
       return "cancelled";
+    default:
+      return "new";
   }
 };
 
@@ -68,76 +72,148 @@ const vnd = (n: number) =>
   n.toLocaleString("vi-VN", { style: "currency", currency: "VND", maximumFractionDigits: 0 });
 
 type LocalState = Record<
-  string,
+  number,
   {
     callCount?: number;
     arrived?: boolean;
-    uiStatus?: UITabStatus; // trạng thái UI override
   }
 >;
 
 export default function ShipperOrdersScreen() {
   const insets = useSafeAreaInsets();
-  const { getOrders, getRestaurants, getUsers, getAddressesByUser } = useDatabase();
 
   const [activeOrderTab, setActiveOrderTab] = useState<UITabStatus>("new");
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [localState, setLocalState] = useState<LocalState>({});
+  const [orders, setOrders] = useState<ShipperOrder[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
 
-  // DB -> UIOrder (có override status từ localState)
-  const uiOrders: UIOrder[] = useMemo(() => {
-    const orders = getOrders();
-    const restaurants = getRestaurants();
-    const users = getUsers();
+  // Fetch orders based on current tab
+  const fetchOrders = useCallback(async () => {
+    try {
+      setLoading(true);
+      let fetchedOrders: ShipperOrder[] = [];
 
-    return orders.map((o) => {
-      const subTotal = o.items.reduce((sum, it) => sum + (it.price || 0) * (it.qty || 0), 0);
+      console.log('=== FETCH ORDERS DEBUG ===');
+      console.log('Active tab:', activeOrderTab);
 
-      const firstItem = o.items[0];
-      let restaurantName = "Nhà hàng";
-      if (firstItem && firstItem.restaurantId != null) {
-        const r = restaurants.find((x) => x.id === firstItem.restaurantId);
-        if (r) restaurantName = r.name;
+      if (activeOrderTab === "new") {
+        // Fetch available orders (no shipper assigned, delivery_status = "Chờ xác nhận")
+        console.log('Fetching available orders...');
+        fetchedOrders = await shipperService.getAvailableOrders();
+        console.log('Available orders response:', fetchedOrders);
+      } else {
+        // Fetch orders for current shipper based on delivery_status
+        const statusMap: Record<UITabStatus, string> = {
+          new: "Chờ xác nhận",
+          accepted: "Đã xác nhận",
+          delivering: "Đã lấy hàng,Đang giao", // Multiple statuses
+          delivered: "Đã giao",
+          cancelled: "Đã huỷ",
+        };
+
+        if (activeOrderTab === "delivering") {
+          // Fetch both "Đã lấy hàng" and "Đang giao"
+          console.log('Fetching delivering orders...');
+          const pickupOrders = await shipperService.getShipperOrders("Đã lấy hàng");
+          const deliveringOrders = await shipperService.getShipperOrders("Đang giao");
+          console.log('Pickup orders:', pickupOrders);
+          console.log('Delivering orders:', deliveringOrders);
+          fetchedOrders = [...(pickupOrders || []), ...(deliveringOrders || [])];
+        } else {
+          console.log('Fetching shipper orders for status:', statusMap[activeOrderTab]);
+          fetchedOrders = await shipperService.getShipperOrders(statusMap[activeOrderTab]);
+          console.log('Shipper orders response:', fetchedOrders);
+        }
       }
 
-      const u = users.find((x) => x.id === o.userId);
-      const customerName = (u as any)?.fullName || (u as any)?.name || "Khách hàng";
-      const customerPhone = (u as any)?.phone || "";
+      console.log('Final fetched orders:', fetchedOrders);
+      console.log('Is array?', Array.isArray(fetchedOrders));
+      console.log('=== END FETCH ORDERS DEBUG ===');
 
-      const addrs = getAddressesByUser(o.userId);
-      const defaultAddr = addrs.find((a) => a.isDefault) || addrs[0];
-      const addressLine = defaultAddr
-        ? [defaultAddr.line1, defaultAddr.ward, defaultAddr.district, defaultAddr.city]
-            .filter(Boolean)
-            .join(", ")
-        : "Chưa có địa chỉ";
+      // Ensure we always have an array
+      setOrders(Array.isArray(fetchedOrders) ? fetchedOrders : []);
+    } catch (error) {
+      console.error('Error fetching orders:', error);
+      Alert.alert('Lỗi', 'Không thể tải danh sách đơn hàng');
+      // Set empty array on error to prevent undefined
+      setOrders([]);
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  }, [activeOrderTab]);
 
-      const t = new Date(o.createdAt);
+  // Fetch orders when component mounts or tab changes
+  useEffect(() => {
+    fetchOrders();
+  }, [fetchOrders]);
+
+  const onRefresh = useCallback(() => {
+    setRefreshing(true);
+    fetchOrders();
+  }, [fetchOrders]);
+
+  // Convert ShipperOrder to UIOrder
+  const uiOrders: UIOrder[] = useMemo(() => {
+    console.log('=== UI ORDERS DEBUG ===');
+    console.log('orders state:', orders);
+    console.log('orders type:', typeof orders);
+    console.log('orders is array:', Array.isArray(orders));
+    
+    if (!orders || !Array.isArray(orders)) {
+      console.log('Orders is not valid array, returning empty array');
+      console.log('=== END UI ORDERS DEBUG ===');
+      return [];
+    }
+    
+    console.log('Processing', orders.length, 'orders');
+    const result = orders.map((order, index) => {
+      console.log(`Processing order ${index}:`, order);
+      
+      if (!order || typeof order !== 'object') {
+        console.warn(`Order ${index} is not a valid object:`, order);
+        return null;
+      }
+      
+      const total = (order.total_after_discount || 0) + (order.shipping_fee || 0);
+      
+      const t = new Date(order.created_date);
       const hh = String(t.getHours()).padStart(2, "0");
       const mm = String(t.getMinutes()).padStart(2, "0");
 
-      const itemDescs = o.items.map((it) => `Món #${it.foodId} x${it.qty}`);
+      const itemDescs = (order.details || []).map((detail) => 
+        `${detail?.food?.title || 'Unknown'} x${detail?.quantity || 0}`
+      );
 
-      const local = localState[o.id] || {};
-      const status = local.uiStatus ?? mapDbStatusToTab(o.status);
+      const local = localState[order.id] || {};
+      const status = mapDeliveryStatusToTab(order.delivery_status || '', order.order_status || '');
 
       return {
-        id: o.id,
-        restaurant: restaurantName,
-        customer: customerName,
-        address: addressLine,
-        phone: customerPhone,
+        id: order.id,
+        restaurant: order.store?.store_name || 'Unknown',
+        customer: order.user?.fullname || 'Unknown',
+        address: order.ship_address || '',
+        phone: order.phone_number || '',
         items: itemDescs,
-        total: vnd(subTotal),
+        total: vnd(total),
         time: `${hh}:${mm}`,
         distance: "--",
         status,
         callCount: local.callCount || 0,
         arrived: !!local.arrived,
+        order_status: order.order_status || '',
+        delivery_status: order.delivery_status || '',
+        raw: order,
       };
-    });
-  }, [getOrders, getRestaurants, getUsers, getAddressesByUser, localState]);
+    }).filter(Boolean) as UIOrder[]; // Filter out null values and cast type
+    
+    console.log('Final UI orders:', result);
+    console.log('=== END UI ORDERS DEBUG ===');
+    return result;
+  }, [orders, localState]);
 
   // filter theo Tab + Search
   const filteredOrders = useMemo(() => {
@@ -163,7 +239,7 @@ export default function ShipperOrdersScreen() {
   }, [uiOrders, activeOrderTab, searchQuery]);
 
   // cập nhật state cục bộ
-  const patchLocal = useCallback((id: string, patch: Partial<LocalState[string]>) => {
+  const patchLocal = useCallback((id: number, patch: Partial<LocalState[number]>) => {
     setLocalState((prev) => ({
       ...prev,
       [id]: { ...prev[id], ...patch },
@@ -172,24 +248,88 @@ export default function ShipperOrdersScreen() {
 
   // --- Flow nút ---
   // Nhận đơn -> sang tab "Đã nhận"
-  const handleAccept = (id: string) => {
-    patchLocal(id, { callCount: 0, arrived: false, uiStatus: "accepted" });
-    setActiveOrderTab("accepted");
+  const handleAccept = async (orderId: number) => {
+    try {
+      setLoading(true);
+      await shipperService.acceptOrder(orderId);
+      patchLocal(orderId, { callCount: 0, arrived: false });
+      
+      // Refresh orders and switch to accepted tab
+      await fetchOrders();
+      setActiveOrderTab("accepted");
+      
+      Alert.alert('Thành công', 'Đã nhận đơn hàng thành công');
+    } catch (error) {
+      console.error('Error accepting order:', error);
+      Alert.alert('Lỗi', 'Không thể nhận đơn hàng');
+    } finally {
+      setLoading(false);
+    }
   };
 
   // Đã đến quán -> bật cờ arrived
-  const handleArrivedAtRestaurant = (id: string) => patchLocal(id, { arrived: true });
+  const handleArrivedAtRestaurant = (id: number) => patchLocal(id, { arrived: true });
+
+  // Đã lấy hàng -> cập nhật delivery_status
+  const handlePickedUp = async (orderId: number) => {
+    try {
+      setLoading(true);
+      await shipperService.updateDeliveryStatus(orderId, 'Đã lấy hàng');
+      await fetchOrders();
+      Alert.alert('Thành công', 'Đã xác nhận lấy hàng');
+    } catch (error) {
+      console.error('Error updating pickup status:', error);
+      Alert.alert('Lỗi', 'Không thể cập nhật trạng thái');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Đang giao -> cập nhật delivery_status  
+  const handleStartDelivery = async (orderId: number) => {
+    try {
+      setLoading(true);
+      await shipperService.updateDeliveryStatus(orderId, 'Đang giao');
+      await fetchOrders();
+      Alert.alert('Thành công', 'Đã bắt đầu giao hàng');
+    } catch (error) {
+      console.error('Error starting delivery:', error);
+      Alert.alert('Lỗi', 'Không thể cập nhật trạng thái');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   // Giao thành công -> sang tab "Đã giao"
-  const handleMarkDelivered = (id: string) => {
-    patchLocal(id, { uiStatus: "delivered" });
-    setActiveOrderTab("delivered");
+  const handleMarkDelivered = async (orderId: number) => {
+    try {
+      setLoading(true);
+      await shipperService.updateDeliveryStatus(orderId, 'Đã giao');
+      await fetchOrders();
+      setActiveOrderTab("delivered");
+      Alert.alert('Thành công', 'Đã giao hàng thành công');
+    } catch (error) {
+      console.error('Error marking as delivered:', error);
+      Alert.alert('Lỗi', 'Không thể cập nhật trạng thái');
+    } finally {
+      setLoading(false);
+    }
   };
 
   // Huỷ đơn (khi gọi >= 3 lần)
-  const handleCancel = (id: string) => {
-    patchLocal(id, { uiStatus: "cancelled" });
-    setActiveOrderTab("cancelled");
+  const handleCancel = async (orderId: number) => {
+    try {
+      setLoading(true);
+      await shipperService.cancelOrder(orderId, 'Không liên lạc được với khách hàng');
+      await fetchOrders();
+      setActiveOrderTab("cancelled");
+      Alert.alert('Thành công', 'Đã hủy đơn hàng');
+    } catch (error) {
+      console.error('Error cancelling order:', error);
+      Alert.alert('Lỗi', 'Không thể hủy đơn hàng');
+    } finally {
+      setLoading(false);
+    }
   };
 
   // Gọi khách, tăng đếm gọi
@@ -263,6 +403,12 @@ export default function ShipperOrdersScreen() {
             Icon={<CheckCircle size={20} color={activeOrderTab === "accepted" ? "#fff" : "#4b5563"} />}
           />
           <TabBtn
+            active={activeOrderTab === "delivering"}
+            onPress={() => setActiveOrderTab("delivering")}
+            label="Đang giao"
+            Icon={<Navigation size={20} color={activeOrderTab === "delivering" ? "#fff" : "#4b5563"} />}
+          />
+          <TabBtn
             active={activeOrderTab === "delivered"}
             onPress={() => setActiveOrderTab("delivered")}
             label="Đã giao"
@@ -285,8 +431,20 @@ export default function ShipperOrdersScreen() {
             paddingTop: 8,
             paddingBottom: 16 + insets.bottom,
           }}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={onRefresh}
+              colors={["#e95322"]}
+            />
+          }
         >
-          {filteredOrders.length === 0 ? (
+          {loading && orders.length === 0 ? (
+            <View style={{ alignItems: "center", paddingVertical: 48 }}>
+              <Text style={styles.emptyTitle}>Đang tải...</Text>
+              <Text style={styles.emptySub}>Vui lòng chờ trong giây lát</Text>
+            </View>
+          ) : filteredOrders.length === 0 ? (
             <View style={{ alignItems: "center", paddingVertical: 48 }}>
               <Text style={styles.emptyTitle}>Không có đơn hàng</Text>
               <Text style={styles.emptySub}>Chưa có đơn hàng nào trong mục này</Text>
@@ -335,16 +493,34 @@ export default function ShipperOrdersScreen() {
                   {/* Actions */}
                   <View style={{ flexDirection: "row", gap: 8 }}>
                     {activeOrderTab === "new" && (
-                      <>
-                        <PrimaryBtn title="Nhận đơn" onPress={() => handleAccept(order.id)} />
-                        {/*   */}
-                      </>
+                      <PrimaryBtn title="Nhận đơn" onPress={() => handleAccept(order.id)} />
                     )}
 
                     {activeOrderTab === "accepted" && (
                       <>
-                        {!arrived ? (
-                          <PrimaryBtn title="Đã đến quán" onPress={() => handleArrivedAtRestaurant(order.id)} />
+                        {order.order_status === "Sẵn sàng" ? (
+                          <PrimaryBtn title="Đã lấy hàng" onPress={() => handlePickedUp(order.id)} />
+                        ) : (
+                          <PrimaryBtn title="Chờ quán chuẩn bị" onPress={() => {}} />
+                        )}
+
+                        <TouchableOpacity style={styles.iconBtnOutline} onPress={() => handleCall(order)}>
+                          <Phone size={20} color="#4b5563" />
+                        </TouchableOpacity>
+
+                        <TouchableOpacity
+                          style={styles.iconBtnOutline}
+                          // onPress={() => {Navigation.navigate("MapScreen", { address: order.address })}}
+                        >
+                          <MapPin size={20} color="#4b5563" />
+                        </TouchableOpacity>
+                      </>
+                    )}
+
+                    {activeOrderTab === "delivering" && (
+                      <>
+                        {order.delivery_status === "Đã lấy hàng" ? (
+                          <PrimaryBtn title="Bắt đầu giao" onPress={() => handleStartDelivery(order.id)} />
                         ) : (
                           <PrimaryBtn title="Giao thành công" onPress={() => handleMarkDelivered(order.id)} />
                         )}

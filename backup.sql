@@ -2382,4 +2382,3 @@ ALTER TABLE ONLY public.users_user_permissions
 --
 -- PostgreSQL database dump complete
 --
-

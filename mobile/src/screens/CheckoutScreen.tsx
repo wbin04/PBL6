@@ -497,10 +497,10 @@ export default function CheckoutScreen() {
           Alert.alert(
             'Thông báo',
             'Đặt hàng thành công, nhưng ghi chú cho một số món không được lưu.',
-            [{ text: 'OK', onPress: () => navigation.navigate("Home") }]
+            [{ text: 'OK', onPress: () => navigation.navigate("MainTabs", { screen: "Orders" }) }]
           );
         } else {
-          navigation.navigate("Home");
+          navigation.navigate("MainTabs", { screen: "Orders" });
         }
       }, 1500);
     } catch (error) {

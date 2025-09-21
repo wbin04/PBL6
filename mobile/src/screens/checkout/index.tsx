@@ -38,6 +38,7 @@ import { IMAGE_MAP, type ImageName } from "@/assets/imageMap";
 import { Fonts } from "@/constants/Fonts";
 import { API_CONFIG, ENDPOINTS } from "@/constants";
 import { CartItem as APICartItem } from "@/types";
+import { getImageSource } from "@/utils/imageUtils";
 
 // User profile interface
 interface UserProfile {
@@ -122,13 +123,6 @@ type SelectedVouchers = {
   restaurant?: Voucher;
   app?: Voucher;
 };
-
-function getImageSource(img?: ImageName | string) {
-  if (!img) return undefined as any;
-  if (typeof img === "string" && (IMAGE_MAP as any)[img]) return (IMAGE_MAP as any)[img];
-  if (typeof img === "string" && /^https?:\/\//i.test(img)) return { uri: img };
-  return undefined as any;
-}
 
 type Nav = any;
 
@@ -473,8 +467,10 @@ useFocusEffect(
         // Show success notification
         setTimeout(() => {
           setShowOrderNotification(false);
-          // Navigate to orders screen
-          navigation.navigate("Orders");
+          // Navigate to orders tab in MainTabs
+          navigation.navigate("MainTabs", { 
+            screen: "Orders" 
+          });
         }, 1500);
       } else {
         const errorData = await response.json();

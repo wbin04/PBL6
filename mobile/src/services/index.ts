@@ -20,6 +20,7 @@ import {
 } from '@/types';
 
 export { ratingService } from './ratingService';
+export { shipperService } from './shipperService';
 
 // Authentication Service
 export const authService = {

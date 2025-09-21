@@ -4,7 +4,7 @@ export interface User {
   username: string;
   email: string;
   fullname: string;
-  role: 'Quản lý' | 'Khách hàng';
+  role: 'Quản lý' | 'Khách hàng' | 'Người vận chuyển';
   phone_number?: string;
   address?: string;
   created_date: string;

@@ -119,6 +119,13 @@ export default function LoginScreen() {
     return true;
   };
 
+  const goHome = () => {
+    navigation.reset({
+      index: 0,
+      routes: [{ name: 'MainTabs' }],
+    });
+  };
+
   const handleLogin = async () => {
     if (!validateForm()) return;
     
@@ -188,8 +195,8 @@ export default function LoginScreen() {
           <Text style={styles.label}>Email hoặc Số điện thoại</Text>
           <View style={styles.inputWrap}>
             <TextInput
-              value={identifier}
-              onChangeText={setIdentifier}
+              value={email}
+              onChangeText={setEmail}
               style={styles.input}
               keyboardType="email-address"
               autoCapitalize="none"

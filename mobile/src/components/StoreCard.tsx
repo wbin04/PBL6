@@ -9,6 +9,7 @@ import {
 } from 'react-native';
 import { Store } from '@/types';
 import { COLORS, SPACING, BORDER_RADIUS, SHADOWS, API_CONFIG } from '@/constants';
+import { getImageSource } from '@/utils/imageUtils';
 import { Ionicons } from '@expo/vector-icons';
 
 interface StoreCardProps {
@@ -20,43 +21,6 @@ const { width } = Dimensions.get('window');
 const CARD_WIDTH = width * 0.85;
 
 export const StoreCard: React.FC<StoreCardProps> = ({ store, onPress }) => {
-  // Construct image URL if needed
-  const getImageSource = () => {
-    console.log('StoreCard - store data:', JSON.stringify(store, null, 2));
-    
-    // Always use fallback if no image or image is empty/invalid
-    if (!store.image || store.image.trim() === '') {
-      console.log('StoreCard - No image provided, using fallback');
-      return require('@/assets/images/placeholder.png');
-    }
-    
-    try {
-      // If it's already a full URL, use it
-      if (store.image.startsWith('http')) {
-        console.log('StoreCard - Using full URL:', store.image);
-        return { uri: store.image };
-      }
-      
-      // Otherwise, construct the full URL
-      const baseUrl = API_CONFIG.BASE_URL.replace('/api', '');
-      const imagePath = store.image.startsWith('/') ? store.image : `/${store.image}`;
-      const fullUrl = `${baseUrl}/media/${imagePath}`;
-      
-      console.log('StoreCard - Constructed URL:', fullUrl);
-      
-      // Validate URL format
-      if (!fullUrl.includes('://')) {
-        console.log('StoreCard - Invalid URL format, using fallback');
-        return require('@/assets/images/placeholder.png');
-      }
-      
-      return { uri: fullUrl };
-    } catch (error) {
-      console.log('StoreCard - Error constructing URL:', error);
-      return require('@/assets/images/placeholder.png');
-    }
-  };
-
   return (
     <TouchableOpacity
       style={styles.container}
@@ -65,7 +29,7 @@ export const StoreCard: React.FC<StoreCardProps> = ({ store, onPress }) => {
     >
       <View style={styles.imageContainer}>
         <Image
-          source={getImageSource()}
+          source={getImageSource(store.image)}
           style={styles.image}
           resizeMode="cover"
           onError={(error) => {

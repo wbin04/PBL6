@@ -16,6 +16,8 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { Fonts } from "@/constants/Fonts";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useNavigation } from "@react-navigation/native";
+import { useSelector } from "react-redux";
+import { RootState } from "@/store";
 
 type Role = "customer" | "shipper";
 
@@ -34,6 +36,16 @@ export default function Sidebar({ isOpen, onClose, currentRole, onSwitchRole }: 
   const translateX = useRef(new Animated.Value(-PANEL_WIDTH)).current;
   const navigation = useNavigation<any>();
   const [roleState, setRoleState] = useState<Role>("customer");
+  
+  // Get user from Redux store
+  const { user } = useSelector((state: RootState) => state.auth);
+
+  // Determine if user can access shipper features
+  const canAccessShipper = useMemo(() => {
+    if (!user) return false;
+    // Only "Người vận chuyển" can access both customer and shipper features
+    return user.role === 'Người vận chuyển';
+  }, [user]);
 
   useEffect(() => {
     const load = async () => {
@@ -81,20 +93,24 @@ export default function Sidebar({ isOpen, onClose, currentRole, onSwitchRole }: 
               </TouchableOpacity>
             </View>
 
-            <TouchableOpacity
-              style={[styles.card, isShipper ? styles.cardActive : styles.cardInactive]}
-              activeOpacity={0.9}
-              onPress={() => setRoleAndGo("shipper", "/shipper")}
-            >
-              <View style={styles.cardIconWrap}>
-                <Truck size={20} color={APP_ORANGE} />
-              </View>
-              <View style={styles.cardTextWrap}>
-                <Text style={styles.cardTitle}>Giao hàng</Text>
-                <Text style={styles.cardDesc}>{isShipper ? "Đang sử dụng" : "Chuyển sang giao hàng"}</Text>
-              </View>
-            </TouchableOpacity>
+            {/* Shipper Option - Only show if user role is "Người vận chuyển" */}
+            {canAccessShipper && (
+              <TouchableOpacity
+                style={[styles.card, isShipper ? styles.cardActive : styles.cardInactive]}
+                activeOpacity={0.9}
+                onPress={() => setRoleAndGo("shipper", "/shipper")}
+              >
+                <View style={styles.cardIconWrap}>
+                  <Truck size={20} color={APP_ORANGE} />
+                </View>
+                <View style={styles.cardTextWrap}>
+                  <Text style={styles.cardTitle}>Giao hàng</Text>
+                  <Text style={styles.cardDesc}>{isShipper ? "Đang sử dụng" : "Chuyển sang giao hàng"}</Text>
+                </View>
+              </TouchableOpacity>
+            )}
 
+            {/* Customer Option - Always show */}
             <TouchableOpacity
               style={[styles.card, isCustomer ? styles.cardActive : styles.cardInactive]}
               activeOpacity={0.9}
@@ -112,7 +128,10 @@ export default function Sidebar({ isOpen, onClose, currentRole, onSwitchRole }: 
             <View style={styles.footerWrap}>
               <View style={styles.footerLine} />
               <Text style={styles.footerText}>
-                {isCustomer ? "Khách hàng" : "Shipper"} - Chọn chế độ phù hợp
+                {user?.role === 'Người vận chuyển' 
+                  ? (isCustomer ? "Khách hàng" : "Shipper") + " - Chọn chế độ phù hợp"
+                  : "Khách hàng"
+                }
               </Text>
             </View>
           </SafeAreaView>
