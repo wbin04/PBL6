@@ -132,7 +132,6 @@ export default function RestaurantDetail() {
     return unsub;
   }, [navigation]);
 
-  // Scroll to top khi đổi tab
   useEffect(() => {
     listRef.current?.scrollToOffset({ offset: 0, animated: true });
   }, [tab]);

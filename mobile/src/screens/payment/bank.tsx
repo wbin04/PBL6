@@ -730,7 +730,7 @@ const styles = StyleSheet.create({
     marginTop: 6,
   },
 
-  bankRowName: { color: BROWN, fontWeight: "600" },
+  bankRowName: { color: BROWN, fontFamily: Fonts.LeagueSpartanMedium, fontSize: 15 },
   bankRowFull: { color: "#6b7280", fontSize: 12, marginTop: 2 },
 
   rowBetweenJustify: { flexDirection: "row", justifyContent: "space-between" },

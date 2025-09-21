@@ -1,6 +1,6 @@
 import addressRaw from "@/assets/address.json";
 import raw from "@/assets/database.json";
-import { useMemo } from "react";
+import { useMemo, useState, useCallback } from "react";
 
 export type Province = {
   province_id: number;
@@ -22,7 +22,7 @@ export type Ward = {
 export type Category = { id: number; name: string; icon?: string };
 
 export type BaseReview = {
-  id: number;
+  id: number | string;
   user?: string;
   avatar?: string;
   userId?: number;
@@ -77,7 +77,7 @@ export type Banner = { id: number; title: string; discount: string; image: strin
 
 export type Role = "customer" | "admin" | "seller" | "shipper";
 
-export type User = {
+export type LegacyUser = {
   id: number;
   fullName: string;
   email: string;
@@ -88,6 +88,72 @@ export type User = {
   defaultAddressId?: number;
   defaultPaymentMethod?: { type: "card" | "bank"; id: number };
 };
+
+export type WalletTxn = {
+  id: string;
+  type: "credit" | "debit";
+  amount: number;
+  desc: string;
+  at: string;
+  orderId?: string;
+};
+export type Wallet = {
+  balance: number;
+  transactionHistory: WalletTxn[];
+};
+
+/** Kiểu user “demo” (được yêu cầu mới) */
+export type DemoAddress = {
+  id: number;
+  fullName: string;
+  phone: string;
+  street: string;
+  ward: string;
+  district: string;
+  province: string;
+  isDefault?: boolean;
+};
+export type DemoFavorites = {
+  restaurantIds: number[];
+  foodIds: number[];
+};
+export type ShipperProfile = {
+  birthDate: string; // YYYY-MM-DD
+  joinDate: string;  // YYYY-MM-DD
+  rating: number;
+  totalDeliveries: number;
+  completionRate: number;
+};
+export type Vehicle = { type: "motorbike" | "bike" | "car"; plateNumber?: string };
+export type SimpleBank = { bankName: string; accountNumber: string; accountHolder: string };
+
+export type DemoCustomerUser = {
+  id: number;
+  name: string;
+  email: string;
+  phone: string;
+  role: "customer";
+  password: string;
+  addresses: DemoAddress[];
+  wallet?: Wallet;
+  orders?: string[]; 
+  favorites?: DemoFavorites;
+};
+
+export type DemoShipperUser = {
+  id: number;
+  name: string;
+  email: string;
+  phone: string;
+  role: "shipper";
+  password: string;
+  profile?: ShipperProfile;
+  vehicle?: Vehicle;
+  bankAccounts?: SimpleBank[];
+  deliveries?: string[]; 
+};
+
+export type AnyUser = LegacyUser | DemoCustomerUser | DemoShipperUser;
 
 export type Address = {
   id: number;
@@ -105,7 +171,6 @@ export type Address = {
   coords?: Coords;
   note?: string;
 
-  // nếu dùng ID địa giới:
   provinceId?: number;
   districtId?: number;
   wardId?: number;
@@ -138,7 +203,7 @@ export type Card = {
   createdAt?: string;
 };
 
-export type Seller = { userId: number; displayName: string; restaurantIds: number[]; status: "active" | "inactive" };
+export type Seller = { userId: number; displayName: string; restaurantIds: number[]; status: "active" | "Inactive" | "inactive" };
 export type Courier = {
   userId: number;
   vehicle: { type: "motorbike" | "bike" | "car"; plate?: string };
@@ -148,7 +213,8 @@ export type Courier = {
   completedTrips?: number;
 };
 
-export type OrderItem = { foodId: number; qty: number; price: number; restaurantId: number };
+/* ================== Orders ================== */
+export type OrderItem = { foodId: number; qty: number; price: number; restaurantId: number | null };
 export type OrderStatus =
   | "pending"
   | "preparing"
@@ -159,6 +225,8 @@ export type OrderStatus =
   | "failed"
   | "refunded";
 
+export type OrderPayment = { method: "wallet" | "card" | "cod" | "bank"; total: number };
+
 export type Order = {
   id: string;
   userId: number;
@@ -166,14 +234,69 @@ export type Order = {
   createdAt: string;
   deliveredAt?: string;
   items: OrderItem[];
+
+  shippingFee?: number;
+  addressId?: number; 
+  assignedCourierUserId?: number; 
+  payment?: OrderPayment;
+  rating?: { stars: number; comment?: string };
 };
 
+export type Voucher =
+  | {
+      id: string;
+      code: string;
+      discountType: "percent" | "amount";
+      value: number;
+      minOrder?: number;
+      appliesTo: "global";
+      validFrom: string; // YYYY-MM-DD
+      validTo: string;   // YYYY-MM-DD
+      isActive: boolean;
+    }
+  | {
+      id: string;
+      code: string;
+      discountType: "percent" | "amount";
+      value: number;
+      minOrder?: number;
+      appliesTo: { type: "restaurant"; restaurantId: number } | { type: "category"; categoryName: string };
+      validFrom: string;
+      validTo: string;
+      isActive: boolean;
+    };
+
+export type AggregatedReview =
+  | {
+      id: string;
+      type: "restaurant";
+      restaurantId: number;
+      userName: string;
+      rating: number;
+      comment: string;
+      createdAt: string;
+      orderId?: string;
+      verified?: boolean;
+    }
+  | {
+      id: string;
+      type: "food";
+      foodId: number;
+      userName: string;
+      rating: number;
+      comment: string;
+      createdAt: string;
+      orderId?: string;
+      verified?: boolean;
+    };
+
+/* ================== DB Root ================== */
 type DB = {
   categories: Category[];
   restaurants: Restaurant[];
   foods: Food[];
   banners: Banner[];
-  users?: User[];
+  users?: AnyUser[];
   auth?: {
     credentials?: Array<{
       userId: number;
@@ -192,9 +315,10 @@ type DB = {
   sellers?: Seller[];
   couriers?: Courier[];
   orders?: Order[];
+  vouchers?: Voucher[];
+  reviews?: AggregatedReview[];
 };
 
-/* ================== Images ================== */
 const IMAGE_MAP: Record<string, any> = {
   "placeholder.png": require("@/assets/images/placeholder.png"),
   "restaurant-meat-vegetables.png": require("@/assets/images/restaurant-meat-vegetables.png"),
@@ -233,15 +357,21 @@ export function hasPurchasedFromRestaurant(orders: Order[] = [], userId: number,
 }
 
 export function canCreateReview(opts: {
-  user: User;
+  user: AnyUser;
   orders?: Order[];
   foodId?: number;
   restaurantId?: number;
   mode?: "food" | "restaurant";
 }) {
   const { user, orders = [], foodId, restaurantId, mode = "food" } = opts;
-  const roleOk = (user.roles ?? []).some((r) => r === "customer" || r === "admin");
-  if (!roleOk) return false;
+
+  const legacyRoles = (user as LegacyUser).roles ?? [];
+  const isCustomer =
+    legacyRoles.includes("customer") ||
+    legacyRoles.includes("admin") ||
+    (user as DemoCustomerUser).role === "customer";
+  if (!isCustomer) return false;
+
   if (mode === "food" && typeof foodId === "number") return hasPurchasedFood(orders, user.id, foodId);
   if (mode === "restaurant" && typeof restaurantId === "number")
     return hasPurchasedFromRestaurant(orders, user.id, restaurantId);
@@ -254,11 +384,15 @@ const isPhone = (v: string) => v.replace(/\s+/g, "").match(/^\+?\d{9,15}$/);
 export function useDatabase() {
   const db = useMemo(() => raw as unknown as DB, []);
 
-  // -------- Categories
+  // 🔁 trigger re-render khi muốn “commit” thay đổi in-memory
+  const [rev, setRev] = useState(0);
+  const commit = useCallback(() => setRev((x) => x + 1), []);
+
+  /* -------- Categories */
   const getCategories = () => db.categories;
   const getCategoryNames = () => db.categories.map((c) => c.name);
 
-  // -------- Foods
+  /* -------- Foods */
   const getFoods = () => db.foods;
   const getFoodById = (id: number) => db.foods.find((f) => f.id === id) || null;
   const getFoodsByCategory = (categoryName: string) => db.foods.filter((f) => f.category === categoryName);
@@ -276,7 +410,7 @@ export function useDatabase() {
   const getBestSellers = (limit = 6) => [...db.foods].sort((a, b) => b.rating - a.rating).slice(0, limit);
   const getFoodReviews = (foodId: number) => getFoodById(foodId)?.reviews ?? [];
 
-  // -------- Address tree (VN)
+  /* -------- Address tree (VN) */
   const provinces = useMemo<Province[]>(() => addressRaw as Province[], []);
   const provinceById = useMemo(
     () => new Map<number, Province>(provinces.map((p) => [p.province_id, p])),
@@ -328,7 +462,8 @@ export function useDatabase() {
     districtId ? districtById.get(districtId)?.name ?? "" : "";
   const getWardNameById = (wardId?: number) =>
     wardId ? wardsById.get(wardId)?.name ?? "" : "";
-  // -------- Restaurants
+
+  /* -------- Restaurants */
   const getRestaurants = () => db.restaurants;
   const getRestaurantById = (id: number) => db.restaurants.find((r) => r.id === id) || null;
   const getRestaurantBySlug = (slug: string) => db.restaurants.find((r) => r.slug === slug) || null;
@@ -346,16 +481,21 @@ export function useDatabase() {
   };
   const getRestaurantReviews = (restaurantId: number) => getRestaurantById(restaurantId)?.reviews ?? [];
 
-  // -------- Users / Addresses / Payments
-  const getUsers = () => db.users ?? [];
+  /* -------- Users / Payments / Orders (generic) */
+  const getUsers = () => (db.users ?? []) as AnyUser[];
   const getUserById = (id: number) => getUsers().find((u) => u.id === id) ?? null;
+
+  const isDemoCustomer = (u: AnyUser | null | undefined): u is DemoCustomerUser =>
+    !!u && (u as DemoCustomerUser).role === "customer" && "name" in u;
+  const isDemoShipper = (u: AnyUser | null | undefined): u is DemoShipperUser =>
+    !!u && (u as DemoShipperUser).role === "shipper" && "name" in u;
 
   const getAddressesByUser = (userId: number) => (db.addresses ?? []).filter((a) => a.userId === userId);
   const getCardsByUser = (userId: number) => (db.cards ?? []).filter((c) => c.userId === userId);
   const getBanksByUser = (userId: number) => (db.bankAccounts ?? []).filter((b) => b.userId === userId);
 
   const getDefaultPayment = (userId: number) => {
-    const u = getUserById(userId);
+    const u = getUserById(userId) as LegacyUser | null;
     if (!u) return null;
     if (u.defaultPaymentMethod) {
       const { type, id } = u.defaultPaymentMethod;
@@ -368,22 +508,22 @@ export function useDatabase() {
     return bank ?? null;
   };
 
-  // -------- Sellers / Couriers
+  /* -------- Sellers / Couriers */
   const getSellers = () => db.sellers ?? [];
   const getVendorRestaurants = (userId: number) => getSellers().find((s) => s.userId === userId)?.restaurantIds ?? [];
   const getCouriers = () => db.couriers ?? [];
 
-  // -------- Orders
+  /* -------- Orders */
   const getOrders = () => db.orders ?? [];
   const getOrdersByUser = (userId: number) => getOrders().filter((o) => o.userId === userId);
+  const getOrdersByStatus = (status: OrderStatus) => getOrders().filter((o) => o.status === status);
+  const getOrdersAssignedToCourier = (courierUserId: number) =>
+    getOrders().filter((o) => o.assignedCourierUserId === courierUserId);
 
-  // -------- Banners
   const getBanners = () => db.banners;
 
-  // -------- Images
   const requireImage = pickImage;
 
-  // -------- Auth: Register User
   const registerUser = (input: {
     fullName: string;
     email: string;
@@ -400,17 +540,21 @@ export function useDatabase() {
     if (!input.password || input.password.length < 6) throw new Error("Mật khẩu tối thiểu 6 ký tự");
     if (!["customer", "seller", "shipper", "admin"].includes(input.role)) throw new Error("Vai trò không hợp lệ");
 
-    const users = db.users ?? [];
+    const users = (db.users ?? []) as AnyUser[];
     const creds = db.auth?.credentials ?? [];
     const duplicated =
-      users.some((u) => u.email.toLowerCase() === email || u.phone === phone) ||
+      users.some((u) => {
+        const uEmail = ("email" in u && u.email) ? String((u as any).email).toLowerCase() : "";
+        const uPhone = ("phone" in u && (u as any).phone) ? String((u as any).phone) : "";
+        return uEmail === email || uPhone === phone;
+      }) ||
       creds.some((c) => c.email?.toLowerCase() === email || c.phone === phone);
     if (duplicated) throw new Error("Tài khoản đã tồn tại");
 
     const nextId = users.length ? Math.max(...users.map((u) => u.id)) + 1 : 1;
     const now = new Date().toISOString();
 
-    const user: User = {
+    const user: LegacyUser = {
       id: nextId,
       fullName: name,
       email,
@@ -424,12 +568,12 @@ export function useDatabase() {
       userId: nextId,
       email,
       phone,
-      passwordHash: "hash_" + input.password, // demo
+      passwordHash: "hash_" + input.password, 
       status: "active",
       lastLoginAt: null as string | null,
     };
 
-    users.push(user);
+    users.push(user as AnyUser);
     if (!db.auth) db.auth = {};
     if (!db.auth.credentials) db.auth.credentials = [];
     db.auth.credentials.push(cred);
@@ -454,8 +598,99 @@ export function useDatabase() {
     return { user };
   };
 
+  // Lấy demo customer/shipper nếu có trong db
+  const getDemoCustomers = () => getUsers().filter(isDemoCustomer);
+  const getDemoShippers = () => getUsers().filter(isDemoShipper);
+
+  const getInlineAddresses = (userId: number): DemoAddress[] => {
+    const u = getUserById(userId);
+    if (isDemoCustomer(u)) return u.addresses ?? [];
+    return [];
+  };
+
+  const getFavorites = (userId: number): DemoFavorites | null => {
+    const u = getUserById(userId);
+    if (isDemoCustomer(u)) return u.favorites ?? { restaurantIds: [], foodIds: [] };
+    return null;
+  };
+
+  const getWallet = (userId: number): Wallet | null => {
+    const u = getUserById(userId);
+    if (isDemoCustomer(u)) return u.wallet ?? { balance: 0, transactionHistory: [] };
+    return null;
+  };
+
+  const getShipperProfile = (userId: number): ShipperProfile | null => {
+    const u = getUserById(userId);
+    if (isDemoShipper(u)) return u.profile ?? null;
+    return null;
+  };
+
+  const getShipperVehicle = (userId: number): Vehicle | null => {
+    const u = getUserById(userId);
+    if (isDemoShipper(u)) return u.vehicle ?? null;
+    return null;
+  };
+
+  const getShipperSimpleBanks = (userId: number): SimpleBank[] => {
+    const u = getUserById(userId);
+    if (isDemoShipper(u)) return u.bankAccounts ?? [];
+    return [];
+  };
+
+  const getDeliveriesByShipper = (userId: number): Order[] => {
+    const u = getUserById(userId);
+    const orders = getOrders();
+    if (isDemoShipper(u)) {
+      const ids = new Set(u.deliveries ?? []);
+      return orders.filter((o) => ids.has(o.id));
+    }
+    return orders.filter((o) => o.assignedCourierUserId === userId);
+  };
+
+  /* -------- Vouchers / Reviews */
+  const getVouchers = (): Voucher[] => db.vouchers ?? [];
+  const getActiveVouchers = (): Voucher[] =>
+    getVouchers().filter((v) => v.isActive);
+
+  const getAggregatedReviews = (): AggregatedReview[] => db.reviews ?? [];
+
+  /* --------- Update helpers + commit --------- */
+  type Updater<T> = (prev: T) => T;
+
+  const updateUser = (userId: number, upd: Partial<AnyUser> | Updater<AnyUser>) => {
+    const list = (db.users ?? []) as AnyUser[];
+    const idx = list.findIndex((u) => u.id === userId);
+    if (idx < 0) return null;
+
+    const prev = list[idx];
+    const next =
+      typeof upd === "function"
+        ? (upd as Updater<AnyUser>)(prev)
+        : ({ ...prev, ...upd } as AnyUser);
+
+    list[idx] = next;
+    db.users = list;
+    return next;
+  };
+
+  const updateOrder = (orderId: string, upd: Partial<Order> | Updater<Order>) => {
+    const list = db.orders ?? [];
+    const idx = list.findIndex((o) => o.id === orderId);
+    if (idx < 0) return null;
+
+    const prev = list[idx]!;
+    const next =
+      typeof upd === "function"
+        ? (upd as Updater<Order>)(prev)
+        : ({ ...prev, ...upd } as Order);
+
+    list[idx] = next;
+    db.orders = list;
+    return next;
+  };
+
   return {
-    // raw
     db,
 
     // categories
@@ -482,7 +717,7 @@ export function useDatabase() {
     // users / payments / orders
     getUsers,
     getUserById,
-    getAddressesByUser,
+    getAddressesByUser,   // legacy table
     getCardsByUser,
     getBanksByUser,
     getDefaultPayment,
@@ -491,6 +726,8 @@ export function useDatabase() {
     getCouriers,
     getOrders,
     getOrdersByUser,
+    getOrdersByStatus,
+    getOrdersAssignedToCourier,
 
     // purchase & permissions
     hasPurchasedFood,
@@ -514,10 +751,29 @@ export function useDatabase() {
     getProvinceOptions,
     getDistrictOptions,
     getWardOptions,
-
     getProvinceNameById,
     getDistrictNameById,
     getWardNameById,
+
+    // demo helpers
+    getDemoCustomers,
+    getDemoShippers,
+    getInlineAddresses,  
+    getFavorites,
+    getWallet,
+    getShipperProfile,
+    getShipperVehicle,
+    getShipperSimpleBanks,
+    getDeliveriesByShipper,
+
+    // vouchers / aggregated reviews
+    getVouchers,
+    getActiveVouchers,
+    getAggregatedReviews,
+
+    // updates + commit
+    updateUser,
+    updateOrder,
+    commit,
   };
 }
-

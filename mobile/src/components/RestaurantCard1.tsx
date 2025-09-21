@@ -62,14 +62,14 @@ export default function RestaurantCard1({
   const onPressOut = () => Animated.timing(press, { toValue: 0, duration: 120, useNativeDriver: true }).start();
 
   return (
-    <Animated.View
-      style={[
-        styles.animatedWrap,
-        { transform: [{ scale }] },
-        Platform.OS === "android" ? ({ elevation: elev as any } as any) : {},
-        Platform.OS === "ios" ? ({ shadowOpacity: shadowOpacity as any } as any) : {},
-      ]}
-    >
+    // <Animated.View
+    //   style={[
+    //     styles.animatedWrap,
+    //     { transform: [{ scale }] },
+    //     Platform.OS === "android" ? ({ elevation: elev as any } as any) : {},
+    //     Platform.OS === "ios" ? ({ shadowOpacity: shadowOpacity as any } as any) : {},
+    //   ]}
+    // >
       <Card style={styles.card} className="overflow-hidden">
         <Pressable onPress={onPress} onPressIn={onPressIn} onPressOut={onPressOut}>
           <View style={styles.coverWrap}>
@@ -137,7 +137,7 @@ export default function RestaurantCard1({
           </View>
         </Pressable>
       </Card>
-    </Animated.View>
+    // </Animated.View>
   );
 }
 

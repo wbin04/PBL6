@@ -1,10 +1,10 @@
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { FontAwesome } from "@expo/vector-icons";
-import { useNavigation } from "@react-navigation/native"; 
+import { useNavigation } from "@react-navigation/native";
 import { ArrowLeft, Eye, EyeOff } from "lucide-react-native";
 import React, { useState } from "react";
 import {
   Alert,
-  SafeAreaView,
   ScrollView,
   StyleSheet,
   Text,
@@ -15,14 +15,79 @@ import {
 import { useDispatch, useSelector } from 'react-redux';
 import { RootState, AppDispatch } from '@/store';
 import { login } from '@/store/slices/authSlice';
+import { SafeAreaView } from "react-native-safe-area-context";
 
 import BottomBar from "@/components/BottomBar";
 import { Colors } from "@/constants/Colors";
 import { Fonts } from "@/constants/Fonts";
 import { VALIDATION } from '@/constants';
 
+// ====== Types ======
+type Role = "customer" | "seller" | "shipper" | "admin";
+
+type RolePolicy = {
+  implicitRoles: Record<Role, Role[]>;
+  switchableRoles: Role[];
+};
+
+type DbUser = {
+  id: number | string;
+  email?: string;
+  phone?: string;
+  password?: string; 
+  roles?: Role[];
+};
+
+type Database = {
+  auth?: {
+    rolePolicy?: RolePolicy;
+  };
+  users?: DbUser[];
+};
+
+import rawDb from "@/assets/database.json";
+const db = rawDb as unknown as Database;
+
+const SESSION_KEY = "auth.session";
+
+// "seller" | "shipper" | "admin" | null
+const FORCE_ROLE: Role | null = "shipper";
+
+const DEFAULT_POLICY: RolePolicy = {
+  implicitRoles: {
+    customer: [],
+    shipper: ["customer"],
+    seller: ["customer"],
+    admin: ["customer"],
+  },
+  switchableRoles: ["customer", "shipper", "seller"],
+};
+
+const rolePolicy: RolePolicy = db.auth?.rolePolicy ?? DEFAULT_POLICY;
+
+function expandImplicitRoles(roles: Role[], policy: RolePolicy = rolePolicy): Role[] {
+  const set = new Set<Role>();
+  const stack = [...roles];
+  while (stack.length) {
+    const r = stack.pop() as Role;
+    if (set.has(r)) continue;
+    set.add(r);
+    const children = policy.implicitRoles[r] ?? [];
+    for (const c of children) stack.push(c as Role);
+  }
+  return [...set];
+}
+
+// Chuẩn hóa SĐT
+function normalizePhone(input: string) {
+  const digits = String(input || "").replace(/[^\d+]/g, "");
+  if (digits.startsWith("+84")) return digits;
+  if (digits.startsWith("0")) return "+84" + digits.slice(1);
+  return digits;
+}
+
 export default function LoginScreen() {
-  const navigation = useNavigation<any>(); 
+  const navigation = useNavigation<any>();
   const dispatch = useDispatch<AppDispatch>();
   const { loading, error } = useSelector((state: RootState) => state.auth);
   
@@ -69,9 +134,34 @@ export default function LoginScreen() {
     }
   };
 
-  const handleSocialLogin = (provider: string) => {
-    console.log(`Đăng nhập với ${provider}`);
-    Alert.alert("Đăng nhập MXH", `Chức năng đăng nhập bằng ${provider} đang được phát triển`);
+  const handleSocialLogin = async (provider: string) => {
+    const users: DbUser[] = Array.isArray(db?.users) ? (db.users as DbUser[]) : [];
+    const user = users[0];
+
+    if (!user) {
+      Alert.alert("Lỗi", "Không tìm thấy user.");
+      return;
+    }
+
+    const baseRoles = (user.roles ?? []) as Role[];
+    const effective = expandImplicitRoles(baseRoles);
+    const forced = FORCE_ROLE && effective.includes(FORCE_ROLE) ? FORCE_ROLE : null;
+
+    const activeRole: Role =
+      forced ?? (effective.includes("customer") ? "customer" : (effective[0] as Role));
+
+    const session = {
+      userId: user.id,
+      roles: effective,
+      activeRole,
+      createdAt: new Date().toISOString(),
+      lastSwitchedAt: null as string | null,
+      provider,
+    };
+
+    await AsyncStorage.setItem(SESSION_KEY, JSON.stringify(session));
+    Alert.alert("Đăng nhập MXH", `Đăng nhập bằng ${provider} (demo)`);
+    goHome();
   };
 
   return (
@@ -98,10 +188,8 @@ export default function LoginScreen() {
           <Text style={styles.label}>Email hoặc Số điện thoại</Text>
           <View style={styles.inputWrap}>
             <TextInput
-              value={email}
-              onChangeText={setEmail}
-              placeholder="example@example.com"
-              placeholderTextColor="#8f8f8f"
+              value={identifier}
+              onChangeText={setIdentifier}
               style={styles.input}
               keyboardType="email-address"
               autoCapitalize="none"
@@ -114,8 +202,6 @@ export default function LoginScreen() {
             <TextInput
               value={password}
               onChangeText={setPassword}
-              placeholder="••••••••••••"
-              placeholderTextColor="#8f8f8f"
               secureTextEntry={!showPassword}
               style={styles.input}
             />
@@ -167,7 +253,7 @@ export default function LoginScreen() {
           </View>
 
           {/* Sign Up link */}
-          <View style={styles.signupRow}>
+          <View className="signupRow" style={styles.signupRow}>
             <Text style={styles.muted}>Chưa có tài khoản? </Text>
             <TouchableOpacity onPress={() => navigation.navigate("Register")}>
               <Text style={styles.linkAccent}>Đăng ký</Text>
@@ -240,7 +326,7 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   inputWrap: {
-    borderWidth: 0, 
+    borderWidth: 0,
     borderRadius: 16,
     backgroundColor: "rgba(245,203,88,0.3)",
     paddingHorizontal: 14,
@@ -302,7 +388,11 @@ const styles = StyleSheet.create({
     elevation: 2,
   },
 
-  signupRow: { flexDirection: "row", justifyContent: "center", alignItems: "center", marginTop: 16 },
+  signupRow: {
+    flexDirection: "row",
+    justifyContent: "center",
+    alignItems: "center",
+    marginTop: 16,
+  },
   muted: { color: "#6b7280", fontFamily: Fonts.LeagueSpartanRegular },
 });
-

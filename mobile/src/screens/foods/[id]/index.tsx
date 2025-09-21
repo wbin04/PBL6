@@ -730,7 +730,7 @@ export default function FoodDetailScreen() {
                 totalPrice,
               };
               await AsyncStorage.setItem("checkoutItem", JSON.stringify(checkoutItem));
-              navigation.navigate("CheckoutScreen");
+              navigation.navigate("Checkout");
             }}
             activeOpacity={0.9}
             style={styles.btnOrange}

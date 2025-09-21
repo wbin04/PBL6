@@ -170,19 +170,18 @@
 // }
 
 
-// App.tsx
 import "react-native-gesture-handler";
 import "react-native-reanimated";
-import React, { useEffect } from "react";
+import React, { useEffect, useState, useCallback } from "react";
 import { StatusBar } from "expo-status-bar";
-import { NavigationContainer } from "@react-navigation/native";
+import { NavigationContainer, useFocusEffect } from "@react-navigation/native";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
-
 import * as SplashScreen from "expo-splash-screen";
 import { useFonts } from "expo-font";
 import { SafeAreaProvider, useSafeAreaInsets } from "react-native-safe-area-context";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { fontAssets } from "@/constants/Fonts";
 
 // ICONS
@@ -192,6 +191,10 @@ import {
   FileText,
   Headphones,
   UtensilsCrossed,
+  Package,
+  MapPin,
+  BarChart3,
+  User,
 } from "lucide-react-native";
 
 // Screens
@@ -225,6 +228,20 @@ import AdminHomeScreen from "@/screens/AdminHomeScreen";
 import { Provider, useSelector, useDispatch } from "react-redux";
 import { store, RootState, AppDispatch } from "@/store";
 import { loadUserFromStorage } from '@/store/slices/authSlice';
+import ShipperTaskScreen from "@/screens/task";
+import MapScreen from "@/screens/map";
+import ShipperSupportScreen from "@/screens/support";
+import ShipperAccountScreen from "@/screens/account/shipper";
+import PasswordSettingScreen from "@/screens/password";
+import WalletScreen from "@/screens/wallet";
+import ChangeWalletPasswordScreen from "@/screens/wallet/resetpassword";
+import ShipperProfileScreen from "@/screens/profile";
+import WalletTransactionsScreen from "@/screens/wallet/transactions";
+import NotificationSettingsScreen from "@/screens/notification";
+import ShipperStatsScreen from "@/screens/statistics";
+import TwoFactorAuthScreen from "@/screens/TwoFactorAuth";
+import WithdrawalMethodsScreen from "@/screens/withdrawalMethod";
+import Sidebar from "@/components/sidebar";
 
 SplashScreen.preventAutoHideAsync().catch(() => {});
 
@@ -233,52 +250,88 @@ const Tab = createBottomTabNavigator();
 
 function MainTabs() {
   const insets = useSafeAreaInsets();
-  const TAB_BASE_HEIGHT = 42; 
+  const TAB_BASE_HEIGHT = 42;
 
+  const [mode, setMode] = useState<"customer" | "shipper" | null>(null);
+
+  const readMode = useCallback(async () => {
+    const v = await AsyncStorage.getItem("activeRole");
+    setMode(v === "shipper" ? "shipper" : "customer");
+  }, []);
+
+  useEffect(() => { readMode(); }, [readMode]);
+  useFocusEffect(useCallback(() => { readMode(); }, [readMode]));
+
+  if (!mode) return null;
+
+  const commonTabOptions = {
+    headerShown: false,
+    tabBarShowLabel: false,
+    tabBarHideOnKeyboard: true,
+    tabBarActiveTintColor: "#fff",
+    tabBarInactiveTintColor: "rgba(255,255,255,0.7)",
+    tabBarStyle: {
+      backgroundColor: "#e95322",
+      borderTopLeftRadius: 24,
+      borderTopRightRadius: 24,
+      height: TAB_BASE_HEIGHT + insets.bottom,
+      paddingBottom: insets.bottom,
+      paddingTop: 6,
+      position: "absolute" as const,
+      left: 0, right: 0, bottom: 0,
+      elevation: 20,
+    },
+  };
+
+  if (mode === "shipper") {
+    return (
+      <Tab.Navigator initialRouteName="ShipperOrders" screenOptions={commonTabOptions}>
+        <Tab.Screen
+          name="ShipperOrders"
+          component={ShipperTaskScreen}
+          options={{ tabBarIcon: ({ color }) => <Package color={color} size={24} /> }}
+        />
+        <Tab.Screen
+          name="ShipperMap"
+          component={MapScreen}
+          options={{ tabBarIcon: ({ color }) => <MapPin color={color} size={24} /> }}
+        />
+        <Tab.Screen
+          name="ShipperStats"
+          component={ShipperStatsScreen }
+          options={{ tabBarIcon: ({ color }) => <BarChart3 color={color} size={24} /> }}
+        />
+        <Tab.Screen
+          name="ShipperSupport"
+          component={ShipperSupportScreen}
+          options={{ tabBarIcon: ({ color }) => <Headphones color={color} size={24} /> }}
+        />
+        <Tab.Screen
+          name="ShipperAccount"
+          component={ShipperAccountScreen}
+          options={{ tabBarIcon: ({ color }) => <User color={color} size={24} /> }}
+        />
+      </Tab.Navigator>
+    );
+  }
+
+  // Customer
   return (
-    <Tab.Navigator
-      initialRouteName="Home"
-      screenOptions={{
-        headerShown: false,
-        tabBarShowLabel: false,
-        tabBarHideOnKeyboard: true,
-        tabBarActiveTintColor: "#fff",
-        tabBarInactiveTintColor: "rgba(255,255,255,0.7)",
-        tabBarStyle: {
-          backgroundColor: "#e95322",
-          borderTopLeftRadius: 24,
-          borderTopRightRadius: 24,
-          height: TAB_BASE_HEIGHT + insets.bottom,
-          paddingBottom: insets.bottom,
-          paddingTop: 6,
-          position: "absolute",
-          left: 0,
-          right: 0,
-          bottom: 0,
-          elevation: 20,
-        },
-      }}
-    >
+    <Tab.Navigator initialRouteName="Home" screenOptions={commonTabOptions}>
       <Tab.Screen
         name="Home"
         component={HomeScreen}
-        options={{
-          tabBarIcon: ({ color, size }) => <HomeIcon color={color} size={24} />,
-        }}
+        options={{ tabBarIcon: ({ color }) => <HomeIcon color={color} size={24} /> }}
       />
       <Tab.Screen
         name="Restaurants"
         component={RestaurantsScreen}
-        options={{
-          tabBarIcon: ({ color, size }) => <UtensilsCrossed color={color} size={24} />,
-        }}
+        options={{ tabBarIcon: ({ color }) => <UtensilsCrossed color={color} size={24} /> }}
       />
       <Tab.Screen
         name="Favorites"
         component={FavoritesScreen}
-        options={{
-          tabBarIcon: ({ color, size }) => <Heart color={color} size={24} />,
-        }}
+        options={{ tabBarIcon: ({ color }) => <Heart color={color} size={24} /> }}
       />
       <Tab.Screen
         name="Orders"
@@ -289,11 +342,10 @@ function MainTabs() {
       />
       <Tab.Screen
         name="Support"
-        component={FavoritesScreen}
-        options={{
-          tabBarIcon: ({ color, size }) => <Headphones color={color} size={24} />,
-        }}
+        component={CheckoutScreen}
+        options={{ tabBarIcon: ({ color }) => <Headphones color={color} size={24} /> }}
       />
+      {/* <Tab.Screen name="RestaurantDetail" component={RestaurantDetail} options={{ tabBarButton: () => null }} /> */}
     </Tab.Navigator>
   );
 }
@@ -301,6 +353,7 @@ function MainTabs() {
 function AppNavigator() {
   const dispatch = useDispatch<AppDispatch>();
   const { isAuthenticated, loading, user } = useSelector((state: RootState) => state.auth);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
 
   useEffect(() => {
     // Load user from storage on app start
@@ -313,13 +366,15 @@ function AppNavigator() {
   }
 
   return (
-    <NavigationContainer>
-      <StatusBar style="auto" />
-      <Stack.Navigator screenOptions={{ headerShown: false }}>
-        {isAuthenticated ? (
-          // Authenticated user screens
-          <>
+    <GestureHandlerRootView style={{ flex: 1 }}>
+      <SafeAreaProvider>
+        <NavigationContainer>
+          <StatusBar style="auto" />
+          <Stack.Navigator screenOptions={{ headerShown: false }} initialRouteName="Login">
+            <Stack.Screen name="Login" component={LoginScreen} />
+            <Stack.Screen name="Register" component={RegisterScreen} />
             <Stack.Screen name="MainTabs" component={MainTabs} />
+            {/* Các màn detail ngoài tab (ẩn tabbar khi push) */}
             <Stack.Screen name="Checkout" component={CheckoutScreen} />
             <Stack.Screen name="Cart" component={CartScreen} />
             <Stack.Screen name="RestaurantDetail" component={RestaurantDetail} />
@@ -349,7 +404,21 @@ function AppNavigator() {
             <Stack.Screen name="Register" component={RegisterScreen} />
           </>
         )}
+            {/* <Stack.Screen name="Map" component={MapScreen} /> */}
+            <Stack.Screen name="PasswordSetting" component={PasswordSettingScreen} />
+            <Stack.Screen name="ShipperWallet" component={WalletScreen} />
+            <Stack.Screen name="ChangeWalletPassword" component={ChangeWalletPasswordScreen} />
+            <Stack.Screen name="ShipperProfile" component={ShipperProfileScreen} />
+            <Stack.Screen name="WalletTransactions" component={WalletTransactionsScreen} />
+            <Stack.Screen name="NotificationSetting" component={NotificationSettingsScreen} />
+            <Stack.Screen name="TwoFASetting" component={TwoFactorAuthScreen} />
+            <Stack.Screen name="WithdrawMethods" component={WithdrawalMethodsScreen} />
       </Stack.Navigator>
+
+          <Sidebar
+            isOpen={sidebarOpen}
+            onClose={() => setSidebarOpen(false)}
+          />
     </NavigationContainer>
   );
 }
