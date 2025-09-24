@@ -50,13 +50,13 @@ const mockBanners = [
     id: 1,
     title: "Giảm giá hôm nay",
     discount: "20% OFF",
-    image: "assets/banner1.jpg"
+    image: require('../../assets/images/assorted-sushi.png') // fallback image
   },
   {
     id: 2,
     title: "Ưu đãi đặc biệt",
     discount: "30% OFF",
-    image: "assets/banner2.jpg"
+    image: require('../../assets/images/burger-palace.png') // fallback image
   }
 ];
 
@@ -290,25 +290,42 @@ export default function HomeScreen() {
                 const active = selectedCategoryId === c.id;
                 // Special handling for "Tất cả" category
                 const isAllCategory = c.id === 0;
-                console.log('Category data:', c.cate_name, 'image:', c.image);
+                // Defensive: always return a valid React element
+                let iconElement: React.ReactNode;
+                if (isAllCategory) {
+                  iconElement = (
+                    <Text style={{ fontSize: 20, fontFamily: Fonts.LeagueSpartanBold }}>📋</Text>
+                  );
+                } else if (typeof c.image === 'string' && !!getImageUrl(c.image)) {
+                  iconElement = (
+                    <Image
+                      source={{ uri: getImageUrl(c.image) || '' }}
+                      style={{ width: 30, height: 30, borderRadius: 15 }}
+                      resizeMode="cover"
+                      onError={() => console.log('Failed to load category image:', getImageUrl(c.image))}
+                    />
+                  );
+                } else if (c.image && typeof c.image === 'object') {
+                  iconElement = (
+                    <Image
+                      source={c.image}
+                      style={{ width: 30, height: 30, borderRadius: 15 }}
+                      resizeMode="cover"
+                    />
+                  );
+                } else {
+                  // fallback: always return a <Text>
+                  iconElement = (
+                    <Text style={{ fontSize: 20, fontFamily: Fonts.LeagueSpartanBold }}>🍔</Text>
+                  );
+                }
                 return (
                   <TouchableOpacity
                     onPress={() => handleCategorySelect(c)}
                     style={styles.catItem}
                   >
-                    <View style={[styles.catIcon, { backgroundColor: active ? "#e95322" : "#f3e9b5" }]}>
-                      {isAllCategory ? (
-                        <Text style={{ fontSize: 20, fontFamily: Fonts.LeagueSpartanBold }}>📋</Text>
-                      ) : c.image && getImageUrl(c.image) ? (
-                        <Image 
-                          source={{ uri: getImageUrl(c.image) || '' }} 
-                          style={{ width: 30, height: 30, borderRadius: 15 }}
-                          resizeMode="cover"
-                          onError={() => console.log('Failed to load category image:', getImageUrl(c.image))}
-                        />
-                      ) : (
-                        <Text style={{ fontSize: 20, fontFamily: Fonts.LeagueSpartanBold }}>🍔</Text>
-                      )}
+                    <View style={[styles.catIcon, { backgroundColor: active ? "#e95322" : "#f3e9b5" }]}> 
+                      {iconElement}
                     </View>
                     <Text style={[styles.catLabel, { color: active ? "#e95322" : "#391713" }]}>{c.cate_name}</Text>
                   </TouchableOpacity>
@@ -534,7 +551,7 @@ export default function HomeScreen() {
                     </View>
                     <View style={{ flex: 1 }}>
                       <Image 
-                        source={{ uri: getImageUrl(b.image) || 'https://via.placeholder.com/200x128' }} 
+                        source={b.image} 
                         style={{ width: "100%", height: "100%" }} 
                         resizeMode="cover" 
                       />

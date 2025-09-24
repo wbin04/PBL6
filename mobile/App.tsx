@@ -1,3 +1,4 @@
+import 'react-native-get-random-values';
 // // @ts-nocheck
 // /* eslint-disable @typescript-eslint/ban-ts-comment */
 // import React, { useEffect } from 'react';
@@ -183,6 +184,8 @@ import { GestureHandlerRootView } from "react-native-gesture-handler";
 import * as SplashScreen from "expo-splash-screen";
 import { useFonts } from "expo-font";
 import { SafeAreaProvider, useSafeAreaInsets } from "react-native-safe-area-context";
+import { VoucherProvider } from "./src/contexts/VoucherContext";
+import { ShipperProvider } from "./src/context/ShipperContext";
 import { fontAssets } from "@/constants/Fonts";
 
 // ICONS
@@ -219,7 +222,6 @@ import ReviewScreen from "@/screens/ReviewScreen";
 import CancelDetailScreen from "@/screens/CancelDetailScreen";
 import AddressPickerScreen from "@/screens/address/AddressPickerScreen";
 import { ProfileScreen } from "@/screens/ProfileScreen";
-import AdminHomeScreen from "@/screens/AdminHomeScreen";
 
 // Redux
 import { Provider, useSelector, useDispatch } from "react-redux";
@@ -299,26 +301,17 @@ function MainTabs() {
 }
 
 function AppNavigator() {
-  const dispatch = useDispatch<AppDispatch>();
-  const { isAuthenticated, loading, user } = useSelector((state: RootState) => state.auth);
-
-  useEffect(() => {
-    // Load user from storage on app start
-    dispatch(loadUserFromStorage());
-  }, [dispatch]);
-
-  // Show loading screen while checking authentication
-  if (loading) {
-    return null; // or a loading screen component
-  }
-
   return (
-    <NavigationContainer>
-      <StatusBar style="auto" />
-      <Stack.Navigator screenOptions={{ headerShown: false }}>
-        {isAuthenticated ? (
-          // Authenticated user screens
-          <>
+    <VoucherProvider>
+      <ShipperProvider>
+        <NavigationContainer>
+          <StatusBar style="auto" />
+          <Stack.Navigator screenOptions={{ headerShown: false }}>
+            <Stack.Screen name="AdminDashboard" component={require('./src/screens/AdminDashboardScreen').default} />
+            <Stack.Screen name="UpdateCustomerScreen" component={require('./src/screens/UpdateCustomerScreen').default} />
+            <Stack.Screen name="StoreDetailScreen" component={require('./src/screens/StoreDetailScreen').StoreDetailScreen} />
+            <Stack.Screen name="StoreDetailScreenV2" component={require('./src/screens/StoreDetailScreenV2').StoreDetailScreenV2} />
+            {/* Các màn khác nếu cần */}
             <Stack.Screen name="MainTabs" component={MainTabs} />
             <Stack.Screen name="Checkout" component={CheckoutScreen} />
             <Stack.Screen name="Cart" component={CartScreen} />
@@ -338,19 +331,15 @@ function AppNavigator() {
             <Stack.Screen name="Review" component={ReviewScreen} />
             <Stack.Screen name="CancelDetail" component={CancelDetailScreen} />
             <Stack.Screen name="Profile" component={ProfileScreen} />
-            {user?.role === 'Quản lý' && (
-              <Stack.Screen name="AdminHome" component={AdminHomeScreen} />
-            )}
-          </>
-        ) : (
-          // Non-authenticated user screens
-          <>
-            <Stack.Screen name="Login" component={LoginScreen} />
-            <Stack.Screen name="Register" component={RegisterScreen} />
-          </>
-        )}
-      </Stack.Navigator>
-    </NavigationContainer>
+            <Stack.Screen name="FoodDetailPopup" component={require('./src/screens/FoodDetailPopup').default} />
+            <Stack.Screen name="VoucherManagementScreen" component={require('./src/screens/VoucherManagementScreen').default} />
+            <Stack.Screen name="VoucherEditScreen" component={require('./src/screens/VoucherEditScreen').default} />
+            <Stack.Screen name="ShipperEditScreen" component={require('./src/screens/ShipperEditScreen').default} />
+            <Stack.Screen name="ShipperDetailScreen" component={require('./src/screens/ShipperDetailScreen').default} />
+          </Stack.Navigator>
+        </NavigationContainer>
+      </ShipperProvider>
+    </VoucherProvider>
   );
 }
 
