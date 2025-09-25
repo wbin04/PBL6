@@ -382,5 +382,48 @@ export const authApi = {
   refreshToken: async (refreshToken: string) => {
     return apiClient.post('/auth/refresh/', { refresh: refreshToken });
   },
+  
+  // Registration status APIs
+  updateShipperRegistration: async (isRegistered: boolean) => {
+    return apiClient.post('/auth/registration/shipper/', { 
+      is_registered: isRegistered 
+    });
+  },
+  
+  updateStoreRegistration: async (isRegistered: boolean) => {
+    return apiClient.post('/auth/registration/store/', { 
+      is_registered: isRegistered 
+    });
+  },
+  
+  getRegistrationStatus: async () => {
+    return apiClient.get('/auth/registration/status/');
+  },
+  
+  // Shipper application management (admin only)
+  getShipperApplications: async (params?: { page?: number; search?: string }) => {
+    return apiClient.get('/auth/shipper/applications/', { params });
+  },
+  
+  approveShipperApplication: async (userId: number) => {
+    return apiClient.post(`/auth/shipper/applications/${userId}/approve/`);
+  },
+  
+  rejectShipperApplication: async (userId: number) => {
+    return apiClient.post(`/auth/shipper/applications/${userId}/reject/`);
+  },
+  
+  // Store application management (admin only)
+  getStoreApplications: async (params?: { page?: number; search?: string }) => {
+    return apiClient.get('/auth/store/applications/', { params });
+  },
+  
+  approveStoreApplication: async (userId: number) => {
+    return apiClient.post(`/auth/store/applications/${userId}/approve/`);
+  },
+  
+  rejectStoreApplication: async (userId: number) => {
+    return apiClient.post(`/auth/store/applications/${userId}/reject/`);
+  },
 };
 

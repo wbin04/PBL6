@@ -2,9 +2,9 @@ import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, FlatList, TouchableOpacity, Image, ActivityIndicator, Alert, TextInput } from 'react-native';
 import { IMAGE_MAP } from '../assets/imageMap';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Star } from 'lucide-react-native';
+import { Star, Plus, UserCheck, UserX } from 'lucide-react-native';
 import { useNavigation } from '@react-navigation/native';
-import { apiClient } from '@/services/api';
+import { apiClient, authApi } from '@/services/api';
 import { API_CONFIG } from "@/constants";
 
 type Store = {
@@ -23,9 +23,22 @@ type Store = {
   totalReviews?: number;
 };
 
+interface StoreApplication {
+  id: number;
+  fullname: string;
+  username: string;
+  email: string;
+  phone_number: string;
+  address: string;
+  created_date: string;
+  is_store_registered: boolean;
+}
+
 const StoreListScreen = () => {
   const navigation = useNavigation<any>();
+  const [activeTab, setActiveTab] = useState<'list' | 'applications'>('list');
   const [stores, setStores] = useState<Store[]>([]);
+  const [applications, setApplications] = useState<StoreApplication[]>([]);
   const [loading, setLoading] = useState(false);
   const [searchText, setSearchText] = useState('');
 
@@ -212,15 +225,117 @@ const StoreListScreen = () => {
     }
   };
 
-  useEffect(() => {
-    fetchStores();
-  }, []);
+  // Fetch store applications
+  const fetchApplications = async (showLoading = true) => {
+    try {
+      if (showLoading) {
+        setLoading(true);
+      }
+      console.log('Fetching store applications...');
 
-  // Search functionality (for now just filter locally)
+      const response = await authApi.getStoreApplications({
+        page: 1,
+      }) as any;
+
+      console.log('Store Applications API Response:', response);
+
+      // Handle different response formats
+      if (response?.applications) {
+        setApplications(response.applications);
+      } else if (response?.data?.applications) {
+        setApplications(response.data.applications);
+      } else if (Array.isArray(response)) {
+        setApplications(response);
+      } else {
+        console.warn('Unexpected store applications response format:', response);
+        setApplications([]);
+      }
+
+    } catch (error: any) {
+      console.error('Error fetching store applications:', error);
+      Alert.alert('Lỗi', error?.response?.data?.message || 'Không thể tải danh sách đơn đăng ký cửa hàng');
+      setApplications([]);
+    } finally {
+      if (showLoading) {
+        setLoading(false);
+      }
+    }
+  };
+
+  useEffect(() => {
+    if (activeTab === 'list') {
+      fetchStores();
+    } else {
+      fetchApplications();
+    }
+  }, [activeTab]);
+
+  // Handle approve store application
+  const handleApproveApplication = async (userId: number, userName: string) => {
+    Alert.alert(
+      "Chấp nhận đơn đăng ký cửa hàng",
+      `Bạn có chắc muốn chấp nhận đơn đăng ký cửa hàng của ${userName}?`,
+      [
+        { text: "Hủy", style: "cancel" },
+        {
+          text: "Chấp nhận",
+          onPress: async () => {
+            try {
+              setLoading(true);
+              await authApi.approveStoreApplication(userId);
+              Alert.alert("Thành công", "Đã chấp nhận đơn đăng ký cửa hàng");
+              fetchApplications(); // Refresh applications list
+            } catch (error: any) {
+              console.error('Error approving store application:', error);
+              Alert.alert("Lỗi", error?.response?.data?.message || "Không thể chấp nhận đơn đăng ký");
+            } finally {
+              setLoading(false);
+            }
+          }
+        }
+      ]
+    );
+  };
+
+  // Handle reject store application
+  const handleRejectApplication = async (userId: number, userName: string) => {
+    Alert.alert(
+      "Từ chối đơn đăng ký cửa hàng",
+      `Bạn có chắc muốn từ chối đơn đăng ký cửa hàng của ${userName}?`,
+      [
+        { text: "Hủy", style: "cancel" },
+        {
+          text: "Từ chối",
+          style: "destructive",
+          onPress: async () => {
+            try {
+              setLoading(true);
+              await authApi.rejectStoreApplication(userId);
+              Alert.alert("Thành công", "Đã từ chối đơn đăng ký cửa hàng");
+              fetchApplications(); // Refresh applications list
+            } catch (error: any) {
+              console.error('Error rejecting store application:', error);
+              Alert.alert("Lỗi", error?.response?.data?.message || "Không thể từ chối đơn đăng ký");
+            } finally {
+              setLoading(false);
+            }
+          }
+        }
+      ]
+    );
+  };
+
+  // Search functionality
   const filteredStores = stores.filter(store => 
     store.name?.toLowerCase().includes(searchText.toLowerCase()) ||
     store.store_name?.toLowerCase().includes(searchText.toLowerCase()) ||
     store.description?.toLowerCase().includes(searchText.toLowerCase())
+  );
+
+  const filteredApplications = applications.filter(app =>
+    app.fullname?.toLowerCase().includes(searchText.toLowerCase()) ||
+    app.email?.toLowerCase().includes(searchText.toLowerCase()) ||
+    app.phone_number?.toLowerCase().includes(searchText.toLowerCase())
   );
 
   const renderItem = ({ item }: any) => {
@@ -292,6 +407,48 @@ const StoreListScreen = () => {
     );
   };
 
+  const renderApplicationItem = ({ item }: { item: StoreApplication }) => (
+    <View style={styles.applicationCard}>
+      <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+        <View style={{ marginRight: 12 }}>
+          <View style={styles.applicationIcon}>
+            <Text style={styles.applicationIconText}>{item.fullname.charAt(0).toUpperCase()}</Text>
+          </View>
+        </View>
+        <View style={{ flex: 1 }}>
+          <Text style={styles.name}>{item.fullname}</Text>
+          <View style={styles.row}>
+            <Text style={styles.email}>{item.email}</Text>
+          </View>
+          <Text style={styles.phone}>📞 {item.phone_number || 'Chưa có SĐT'}</Text>
+          <Text style={styles.address}>{item.address || 'Chưa có địa chỉ'}</Text>
+          <Text style={styles.applicationDate}>
+            Đăng ký: {new Date(item.created_date).toLocaleDateString('vi-VN')}
+          </Text>
+        </View>
+      </View>
+
+      <View style={styles.actionRow}>
+        <TouchableOpacity
+          style={styles.approveButton}
+          onPress={() => handleApproveApplication(item.id, item.fullname)}
+          disabled={loading}
+        >
+          <UserCheck size={16} color="#fff" />
+          <Text style={styles.approveButtonText}>Chấp nhận</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={styles.rejectButton}
+          onPress={() => handleRejectApplication(item.id, item.fullname)}
+          disabled={loading}
+        >
+          <UserX size={16} color="#fff" />
+          <Text style={styles.rejectButtonText}>Từ chối</Text>
+        </TouchableOpacity>
+      </View>
+    </View>
+  );
+
   return (
     <SafeAreaView style={styles.container}>
       {/* Search Box */}
@@ -308,6 +465,26 @@ const StoreListScreen = () => {
         </TouchableOpacity>
       </View>
 
+      {/* Tab Container */}
+      <View style={styles.tabContainer}>
+        <TouchableOpacity
+          style={[styles.tabButton, activeTab === 'list' && styles.activeTab]}
+          onPress={() => setActiveTab('list')}
+        >
+          <Text style={[styles.tabText, activeTab === 'list' && styles.activeTabText]}>
+            Danh sách
+          </Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.tabButton, activeTab === 'applications' && styles.activeTab]}
+          onPress={() => setActiveTab('applications')}
+        >
+          <Text style={[styles.tabText, activeTab === 'applications' && styles.activeTabText]}>
+            Đơn đăng ký ({applications.length})
+          </Text>
+        </TouchableOpacity>
+      </View>
+
       {loading && (
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color="#ea580c" />
@@ -315,22 +492,41 @@ const StoreListScreen = () => {
         </View>
       )}
 
-      <FlatList
-        data={filteredStores}
-        keyExtractor={item => item.id.toString()}
-        renderItem={renderItem}
-        contentContainerStyle={{ padding: 16, paddingBottom: 20 }}
-        ListHeaderComponent={<Text style={styles.header}>Danh sách cửa hàng</Text>}
-        ListEmptyComponent={
-          !loading ? (
-            <View style={styles.emptyContainer}>
-              <Text style={styles.emptyText}>
-                {searchText ? 'Không tìm thấy cửa hàng nào' : 'Không có cửa hàng nào'}
-              </Text>
-            </View>
-          ) : null
-        }
-      />
+      {activeTab === 'list' ? (
+        <FlatList
+          data={filteredStores}
+          keyExtractor={item => item.id.toString()}
+          renderItem={renderItem}
+          contentContainerStyle={{ padding: 16, paddingBottom: 20 }}
+          ListHeaderComponent={<Text style={styles.header}>Danh sách cửa hàng</Text>}
+          ListEmptyComponent={
+            !loading ? (
+              <View style={styles.emptyContainer}>
+                <Text style={styles.emptyText}>
+                  {searchText ? 'Không tìm thấy cửa hàng nào' : 'Không có cửa hàng nào'}
+                </Text>
+              </View>
+            ) : null
+          }
+        />
+      ) : (
+        <FlatList
+          data={filteredApplications}
+          keyExtractor={item => item.id.toString()}
+          renderItem={renderApplicationItem}
+          contentContainerStyle={{ padding: 16, paddingBottom: 20 }}
+          ListHeaderComponent={<Text style={styles.header}>Đơn đăng ký cửa hàng</Text>}
+          ListEmptyComponent={
+            !loading ? (
+              <View style={styles.emptyContainer}>
+                <Text style={styles.emptyText}>
+                  {searchText ? 'Không tìm thấy đơn đăng ký nào' : 'Không có đơn đăng ký nào'}
+                </Text>
+              </View>
+            ) : null
+          }
+        />
+      )}
     </SafeAreaView>
   );
 };
@@ -392,7 +588,111 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#6b7280',
     fontStyle: 'italic'
-  }
+  },
+  tabContainer: {
+    flexDirection: 'row',
+    backgroundColor: '#f3f4f6',
+    marginHorizontal: 16,
+    marginBottom: 16,
+    borderRadius: 8,
+    padding: 4,
+  },
+  tabButton: {
+    flex: 1,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 6,
+    alignItems: 'center',
+  },
+  activeTab: {
+    backgroundColor: '#ea580c',
+  },
+  tabText: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: '#6b7280',
+  },
+  activeTabText: {
+    color: '#fff',
+    fontWeight: '600',
+  },
+  applicationCard: {
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: '#e5e7eb',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  applicationIcon: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: '#ea580c',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  applicationIconText: {
+    color: '#fff',
+    fontSize: 18,
+    fontWeight: 'bold',
+  },
+  email: {
+    fontSize: 14,
+    color: '#6b7280',
+    marginBottom: 4,
+  },
+  phone: {
+    fontSize: 14,
+    color: '#4b5563',
+    marginBottom: 4,
+  },
+  applicationDate: {
+    fontSize: 12,
+    color: '#9ca3af',
+    fontStyle: 'italic',
+  },
+  actionRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginTop: 12,
+    gap: 12,
+  },
+  approveButton: {
+    flex: 1,
+    backgroundColor: '#10b981',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 10,
+    borderRadius: 8,
+    gap: 6,
+  },
+  approveButtonText: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  rejectButton: {
+    flex: 1,
+    backgroundColor: '#ef4444',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 10,
+    borderRadius: 8,
+    gap: 6,
+  },
+  rejectButtonText: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: '600',
+  },
 });
 
 export default StoreListScreen;

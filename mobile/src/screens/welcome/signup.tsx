@@ -25,10 +25,10 @@ export default function RegisterScreen() {
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [form, setForm] = useState({
-    fullName: "Test",
-    username: "test2",
-    email: "test2@gmail.com",
-    phone: "0987654322",
+    fullName: "Test3",
+    username: "test3",
+    email: "test3@gmail.com",
+    phone: "0987654323",
     password: "123456",
     confirm: "123456",
   });

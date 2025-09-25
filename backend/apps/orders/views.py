@@ -352,7 +352,7 @@ def update_order_status(request, pk):
     print(f"Cancel reason: {cancel_reason}")
     
     # Only allow customer to cancel with Vietnamese status
-    if new_status not in ['Đã hủy']:
+    if new_status not in ['Đã huỷ']:
         return Response({'error': 'Trạng thái không hợp lệ'}, status=status.HTTP_400_BAD_REQUEST)
     
     # Only cancel if current status is 'Chờ xác nhận'
@@ -365,7 +365,7 @@ def update_order_status(request, pk):
         print(f"Saved cancel_reason: {cancel_reason}")
     
     # Set cancellation information
-    if new_status == 'Đã hủy':
+    if new_status == 'Đã huỷ':
         from apps.orders.models import get_vietnam_time
         order.cancelled_date = get_vietnam_time()
         order.cancelled_by_role = 'Khách hàng'  # Customer is cancelling
@@ -730,14 +730,14 @@ def admin_update_order_status(request, pk):
         
         # Determine cancellation role based on user role
         cancelled_by_role = None
-        if new_status == 'Đã hủy':
+        if new_status == 'Đã huỷ':
             if request.user.role == 'Quản lý':
                 cancelled_by_role = 'Quản lý'
             else:
                 cancelled_by_role = 'Cửa hàng'  # Store manager
         
         # Validate status transition (admin has more freedom)
-        valid_statuses = ['Chờ xác nhận', 'Đã xác nhận', 'Đang chuẩn bị', 'Sẵn sàng', 'Đã lấy hàng', 'Đã giao', 'Đã hủy']
+        valid_statuses = ['Chờ xác nhận', 'Đã xác nhận', 'Đang chuẩn bị', 'Sẵn sàng', 'Đã lấy hàng', 'Đã giao', 'Đã huỷ']
         if new_status not in valid_statuses:
             return Response({'error': 'Invalid status'}, status=status.HTTP_400_BAD_REQUEST)
         
@@ -747,7 +747,7 @@ def admin_update_order_status(request, pk):
             order.cancel_reason = cancel_reason
         
         # Set cancellation info if being cancelled
-        if new_status == 'Đã hủy':
+        if new_status == 'Đã huỷ':
             from apps.orders.models import get_vietnam_time
             order.cancelled_date = get_vietnam_time()
             order.cancelled_by_role = cancelled_by_role
