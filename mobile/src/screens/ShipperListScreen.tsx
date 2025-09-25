@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Linking, ScrollView, ActivityIndicator, RefreshControl, Alert } from 'react-native';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
-import { Phone, Plus } from 'lucide-react-native';
-import { shipperApi } from '../services/api';
+import { Phone, Plus, UserCheck, UserX } from 'lucide-react-native';
+import { shipperApi, authApi } from '../services/api';
 
 interface Shipper {
   id: number;
@@ -20,9 +20,22 @@ interface Shipper {
   };
 }
 
+interface ShipperApplication {
+  id: number;
+  fullname: string;
+  username: string;
+  email: string;
+  phone_number: string;
+  address: string;
+  created_date: string;
+  is_shipper_registered: boolean;
+}
+
 const ShipperListScreen: React.FC = () => {
   const navigation = useNavigation<any>();
+  const [activeTab, setActiveTab] = useState<'list' | 'applications'>('list');
   const [shippers, setShippers] = useState<Shipper[]>([]);
+  const [applications, setApplications] = useState<ShipperApplication[]>([]);
   const [loading, setLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -86,40 +99,143 @@ const ShipperListScreen: React.FC = () => {
     }
   };
 
+  // Fetch shipper applications
+  const fetchApplications = async (showLoading = true) => {
+    try {
+      if (showLoading) {
+        setLoading(true);
+      }
+      setError(null);
+
+      const response = await authApi.getShipperApplications({
+        page: 1,
+      }) as any;
+
+      console.log('Applications API Response:', response);
+
+      // Handle different response formats
+      if (response?.applications) {
+        setApplications(response.applications);
+      } else if (response?.data?.applications) {
+        setApplications(response.data.applications);
+      } else if (Array.isArray(response)) {
+        setApplications(response);
+      } else {
+        console.warn('Unexpected applications response format:', response);
+        setApplications([]);
+      }
+
+    } catch (error: any) {
+      console.error('Error fetching applications:', error);
+      setError(error.message || 'Không thể tải danh sách đơn đăng ký');
+      setApplications([]);
+    } finally {
+      if (showLoading) {
+        setLoading(false);
+      }
+      if (refreshing) {
+        setRefreshing(false);
+      }
+    }
+  };
+
   // Load data when component mounts and when screen is focused
   useFocusEffect(
     React.useCallback(() => {
-      fetchShippers();
+      if (activeTab === 'list') {
+        fetchShippers();
+      } else {
+        fetchApplications();
+      }
       fetchStatistics();
-    }, [])
+    }, [activeTab])
   );
 
   // Refresh handler
   const onRefresh = () => {
     setRefreshing(true);
-    fetchShippers(false);
+    if (activeTab === 'list') {
+      fetchShippers(false);
+    } else {
+      fetchApplications(false);
+    }
     fetchStatistics();
   };
 
-  // Create new shipper handler
-  const createShipper = () => {
-    navigation.navigate('CreateShipperScreen');
+  // Handle approve shipper application
+  const handleApproveApplication = async (userId: number, userName: string) => {
+    Alert.alert(
+      "Chấp nhận đơn đăng ký",
+      `Bạn có chắc muốn chấp nhận đơn đăng ký của ${userName}?`,
+      [
+        { text: "Hủy", style: "cancel" },
+        {
+          text: "Chấp nhận",
+          onPress: async () => {
+            try {
+              setLoading(true);
+              await authApi.approveShipperApplication(userId);
+              Alert.alert("Thành công", "Đã chấp nhận đơn đăng ký shipper");
+              fetchApplications(); // Refresh applications list
+            } catch (error: any) {
+              console.error('Error approving application:', error);
+              Alert.alert("Lỗi", error?.response?.data?.message || "Không thể chấp nhận đơn đăng ký");
+            } finally {
+              setLoading(false);
+            }
+          }
+        }
+      ]
+    );
+  };
+
+  // Handle reject shipper application
+  const handleRejectApplication = async (userId: number, userName: string) => {
+    Alert.alert(
+      "Từ chối đơn đăng ký",
+      `Bạn có chắc muốn từ chối đơn đăng ký của ${userName}?`,
+      [
+        { text: "Hủy", style: "cancel" },
+        {
+          text: "Từ chối",
+          style: "destructive",
+          onPress: async () => {
+            try {
+              setLoading(true);
+              await authApi.rejectShipperApplication(userId);
+              Alert.alert("Thành công", "Đã từ chối đơn đăng ký shipper");
+              fetchApplications(); // Refresh applications list
+            } catch (error: any) {
+              console.error('Error rejecting application:', error);
+              Alert.alert("Lỗi", error?.response?.data?.message || "Không thể từ chối đơn đăng ký");
+            } finally {
+              setLoading(false);
+            }
+          }
+        }
+      ]
+    );
   };
 
   if (loading && !refreshing) {
     return (
       <View style={[styles.container, styles.centered]}>
         <ActivityIndicator size="large" color="#ea580c" />
-        <Text style={styles.loadingText}>Đang tải danh sách shipper...</Text>
+        <Text style={styles.loadingText}>
+          {activeTab === 'list' ? 'Đang tải danh sách shipper...' : 'Đang tải đơn đăng ký...'}
+        </Text>
       </View>
     );
   }
 
-  if (error && !refreshing && shippers.length === 0) {
+  if (error && !refreshing && (activeTab === 'list' ? shippers.length === 0 : applications.length === 0)) {
     return (
       <View style={[styles.container, styles.centered]}>
         <Text style={styles.errorText}>{error}</Text>
-        <TouchableOpacity style={styles.retryButton} onPress={() => fetchShippers()}>
+        <TouchableOpacity 
+          style={styles.retryButton} 
+          onPress={() => activeTab === 'list' ? fetchShippers() : fetchApplications()}
+        >
           <Text style={styles.retryButtonText}>Thử lại</Text>
         </TouchableOpacity>
       </View>
@@ -130,16 +246,32 @@ const ShipperListScreen: React.FC = () => {
     <View style={styles.container}>
       <View style={styles.header}>
         <View>
-          <Text style={styles.title}>Danh sách shipper</Text>
+          <Text style={styles.title}>Quản lý shipper</Text>
           {statistics && (
             <Text style={styles.subtitle}>
               Tổng cộng: {statistics.total_shippers} shipper
             </Text>
           )}
         </View>
-        <TouchableOpacity style={styles.addButton} onPress={createShipper}>
-          <Plus size={20} color="#fff" />
-          <Text style={styles.addButtonText}>Thêm</Text>
+      </View>
+
+      {/* Tab Toggle */}
+      <View style={styles.tabContainer}>
+        <TouchableOpacity
+          style={[styles.tab, activeTab === 'list' && styles.activeTab]}
+          onPress={() => setActiveTab('list')}
+        >
+          <Text style={[styles.tabText, activeTab === 'list' && styles.activeTabText]}>
+            Danh sách
+          </Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.tab, activeTab === 'applications' && styles.activeTab]}
+          onPress={() => setActiveTab('applications')}
+        >
+          <Text style={[styles.tabText, activeTab === 'applications' && styles.activeTabText]}>
+            Đơn đăng ký
+          </Text>
         </TouchableOpacity>
       </View>
 
@@ -154,62 +286,116 @@ const ShipperListScreen: React.FC = () => {
           />
         }
       >
-        {shippers.length === 0 ? (
-          <View style={styles.emptyContainer}>
-            <Text style={styles.emptyText}>Chưa có shipper nào</Text>
-            <TouchableOpacity style={styles.createFirstButton} onPress={createShipper}>
-              <Text style={styles.createFirstButtonText}>Tạo shipper đầu tiên</Text>
-            </TouchableOpacity>
-          </View>
-        ) : (
-          shippers.map((item: Shipper) => (
-            <TouchableOpacity 
-              key={item.id} 
-              style={styles.card} 
-              onPress={() => navigation.navigate('ShipperDetailScreen', { shipper: item })}
-            >
-              <View style={styles.cardHeader}>
-                <View style={styles.shipperInfo}>
-                  <Text style={styles.name}>{item.fullname || item.user?.fullname || 'Chưa có tên'}</Text>
-                  <View style={styles.phoneContainer}>
-                    <Text style={styles.phone}>{item.phone || item.user?.phone || 'Chưa có SĐT'}</Text>
-                    {(item.phone || item.user?.phone) && (
-                      <TouchableOpacity
-                        style={styles.callBtn}
-                        onPress={() => Linking.openURL(`tel:${item.phone || item.user?.phone}`)}
-                      >
-                        <Phone size={16} color="#fff" />
-                      </TouchableOpacity>
-                    )}
+        {activeTab === 'list' ? (
+          // Shipper List
+          shippers.length === 0 ? (
+            <View style={styles.emptyContainer}>
+              <Text style={styles.emptyText}>Chưa có shipper nào</Text>
+            </View>
+          ) : (
+            shippers.map((item: Shipper) => (
+              <TouchableOpacity 
+                key={item.id} 
+                style={styles.card} 
+                onPress={() => navigation.navigate('ShipperDetailScreen', { shipper: item })}
+              >
+                <View style={styles.cardHeader}>
+                  <View style={styles.shipperInfo}>
+                    <Text style={styles.name}>{item.fullname || item.user?.fullname || 'Chưa có tên'}</Text>
+                    <View style={styles.phoneContainer}>
+                      <Text style={styles.phone}>{item.phone || item.user?.phone || 'Chưa có SĐT'}</Text>
+                      {(item.phone || item.user?.phone) && (
+                        <TouchableOpacity
+                          style={styles.callBtn}
+                          onPress={() => Linking.openURL(`tel:${item.phone || item.user?.phone}`)}
+                        >
+                          <Phone size={16} color="#fff" />
+                        </TouchableOpacity>
+                      )}
+                    </View>
+                    <Text style={styles.email}>{item.email || item.user?.email || 'Chưa có email'}</Text>
+                    <Text style={styles.address} numberOfLines={2}>
+                      {item.address || item.user?.address || 'Chưa có địa chỉ'}
+                    </Text>
                   </View>
-                  <Text style={styles.email}>{item.email || item.user?.email || 'Chưa có email'}</Text>
-                  <Text style={styles.address} numberOfLines={2}>
-                    {item.address || item.user?.address || 'Chưa có địa chỉ'}
-                  </Text>
+                  <TouchableOpacity
+                    style={styles.editButton}
+                    onPress={() => navigation.navigate('ShipperEditScreen', { shipper: item })}
+                  >
+                    <Text style={styles.editButtonText}>Sửa</Text>
+                  </TouchableOpacity>
                 </View>
-                <TouchableOpacity
-                  style={styles.editButton}
-                  onPress={() => navigation.navigate('ShipperEditScreen', { shipper: item })}
-                >
-                  <Text style={styles.editButtonText}>Sửa</Text>
-                </TouchableOpacity>
-              </View>
 
-              <View style={styles.statsRow}>
-                <View style={styles.statBox}>
-                  <Text style={styles.statValue}>0</Text>
-                  <Text style={styles.statLabel}>Đã giao</Text>
+                <View style={styles.statsRow}>
+                  <View style={styles.statBox}>
+                    <Text style={styles.statValue}>0</Text>
+                    <Text style={styles.statLabel}>Đã giao</Text>
+                  </View>
+                  <View style={styles.statBox}>
+                    <Text style={styles.statValue}>0</Text>
+                    <Text style={styles.statLabel}>Đánh giá</Text>
+                  </View>
+                  <View style={styles.statBox}>
+                    <Text style={[styles.status, styles.active]}>Sẵn sàng</Text>
+                  </View>
                 </View>
-                <View style={styles.statBox}>
-                  <Text style={styles.statValue}>0</Text>
-                  <Text style={styles.statLabel}>Đánh giá</Text>
+              </TouchableOpacity>
+            ))
+          )
+        ) : (
+          // Applications List
+          applications.length === 0 ? (
+            <View style={styles.emptyContainer}>
+              <Text style={styles.emptyText}>Chưa có đơn đăng ký nào</Text>
+            </View>
+          ) : (
+            applications.map((item: ShipperApplication) => (
+              <View key={item.id} style={styles.applicationCard}>
+                <View style={styles.cardHeader}>
+                  <View style={styles.shipperInfo}>
+                    <Text style={styles.name}>{item.fullname || 'Chưa có tên'}</Text>
+                    <View style={styles.phoneContainer}>
+                      <Text style={styles.phone}>{item.phone_number || 'Chưa có SĐT'}</Text>
+                      {item.phone_number && (
+                        <TouchableOpacity
+                          style={styles.callBtn}
+                          onPress={() => Linking.openURL(`tel:${item.phone_number}`)}
+                        >
+                          <Phone size={16} color="#fff" />
+                        </TouchableOpacity>
+                      )}
+                    </View>
+                    <Text style={styles.email}>{item.email || 'Chưa có email'}</Text>
+                    <Text style={styles.address} numberOfLines={2}>
+                      {item.address || 'Chưa có địa chỉ'}
+                    </Text>
+                    <Text style={styles.applicationDate}>
+                      Đăng ký: {new Date(item.created_date).toLocaleDateString('vi-VN')}
+                    </Text>
+                  </View>
                 </View>
-                <View style={styles.statBox}>
-                  <Text style={[styles.status, styles.active]}>Sẵn sàng</Text>
+
+                <View style={styles.actionRow}>
+                  <TouchableOpacity
+                    style={styles.approveButton}
+                    onPress={() => handleApproveApplication(item.id, item.fullname)}
+                    disabled={loading}
+                  >
+                    <UserCheck size={16} color="#fff" />
+                    <Text style={styles.approveButtonText}>Chấp nhận</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={styles.rejectButton}
+                    onPress={() => handleRejectApplication(item.id, item.fullname)}
+                    disabled={loading}
+                  >
+                    <UserX size={16} color="#fff" />
+                    <Text style={styles.rejectButtonText}>Từ chối</Text>
+                  </TouchableOpacity>
                 </View>
               </View>
-            </TouchableOpacity>
-          ))
+            ))
+          )
         )}
       </ScrollView>
     </View>
@@ -241,20 +427,6 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#6b7280',
     marginTop: 4,
-  },
-  addButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#ea580c',
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 8,
-    gap: 8,
-  },
-  addButtonText: {
-    color: '#fff',
-    fontWeight: 'bold',
-    fontSize: 14,
   },
   scrollView: { 
     flex: 1 
@@ -402,13 +574,92 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginBottom: 16,
   },
-  createFirstButton: {
-    backgroundColor: '#ea580c',
-    paddingHorizontal: 20,
-    paddingVertical: 12,
+  
+  // Tab styles
+  tabContainer: {
+    flexDirection: 'row',
+    backgroundColor: '#f3f4f6',
     borderRadius: 8,
+    marginBottom: 16,
+    padding: 4,
   },
-  createFirstButtonText: {
+  tab: {
+    flex: 1,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 6,
+    alignItems: 'center',
+  },
+  activeTab: {
+    backgroundColor: '#ea580c',
+  },
+  tabText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#6b7280',
+  },
+  activeTabText: {
+    color: '#fff',
+  },
+  
+  // Application styles
+  applicationCard: {
+    backgroundColor: '#fff', 
+    borderRadius: 12, 
+    padding: 16, 
+    marginBottom: 16, 
+    borderWidth: 1, 
+    borderColor: '#fbbf24',
+    borderLeftWidth: 4,
+    borderLeftColor: '#f59e0b',
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 3,
+  },
+  applicationDate: {
+    fontSize: 12,
+    color: '#f59e0b',
+    fontWeight: '500',
+    marginTop: 4,
+  },
+  actionRow: {
+    flexDirection: 'row',
+    gap: 12,
+    marginTop: 12,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: '#f3f4f6',
+  },
+  approveButton: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#22c55e',
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    borderRadius: 8,
+    gap: 6,
+  },
+  approveButtonText: {
+    color: '#fff',
+    fontWeight: 'bold',
+    fontSize: 14,
+  },
+  rejectButton: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#ef4444',
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    borderRadius: 8,
+    gap: 6,
+  },
+  rejectButtonText: {
     color: '#fff',
     fontWeight: 'bold',
     fontSize: 14,

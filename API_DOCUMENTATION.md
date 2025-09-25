@@ -171,6 +171,176 @@ FastFood API cung cấp các endpoints để quản lý hệ thống đặt đ�
 ```
 - **Response:** Tương tự thông tin người dùng
 
+### 1.9 Admin - Bật/tắt trạng thái khách hàng
+- **POST** `/api/auth/admin/customers/{customer_id}/toggle-status/`
+- **Headers:** `Authorization: Bearer {admin_token}`
+- **Mô tả:** Bật/tắt trạng thái hoạt động của khách hàng
+- **Response:**
+```json
+{
+  "message": "Customer activated successfully",
+  "customer": {
+    "id": 1,
+    "username": "john_doe",
+    "email": "user@example.com",
+    "fullname": "John Doe",
+    "is_active": true
+  }
+}
+```
+
+### 1.10 Cập nhật đăng ký làm Shipper
+- **POST** `/api/auth/registration/shipper/`
+- **Headers:** `Authorization: Bearer {access_token}`
+- **Mô tả:** Người dùng đăng ký làm shipper
+- **Request Body:**
+```json
+{
+  "is_registered": true
+}
+```
+- **Response:**
+```json
+{
+  "message": "Shipper registration status updated successfully",
+  "is_shipper_registered": true
+}
+```
+
+### 1.11 Cập nhật đăng ký làm Store Manager
+- **POST** `/api/auth/registration/store/`
+- **Headers:** `Authorization: Bearer {access_token}`
+- **Mô tả:** Người dùng đăng ký làm quản lý cửa hàng
+- **Request Body:**
+```json
+{
+  "is_registered": true
+}
+```
+- **Response:**
+```json
+{
+  "message": "Store registration status updated successfully",
+  "is_store_registered": true
+}
+```
+
+### 1.12 Kiểm tra trạng thái đăng ký
+- **GET** `/api/auth/registration/status/`
+- **Headers:** `Authorization: Bearer {access_token}`
+- **Mô tả:** Xem trạng thái đăng ký làm shipper/store manager
+- **Response:**
+```json
+{
+  "is_shipper_registered": false,
+  "is_store_registered": true
+}
+```
+
+### 1.13 Admin - Danh sách đăng ký Shipper
+- **GET** `/api/auth/shipper/applications/`
+- **Headers:** `Authorization: Bearer {admin_token}`
+- **Query Parameters:**
+  - `search`: Tìm kiếm theo tên, email hoặc số điện thoại
+  - `page`: Trang hiện tại (mặc định: 1)
+- **Response:**
+```json
+{
+  "applications": [
+    {
+      "id": 10,
+      "username": "shipper_candidate",
+      "email": "shipper@example.com",
+      "fullname": "Nguyễn Văn A",
+      "phone_number": "0123456789",
+      "address": "123 Main St",
+      "is_shipper_registered": true,
+      "created_date": "2025-01-01T10:00:00Z"
+    }
+  ],
+  "total_pages": 2,
+  "current_page": 1,
+  "total_applications": 15
+}
+```
+
+### 1.14 Admin - Duyệt đăng ký Shipper
+- **POST** `/api/auth/shipper/applications/{user_id}/approve/`
+- **Headers:** `Authorization: Bearer {admin_token}`
+- **Mô tả:** Duyệt đăng ký làm shipper và tự động tạo Shipper record
+- **Response:**
+```json
+{
+  "message": "Shipper application approved successfully",
+  "user": {
+    "id": 10,
+    "username": "shipper_candidate",
+    "email": "shipper@example.com",
+    "fullname": "Nguyễn Văn A",
+    "role": "Người vận chuyển",
+    "role_id": 4
+  },
+  "shipper_id": 1
+}
+```
+
+### 1.15 Admin - Từ chối đăng ký Shipper
+- **POST** `/api/auth/shipper/applications/{user_id}/reject/`
+- **Headers:** `Authorization: Bearer {admin_token}`
+- **Response:**
+```json
+{
+  "message": "Shipper application rejected",
+  "user": {
+    "id": 10,
+    "username": "shipper_candidate",
+    "is_shipper_registered": false
+  }
+}
+```
+
+### 1.16 Admin - Danh sách đăng ký Store Manager
+- **GET** `/api/auth/store/applications/`
+- **Headers:** `Authorization: Bearer {admin_token}`
+- **Query Parameters:** Tương tự danh sách đăng ký Shipper
+- **Response:** Tương tự danh sách đăng ký Shipper
+
+### 1.17 Admin - Duyệt đăng ký Store Manager
+- **POST** `/api/auth/store/applications/{user_id}/approve/`
+- **Headers:** `Authorization: Bearer {admin_token}`
+- **Mô tả:** Duyệt đăng ký làm store manager và tự động tạo Store record
+- **Response:**
+```json
+{
+  "message": "Store application approved successfully",
+  "user": {
+    "id": 11,
+    "username": "store_candidate",
+    "email": "store@example.com",
+    "fullname": "Trần Thị B",
+    "role": "Cửa hàng",
+    "role_id": 3
+  },
+  "store_id": 5,
+  "store_name": "Cửa hàng Trần Thị B"
+}
+```
+
+### 1.18 Admin - Từ chối đăng ký Store Manager
+- **POST** `/api/auth/store/applications/{user_id}/reject/`
+- **Headers:** `Authorization: Bearer {admin_token}`
+- **Response:**
+```json
+{
+  "message": "Store application rejected",
+  "user": {
+    "id": 11,
+    "username": "store_candidate",
+    "is_store_registered": false
+  }
+}
+```
+
 ---
 
 ## 2. Menu API (`/api/menu/`)
@@ -645,6 +815,79 @@ FastFood API cung cấp các endpoints để quản lý hệ thống đặt đ�
 {
   "message": "Đã hủy 3 đơn hàng trong nhóm",
   "cancelled_orders": [1, 2, 3]
+}
+```
+
+### 4.6 Tạo đơn hàng với nhiều khuyến mãi (Phiên bản mới)
+- **POST** `/api/orders/create-with-multiple-promos/`
+- **Headers:** `Authorization: Bearer {access_token}`
+- **Mô tả:** API mới hỗ trợ tạo đơn hàng với nhiều khuyến mãi được áp dụng tự động
+- **Request Body:**
+```json
+{
+  "receiver_name": "John Doe",
+  "ship_address": "123 Main St, Hà Nội",
+  "phone_number": "0123456789",
+  "payment_method": "COD",
+  "note": "Giao hàng nhanh",
+  "promo_ids": [1, 2, 3]
+}
+```
+- **Response:**
+```json
+{
+  "message": "Đã tạo 2 đơn hàng cho 2 cửa hàng",
+  "group_id": 1,
+  "orders": [
+    {
+      "id": 1,
+      "user": {
+        "id": 1,
+        "fullname": "John Doe"
+      },
+      "store": {
+        "id": 1,
+        "store_name": "McDonald's Nguyễn Huệ"
+      },
+      "receiver_name": "John Doe",
+      "phone_number": "0123456789",
+      "ship_address": "123 Main St, Hà Nội",
+      "order_status": "Chờ xác nhận",
+      "payment_method": "COD",
+      "total_before_discount": "171000.00",
+      "total_discount": "30000.00",
+      "total_after_discount": "141000.00",
+      "shipping_fee": "15000.00",
+      "note": "Giao hàng nhanh",
+      "group_id": 1,
+      "applied_promotions": [
+        {
+          "promo_id": 1,
+          "promo_name": "Giảm 10% cho đơn hàng từ 100k",
+          "applied_amount": "15000.00"
+        },
+        {
+          "promo_id": 2,
+          "promo_name": "Giảm 15k cho đơn hàng từ 150k",
+          "applied_amount": "15000.00"
+        }
+      ],
+      "order_details": [
+        {
+          "food": {
+            "id": 1,
+            "title": "Big Mac",
+            "price": "89000.00"
+          },
+          "quantity": 2,
+          "price": "89000.00",
+          "subtotal": "178000.00"
+        }
+      ],
+      "created_date": "2025-01-01T17:00:00Z",
+      "created_date_display": "2025-01-01 17:00:00"
+    }
+  ]
 }
 ```
 
@@ -1373,6 +1616,224 @@ FastFood API cung cấp các endpoints để quản lý hệ thống đặt đ�
 
 ---
 
+## 14. API Quản lý Order-Promotion (OrderPromo)
+
+### 14.1 Lấy danh sách khuyến mãi đã áp dụng cho đơn hàng
+- **GET** `/api/orders/{order_id}/promotions/`
+- **Headers:** `Authorization: Bearer {access_token}`
+- **Mô tả:** Xem tất cả khuyến mãi đã được áp dụng cho một đơn hàng cụ thể
+- **Response:**
+```json
+[
+  {
+    "id": 1,
+    "order_id": 1,
+    "promo": {
+      "id": 1,
+      "name": "Giảm 10% cho đơn hàng từ 100k",
+      "category": "PERCENT",
+      "discount_value": 10.0,
+      "minimum_pay": "100000.00",
+      "max_discount_amount": "50000.00"
+    },
+    "applied_amount": "15000.00",
+    "note": "Tự động áp dụng",
+    "created_at": "2025-01-01T10:00:00Z"
+  }
+]
+```
+
+### 14.2 Thêm khuyến mãi vào đơn hàng (Admin)
+- **POST** `/api/orders/{order_id}/promotions/`
+- **Headers:** `Authorization: Bearer {admin_token}`
+- **Mô tả:** Admin có thể thủ công thêm khuyến mãi vào đơn hàng
+- **Request Body:**
+```json
+{
+  "promo_id": 1,
+  "applied_amount": "15000.00",
+  "note": "Áp dụng thủ công bởi admin"
+}
+```
+- **Response:**
+```json
+{
+  "id": 1,
+  "message": "Promotion applied successfully",
+  "applied_amount": "15000.00",
+  "order_total_updated": "141000.00"
+}
+```
+
+### 14.3 Xóa khuyến mãi khỏi đơn hàng (Admin)
+- **DELETE** `/api/orders/{order_id}/promotions/{promo_id}/`
+- **Headers:** `Authorization: Bearer {admin_token}`
+- **Mô tả:** Admin có thể gỡ bỏ khuyến mãi khỏi đơn hàng
+- **Response:**
+```json
+{
+  "message": "Promotion removed successfully",
+  "refunded_amount": "15000.00",
+  "order_total_updated": "156000.00"
+}
+```
+
+### 14.4 Cập nhật thông tin khuyến mãi trong đơn hàng (Admin)
+- **PUT** `/api/orders/{order_id}/promotions/{promo_id}/`
+- **Headers:** `Authorization: Bearer {admin_token}`
+- **Request Body:**
+```json
+{
+  "applied_amount": "20000.00",
+  "note": "Cập nhật số tiền giảm giá"
+}
+```
+- **Response:**
+```json
+{
+  "id": 1,
+  "message": "Order promotion updated successfully",
+  "applied_amount": "20000.00",
+  "order_total_updated": "136000.00"
+}
+```
+
+---
+
+## 15. API Thống kê và Báo cáo (Mở rộng)
+
+### 15.1 Thống kê tổng quan hệ thống (Admin) - Phiên bản mở rộng
+- **GET** `/api/admin/dashboard/stats/`
+- **Headers:** `Authorization: Bearer {admin_token}`
+- **Response:**
+```json
+{
+  "total_users": 150,
+  "total_orders": 1250,
+  "total_revenue": "125000000.00",
+  "total_stores": 12,
+  "active_shippers": 8,
+  "pending_shipper_applications": 5,
+  "pending_store_applications": 3,
+  "orders_today": 45,
+  "revenue_today": "2500000.00",
+  "orders_this_month": 320,
+  "revenue_this_month": "32000000.00",
+  "top_selling_foods": [
+    {
+      "food_id": 1,
+      "food_name": "Big Mac",
+      "total_quantity": 150,
+      "total_revenue": "13350000.00"
+    }
+  ],
+  "store_performance": [
+    {
+      "store_id": 1,
+      "store_name": "McDonald's Nguyễn Huệ",
+      "total_orders": 85,
+      "total_revenue": "8500000.00",
+      "average_rating": 4.2
+    }
+  ],
+  "shipper_performance": [
+    {
+      "shipper_id": 1,
+      "shipper_name": "Nguyễn Văn A",
+      "total_deliveries": 85,
+      "completion_rate": 95.5,
+      "average_rating": 4.6
+    }
+  ]
+}
+```
+
+### 15.2 Báo cáo doanh thu theo thời gian (Admin)
+- **GET** `/api/admin/reports/revenue/`
+- **Headers:** `Authorization: Bearer {admin_token}`
+- **Query Parameters:**
+  - `start_date`: Ngày bắt đầu (YYYY-MM-DD)
+  - `end_date`: Ngày kết thúc (YYYY-MM-DD)
+  - `period`: `daily`, `weekly`, `monthly`
+  - `store_id`: Lọc theo cửa hàng (optional)
+- **Response:**
+```json
+{
+  "period": "daily",
+  "start_date": "2025-01-01",
+  "end_date": "2025-01-31",
+  "total_revenue": "15000000.00",
+  "total_orders": 450,
+  "data": [
+    {
+      "date": "2025-01-01",
+      "revenue": "500000.00",
+      "orders": 15
+    },
+    {
+      "date": "2025-01-02", 
+      "revenue": "750000.00",
+      "orders": 22
+    }
+  ]
+}
+```
+
+### 15.3 Báo cáo món ăn bán chạy (Admin/Store Manager)
+- **GET** `/api/admin/reports/popular-foods/`
+- **GET** `/api/stores/{store_id}/reports/popular-foods/`
+- **Headers:** `Authorization: Bearer {admin_or_store_manager_token}`
+- **Query Parameters:**
+  - `start_date`, `end_date`: Khoảng thời gian
+  - `limit`: Số lượng kết quả (mặc định: 10)
+- **Response:**
+```json
+{
+  "period": "2025-01-01 to 2025-01-31",
+  "foods": [
+    {
+      "food_id": 1,
+      "food_name": "Big Mac",
+      "category": "Burger",
+      "store_name": "McDonald's Nguyễn Huệ",
+      "total_quantity": 150,
+      "total_revenue": "13350000.00",
+      "order_count": 85
+    }
+  ]
+}
+```
+
+### 15.4 Thống kê shipper (Mở rộng)
+- **GET** `/api/shipper/stats/`
+- **Headers:** `Authorization: Bearer {shipper_token}`
+- **Response:**
+```json
+{
+  "total_delivered": 85,
+  "total_earnings": "850000.00",
+  "delivery_rate": 95.5,
+  "average_delivery_time": "25 minutes",
+  "orders_this_month": 35,
+  "earnings_this_month": "350000.00",
+  "orders_today": 8,
+  "earnings_today": "80000.00",
+  "rating_summary": {
+    "average_rating": 4.6,
+    "total_ratings": 78
+  },
+  "delivery_zones": [
+    {
+      "zone": "Quận 1",
+      "delivery_count": 45,
+      "success_rate": 98.5
+    }
+  ]
+}
+```
+
+---
+
 ## Mã lỗi HTTP thường gặp
 
 - **200 OK** - Thành công
@@ -1417,3 +1878,27 @@ FastFood API cung cấp các endpoints để quản lý hệ thống đặt đ�
 4. Hình ảnh được trả về dưới dạng URL đầy đủ để dễ dàng hiển thị
 5. Pagination được áp dụng cho các danh sách lớn với format chuẩn Django REST Framework
 6. Tất cả endpoint đều hỗ trợ CORS cho frontend development
+
+## Cập nhật mới (2025-01-01)
+
+### Authentication API
+- **Mới:** Hệ thống đăng ký làm Shipper/Store Manager với workflow duyệt/từ chối
+- **Mới:** Admin có thể quản lý danh sách đăng ký và bật/tắt trạng thái khách hàng
+- **Mới:** API kiểm tra trạng thái đăng ký cho người dùng
+
+### Orders API  
+- **Mới:** API tạo đơn hàng với nhiều khuyến mãi `/api/orders/create-with-multiple-promos/`
+- **Mới:** Hệ thống OrderPromo để quản lý khuyến mãi trong đơn hàng
+- **Cải tiến:** Tự động tính toán và áp dụng khuyến mãi khi tạo đơn hàng
+
+### Management API
+- **Mới:** Quản lý quan hệ Order-Promotion với đầy đủ CRUD operations
+- **Mới:** API thống kê mở rộng với báo cáo doanh thu theo thời gian
+- **Mới:** Báo cáo món ăn bán chạy và hiệu suất cửa hàng/shipper
+
+### Technical Improvements
+- **Database:** Bảng `order_promo` với trigger tự động tính toán discount
+- **Business Logic:** Hỗ trợ áp dụng nhiều khuyến mãi cùng lúc cho một đơn hàng
+- **User Experience:** Workflow đăng ký Shipper/Store Manager có thông báo realtime
+
+---

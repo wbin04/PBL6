@@ -350,3 +350,80 @@ export const shipperApi = {
   },
 };
 
+// Authentication API
+export const authApi = {
+  // Register new user
+  register: async (data: {
+    fullname: string;
+    username?: string;
+    email: string;
+    phone_number: string; // Sửa từ phone thành phone_number
+    password: string;
+    password_confirm?: string;
+    role?: string;
+  }) => {
+    return apiClient.post('/auth/register/', data);
+  },
+
+  // Login user
+  login: async (data: {
+    email: string;
+    password: string;
+  }) => {
+    return apiClient.post('/auth/login/', data);
+  },
+
+  // Logout user
+  logout: async () => {
+    return apiClient.post('/auth/logout/');
+  },
+
+  // Refresh token
+  refreshToken: async (refreshToken: string) => {
+    return apiClient.post('/auth/refresh/', { refresh: refreshToken });
+  },
+  
+  // Registration status APIs
+  updateShipperRegistration: async (isRegistered: boolean) => {
+    return apiClient.post('/auth/registration/shipper/', { 
+      is_registered: isRegistered 
+    });
+  },
+  
+  updateStoreRegistration: async (isRegistered: boolean) => {
+    return apiClient.post('/auth/registration/store/', { 
+      is_registered: isRegistered 
+    });
+  },
+  
+  getRegistrationStatus: async () => {
+    return apiClient.get('/auth/registration/status/');
+  },
+  
+  // Shipper application management (admin only)
+  getShipperApplications: async (params?: { page?: number; search?: string }) => {
+    return apiClient.get('/auth/shipper/applications/', { params });
+  },
+  
+  approveShipperApplication: async (userId: number) => {
+    return apiClient.post(`/auth/shipper/applications/${userId}/approve/`);
+  },
+  
+  rejectShipperApplication: async (userId: number) => {
+    return apiClient.post(`/auth/shipper/applications/${userId}/reject/`);
+  },
+  
+  // Store application management (admin only)
+  getStoreApplications: async (params?: { page?: number; search?: string }) => {
+    return apiClient.get('/auth/store/applications/', { params });
+  },
+  
+  approveStoreApplication: async (userId: number) => {
+    return apiClient.post(`/auth/store/applications/${userId}/approve/`);
+  },
+  
+  rejectStoreApplication: async (userId: number) => {
+    return apiClient.post(`/auth/store/applications/${userId}/reject/`);
+  },
+};
+

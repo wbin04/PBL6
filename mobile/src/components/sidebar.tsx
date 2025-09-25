@@ -11,7 +11,7 @@ import {
   Text,
   Pressable,
 } from "react-native";
-import { X, Truck, ShoppingBag, User, LogOut } from "lucide-react-native";
+import { X, Truck, ShoppingBag, User, LogOut, UserPlus, Store } from "lucide-react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Fonts } from "@/constants/Fonts";
 import AsyncStorage from "@react-native-async-storage/async-storage";
@@ -19,6 +19,8 @@ import { useNavigation } from "@react-navigation/native";
 import { useSelector, useDispatch } from "react-redux";
 import { RootState, AppDispatch } from "@/store";
 import { logout } from "@/store/slices/authSlice";
+import { authApi } from "@/services/api";
+import { Alert } from "react-native";
 
 type Role = "customer" | "shipper";
 
@@ -38,6 +40,14 @@ export default function Sidebar({ isOpen, onClose, currentRole, onSwitchRole }: 
   const navigation = useNavigation<any>();
   const dispatch = useDispatch<AppDispatch>();
   const [roleState, setRoleState] = useState<Role>("customer");
+  const [registrationStatus, setRegistrationStatus] = useState<{
+    is_shipper_registered: boolean | null;
+    is_store_registered: boolean | null;
+  }>({
+    is_shipper_registered: null,
+    is_store_registered: null
+  });
+  const [loading, setLoading] = useState(false);
   
   // Get user from Redux store
   const { user } = useSelector((state: RootState) => state.auth);
@@ -58,8 +68,22 @@ export default function Sidebar({ isOpen, onClose, currentRole, onSwitchRole }: 
       const v = await AsyncStorage.getItem("activeRole");
       setRoleState(v === "shipper" ? "shipper" : "customer");
     };
-    if (isOpen) load();
-  }, [isOpen, currentRole]);
+    
+    const loadRegistrationStatus = async () => {
+      if (!user) return;
+      try {
+        const response: any = await authApi.getRegistrationStatus();
+        setRegistrationStatus(response.data);
+      } catch (error) {
+        console.error('Failed to load registration status:', error);
+      }
+    };
+    
+    if (isOpen) {
+      load();
+      loadRegistrationStatus();
+    }
+  }, [isOpen, currentRole, user]);
 
   useEffect(() => {
     Animated.timing(translateX, {
@@ -106,6 +130,92 @@ export default function Sidebar({ isOpen, onClose, currentRole, onSwitchRole }: 
     }
   };
 
+  const handleShipperRegistration = async () => {
+    if (loading) return;
+    
+    const isCurrentlyRegistered = registrationStatus?.is_shipper_registered || false;
+    const action = isCurrentlyRegistered ? "hủy đăng ký" : "đăng ký";
+    
+    Alert.alert(
+      `${action} Shipper`,
+      `Bạn có chắc muốn ${action} làm shipper không?`,
+      [
+        { text: "Hủy", style: "cancel" },
+        {
+          text: "Xác nhận",
+          onPress: async () => {
+            try {
+              setLoading(true);
+              const newStatus = !isCurrentlyRegistered;
+              await authApi.updateShipperRegistration(newStatus);
+              
+              setRegistrationStatus(prev => ({
+                ...prev,
+                is_shipper_registered: newStatus
+              }));
+              
+              Alert.alert(
+                "Thành công",
+                `${newStatus ? "Đăng ký" : "Hủy đăng ký"} shipper thành công!`
+              );
+            } catch (error: any) {
+              console.error('Shipper registration error:', error);
+              Alert.alert(
+                "Lỗi", 
+                error?.response?.data?.message || `${action} shipper thất bại`
+              );
+            } finally {
+              setLoading(false);
+            }
+          }
+        }
+      ]
+    );
+  };
+
+  const handleStoreRegistration = async () => {
+    if (loading) return;
+    
+    const isCurrentlyRegistered = registrationStatus?.is_store_registered || false;
+    const action = isCurrentlyRegistered ? "hủy đăng ký" : "đăng ký";
+    
+    Alert.alert(
+      `${action} Cửa hàng`,
+      `Bạn có chắc muốn ${action} cửa hàng không?`,
+      [
+        { text: "Hủy", style: "cancel" },
+        {
+          text: "Xác nhận",
+          onPress: async () => {
+            try {
+              setLoading(true);
+              const newStatus = !isCurrentlyRegistered;
+              await authApi.updateStoreRegistration(newStatus);
+              
+              setRegistrationStatus(prev => ({
+                ...prev,
+                is_store_registered: newStatus
+              }));
+              
+              Alert.alert(
+                "Thành công",
+                `${newStatus ? "Đăng ký" : "Hủy đăng ký"} cửa hàng thành công!`
+              );
+            } catch (error: any) {
+              console.error('Store registration error:', error);
+              Alert.alert(
+                "Lỗi", 
+                error?.response?.data?.message || `${action} cửa hàng thất bại`
+              );
+            } finally {
+              setLoading(false);
+            }
+          }
+        }
+      ]
+    );
+  };
+
   const isShipper = useMemo(() => roleState === "shipper", [roleState]);
   const isCustomer = useMemo(() => roleState === "customer", [roleState]);
 
@@ -147,6 +257,79 @@ export default function Sidebar({ isOpen, onClose, currentRole, onSwitchRole }: 
                   <Text style={styles.cardDesc}>Chuyển về trang quản lý</Text>
                 </View>
               </TouchableOpacity>
+            )}
+
+            {/* Registration Options - Only show if user is customer */}
+            {user?.role === 'Khách hàng' && (
+              <>
+                {/* Shipper Registration */}
+                <TouchableOpacity
+                  style={[styles.card, 
+                    registrationStatus?.is_shipper_registered 
+                      ? styles.cardRegistered 
+                      : styles.cardInactive
+                  ]}
+                  activeOpacity={0.9}
+                  onPress={handleShipperRegistration}
+                  disabled={loading}
+                >
+                  <View style={styles.cardIconWrap}>
+                    <UserPlus size={20} color={
+                      registrationStatus?.is_shipper_registered 
+                        ? "#4CAF50" 
+                        : APP_ORANGE
+                    } />
+                  </View>
+                  <View style={styles.cardTextWrap}>
+                    <Text style={styles.cardTitle}>
+                      {registrationStatus?.is_shipper_registered 
+                        ? "Hủy đăng ký Shipper" 
+                        : "Đăng ký Shipper"
+                      }
+                    </Text>
+                    <Text style={styles.cardDesc}>
+                      {registrationStatus?.is_shipper_registered 
+                        ? "Đã đăng ký làm shipper" 
+                        : "Đăng ký để giao hàng"
+                      }
+                    </Text>
+                  </View>
+                </TouchableOpacity>
+
+                {/* Store Registration */}
+                <TouchableOpacity
+                  style={[styles.card, 
+                    registrationStatus?.is_store_registered 
+                      ? styles.cardRegistered 
+                      : styles.cardInactive
+                  ]}
+                  activeOpacity={0.9}
+                  onPress={handleStoreRegistration}
+                  disabled={loading}
+                >
+                  <View style={styles.cardIconWrap}>
+                    <Store size={20} color={
+                      registrationStatus?.is_store_registered 
+                        ? "#4CAF50" 
+                        : APP_ORANGE
+                    } />
+                  </View>
+                  <View style={styles.cardTextWrap}>
+                    <Text style={styles.cardTitle}>
+                      {registrationStatus?.is_store_registered 
+                        ? "Hủy đăng ký Cửa hàng" 
+                        : "Đăng ký Cửa hàng"
+                      }
+                    </Text>
+                    <Text style={styles.cardDesc}>
+                      {registrationStatus?.is_store_registered 
+                        ? "Đã đăng ký cửa hàng" 
+                        : "Đăng ký bán hàng"
+                      }
+                    </Text>
+                  </View>
+                </TouchableOpacity>
+              </>
             )}
 
             {/* Shipper Option - Only show if user role is "Người vận chuyển" */}
@@ -260,6 +443,11 @@ const styles = StyleSheet.create({
   },
   cardInactive: {
     backgroundColor: "rgba(255,255,255,0.1)",
+  },
+  cardRegistered: {
+    backgroundColor: "rgba(76,175,80,0.2)",
+    borderWidth: 1,
+    borderColor: "rgba(76,175,80,0.4)",
   },
   cardIconWrap: {
     width: 36,
