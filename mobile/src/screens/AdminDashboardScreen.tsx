@@ -70,9 +70,12 @@ function AdminDashboardScreen() {
                 <View style={styles.logoHeader}>
                   <TouchableOpacity onPress={() => {
                     setSidebarVisible(false);
-                    navigation.navigate('MainTabs', { screen: 'Home' });
+                    navigation.reset({
+                      index: 0,
+                      routes: [{ name: 'MainTabs', params: { screen: 'Home' } }],
+                    });
                   }}>
-                    <Text style={{ fontSize: 18, color: '#1f2937', fontWeight: 'bold' }}>QUẢN TRỊ VIÊN</Text>
+                    <Text style={{ fontSize: 18, color: '#1f2937', fontWeight: 'bold' }}>QUẢN LÝ VIÊN</Text>
                   </TouchableOpacity>
                   <TouchableOpacity onPress={() => setSidebarVisible(false)} style={styles.closeButton}>
                     <X size={20} color="#6b7280" />
@@ -92,7 +95,10 @@ function AdminDashboardScreen() {
                         if (item.section === 'promotions') {
                           navigation.navigate('VoucherManagementScreen');
                         } else if (item.section === 'buy') {
-                          navigation.navigate('MainTabs', { screen: 'Home' });
+                          navigation.reset({
+                            index: 0,
+                            routes: [{ name: 'MainTabs', params: { screen: 'Home' } }],
+                          });
                         }
                       }}
                     >

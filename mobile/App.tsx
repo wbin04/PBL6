@@ -1,7 +1,7 @@
 import 'react-native-get-random-values';
 import "react-native-gesture-handler";
 import "react-native-reanimated";
-import React, { useEffect, useState, useCallback } from "react";
+import React, { useEffect, useState, useCallback, useMemo } from "react";
 import { StatusBar } from "expo-status-bar";
 import { NavigationContainer, useFocusEffect } from "@react-navigation/native";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
@@ -81,19 +81,37 @@ const Tab = createBottomTabNavigator();
 
 function MainTabs() {
   const insets = useSafeAreaInsets();
+  const { user } = useSelector((state: RootState) => state.auth);
   const TAB_BASE_HEIGHT = 42;
 
   const [mode, setMode] = useState<"customer" | "shipper" | null>(null);
 
   const readMode = useCallback(async () => {
-    const v = await AsyncStorage.getItem("activeRole");
-    setMode(v === "shipper" ? "shipper" : "customer");
-  }, []);
+    const activeRole = await AsyncStorage.getItem("activeRole");
+    console.log('MainTabs - activeRole from storage:', activeRole);
+    console.log('MainTabs - user role:', user?.role);
+    
+    // If user is shipper, they can choose between shipper and customer mode
+    if (user?.role === 'Người vận chuyển') {
+      setMode(activeRole === "shipper" ? "shipper" : "customer");
+    } else {
+      // Other users (customers, admins) default to customer mode
+      setMode("customer");
+    }
+  }, [user?.role]);
 
-  useEffect(() => { readMode(); }, [readMode]);
-  useFocusEffect(useCallback(() => { readMode(); }, [readMode]));
+  useEffect(() => {
+    readMode();
+  }, [readMode]);
 
-  if (!mode) return null;
+  // Re-read mode when sidebar might have changed activeRole
+  useFocusEffect(useCallback(() => {
+    readMode();
+  }, [readMode]));
+
+  if (!mode || !user) {
+    return null; // Show loading or placeholder
+  }
 
   const commonTabOptions = {
     headerShown: false,
@@ -183,16 +201,17 @@ function MainTabs() {
 function AppNavigator() {
   const dispatch = useDispatch<AppDispatch>();
   const { isAuthenticated, loading, user } = useSelector((state: RootState) => state.auth);
-  const [sidebarOpen, setSidebarOpen] = useState(false);
 
   useEffect(() => {
     // Load user from storage on app start
     dispatch(loadUserFromStorage());
   }, [dispatch]);
 
+  console.log('App Navigator - Auth state:', { isAuthenticated, loading, userRole: user?.role });
+
   // Show loading screen while checking authentication
   if (loading) {
-    return null; // or a loading screen component
+    return null; // You can add a loading screen component here
   }
 
   return (
@@ -201,35 +220,73 @@ function AppNavigator() {
         <NavigationContainer>
           <StatusBar style="auto" />
           <Stack.Navigator screenOptions={{ headerShown: false }}>
-            <Stack.Screen name="AdminDashboard" component={require('./src/screens/AdminDashboardScreen').default} />
-            <Stack.Screen name="UpdateCustomerScreen" component={require('./src/screens/UpdateCustomerScreen').default} />
-            <Stack.Screen name="StoreDetailScreen" component={require('./src/screens/StoreDetailScreen').StoreDetailScreen} />
-            <Stack.Screen name="StoreDetailScreenV2" component={require('./src/screens/StoreDetailScreenV2').StoreDetailScreenV2} />
-            {/* Các màn khác nếu cần */}
-            <Stack.Screen name="MainTabs" component={MainTabs} />
-            <Stack.Screen name="Checkout" component={CheckoutScreen} />
-            <Stack.Screen name="Cart" component={CartScreen} />
-            <Stack.Screen name="RestaurantDetail" component={RestaurantDetail} />
-            <Stack.Screen name="StoreDetail" component={StoreDetailScreen} />
-            <Stack.Screen name="FoodDetail" component={FoodDetailScreen} />
-            <Stack.Screen name="FoodReviews" component={FoodReviewsScreen} />
-            <Stack.Screen name="CardPayment" component={CardPaymentScreen} />
-            <Stack.Screen name="BankPayment" component={BankPaymentScreen} />
-            <Stack.Screen name="AddressList" component={AddressListScreen} />
-            <Stack.Screen name="AddAddress" component={AddAddressScreen} />
-            <Stack.Screen name="Cancel" component={CancelScreen} />
-            <Stack.Screen name="Tracking" component={TrackingScreen} />
-            <Stack.Screen name="MapTracking" component={MapTrackingScreen} />
-            <Stack.Screen name="AddressSelection" component={AddressSelectionScreen} />
-            <Stack.Screen name="AddressPicker" component={AddressPickerScreen} />
-            <Stack.Screen name="Review" component={ReviewScreen} />
-            <Stack.Screen name="CancelDetail" component={CancelDetailScreen} />
-            <Stack.Screen name="Profile" component={ProfileScreen} />
-            <Stack.Screen name="FoodDetailPopup" component={require('./src/screens/FoodDetailPopup').default} />
-            <Stack.Screen name="VoucherManagementScreen" component={require('./src/screens/VoucherManagementScreen').default} />
-            <Stack.Screen name="VoucherEditScreen" component={require('./src/screens/VoucherEditScreen').default} />
-            <Stack.Screen name="ShipperEditScreen" component={require('./src/screens/ShipperEditScreen').default} />
-            <Stack.Screen name="ShipperDetailScreen" component={require('./src/screens/ShipperDetailScreen').default} />
+            {!isAuthenticated ? (
+              // Auth screens - show when not authenticated
+              <>
+                <Stack.Screen 
+                  name="Login" 
+                  component={LoginScreen}
+                  options={{ gestureEnabled: false }}
+                />
+                <Stack.Screen name="Register" component={RegisterScreen} />
+              </>
+            ) : (
+              // Main app screens - show when authenticated
+              <>
+                {user?.role === 'Quản lý' ? (
+                  // Admin gets admin dashboard as initial screen
+                  <Stack.Screen 
+                    name="AdminDashboard" 
+                    component={require('./src/screens/AdminDashboardScreen').default}
+                    options={{ gestureEnabled: false }}
+                  />
+                ) : (
+                  // Customer and Shipper get MainTabs as initial screen
+                  <Stack.Screen 
+                    name="MainTabs" 
+                    component={MainTabs}
+                    options={{ gestureEnabled: false }}
+                  />
+                )}
+                
+                {/* MainTabs available to all authenticated users (including admin for shopping) */}
+                {user?.role === 'Quản lý' && (
+                  <Stack.Screen 
+                    name="MainTabs" 
+                    component={MainTabs}
+                    options={{ gestureEnabled: false }}
+                  />
+                )}
+                
+                {/* Additional screens available to authenticated users */}
+                <Stack.Screen name="UpdateCustomerScreen" component={require('./src/screens/UpdateCustomerScreen').default} />
+                <Stack.Screen name="StoreDetailScreen" component={require('./src/screens/StoreDetailScreen').StoreDetailScreen} />
+                <Stack.Screen name="StoreDetailScreenV2" component={require('./src/screens/StoreDetailScreenV2').StoreDetailScreenV2} />
+                <Stack.Screen name="Checkout" component={CheckoutScreen} />
+                <Stack.Screen name="Cart" component={CartScreen} />
+                <Stack.Screen name="RestaurantDetail" component={RestaurantDetail} />
+                <Stack.Screen name="StoreDetail" component={StoreDetailScreen} />
+                <Stack.Screen name="FoodDetail" component={FoodDetailScreen} />
+                <Stack.Screen name="FoodReviews" component={FoodReviewsScreen} />
+                <Stack.Screen name="CardPayment" component={CardPaymentScreen} />
+                <Stack.Screen name="BankPayment" component={BankPaymentScreen} />
+                <Stack.Screen name="AddressList" component={AddressListScreen} />
+                <Stack.Screen name="AddAddress" component={AddAddressScreen} />
+                <Stack.Screen name="Cancel" component={CancelScreen} />
+                <Stack.Screen name="Tracking" component={TrackingScreen} />
+                <Stack.Screen name="MapTracking" component={MapTrackingScreen} />
+                <Stack.Screen name="AddressSelection" component={AddressSelectionScreen} />
+                <Stack.Screen name="AddressPicker" component={AddressPickerScreen} />
+                <Stack.Screen name="Review" component={ReviewScreen} />
+                <Stack.Screen name="CancelDetail" component={CancelDetailScreen} />
+                <Stack.Screen name="Profile" component={ProfileScreen} />
+                <Stack.Screen name="FoodDetailPopup" component={require('./src/screens/FoodDetailPopup').default} />
+                <Stack.Screen name="VoucherManagementScreen" component={require('./src/screens/VoucherManagementScreen').default} />
+                <Stack.Screen name="VoucherEditScreen" component={require('./src/screens/VoucherEditScreen').default} />
+                <Stack.Screen name="ShipperEditScreen" component={require('./src/screens/ShipperEditScreen').default} />
+                <Stack.Screen name="ShipperDetailScreen" component={require('./src/screens/ShipperDetailScreen').default} />
+              </>
+            )}
           </Stack.Navigator>
         </NavigationContainer>
       </ShipperProvider>

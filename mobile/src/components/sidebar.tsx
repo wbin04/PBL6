@@ -11,13 +11,14 @@ import {
   Text,
   Pressable,
 } from "react-native";
-import { X, Truck, ShoppingBag } from "lucide-react-native";
+import { X, Truck, ShoppingBag, User, LogOut } from "lucide-react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Fonts } from "@/constants/Fonts";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useNavigation } from "@react-navigation/native";
-import { useSelector } from "react-redux";
-import { RootState } from "@/store";
+import { useSelector, useDispatch } from "react-redux";
+import { RootState, AppDispatch } from "@/store";
+import { logout } from "@/store/slices/authSlice";
 
 type Role = "customer" | "shipper";
 
@@ -35,6 +36,7 @@ const APP_ORANGE = "#e95322";
 export default function Sidebar({ isOpen, onClose, currentRole, onSwitchRole }: SidebarProps) {
   const translateX = useRef(new Animated.Value(-PANEL_WIDTH)).current;
   const navigation = useNavigation<any>();
+  const dispatch = useDispatch<AppDispatch>();
   const [roleState, setRoleState] = useState<Role>("customer");
   
   // Get user from Redux store
@@ -68,11 +70,40 @@ export default function Sidebar({ isOpen, onClose, currentRole, onSwitchRole }: 
   }, [isOpen, translateX]);
 
   const setRoleAndGo = async (next: Role, to: string) => {
+    console.log('Sidebar - switching to role:', next);
     setRoleState(next);
     onSwitchRole?.(next);
     await AsyncStorage.setItem("activeRole", next);
     onClose();
-    navigation.reset({ index: 0, routes: [{ name: "MainTabs" }] });
+    
+    // Add a small delay to ensure AsyncStorage is updated before navigation
+    setTimeout(() => {
+      navigation.reset({ index: 0, routes: [{ name: "MainTabs" }] });
+    }, 100);
+  };
+
+  const handleLogout = async () => {
+    try {
+      // Clear AsyncStorage
+      await AsyncStorage.removeItem("activeRole");
+      await AsyncStorage.removeItem("token");
+      
+      // Dispatch logout action to Redux
+      dispatch(logout());
+      
+      // Close sidebar and navigate to login
+      onClose();
+      
+      // Reset navigation stack to login screen
+      setTimeout(() => {
+        navigation.reset({
+          index: 0,
+          routes: [{ name: "Login" }],
+        });
+      }, 100);
+    } catch (error) {
+      console.error('Logout error:', error);
+    }
   };
 
   const isShipper = useMemo(() => roleState === "shipper", [roleState]);
@@ -92,6 +123,31 @@ export default function Sidebar({ isOpen, onClose, currentRole, onSwitchRole }: 
                 <X size={22} color="#fff" />
               </TouchableOpacity>
             </View>
+
+            {/* Admin Dashboard Option - Only show if user is admin */}
+            {user?.role === 'Quản lý' && (
+              <TouchableOpacity
+                style={[styles.card, styles.cardInactive]}
+                activeOpacity={0.9}
+                onPress={() => {
+                  onClose();
+                  setTimeout(() => {
+                    navigation.reset({ 
+                      index: 0, 
+                      routes: [{ name: "AdminDashboard" }] 
+                    });
+                  }, 100);
+                }}
+              >
+                <View style={styles.cardIconWrap}>
+                  <User size={20} color={APP_ORANGE} />
+                </View>
+                <View style={styles.cardTextWrap}>
+                  <Text style={styles.cardTitle}>Quản lý</Text>
+                  <Text style={styles.cardDesc}>Chuyển về trang quản lý</Text>
+                </View>
+              </TouchableOpacity>
+            )}
 
             {/* Shipper Option - Only show if user role is "Người vận chuyển" */}
             {canAccessShipper && (
@@ -133,6 +189,21 @@ export default function Sidebar({ isOpen, onClose, currentRole, onSwitchRole }: 
                   : "Khách hàng"
                 }
               </Text>
+              
+              {/* Logout Button */}
+              <TouchableOpacity
+                style={[styles.card, styles.logoutCard]}
+                activeOpacity={0.9}
+                onPress={handleLogout}
+              >
+                <View style={styles.cardIconWrap}>
+                  <LogOut size={20} color="#ff4444" />
+                </View>
+                <View style={styles.cardTextWrap}>
+                  <Text style={[styles.cardTitle, styles.logoutText]}>Đăng xuất</Text>
+                  <Text style={[styles.cardDesc, styles.logoutDesc]}>Thoát khỏi tài khoản</Text>
+                </View>
+              </TouchableOpacity>
             </View>
           </SafeAreaView>
         </Animated.View>
@@ -213,10 +284,8 @@ const styles = StyleSheet.create({
     lineHeight: 18,
   },
   footerWrap: {
-    position: "absolute",
-    left: 16,
-    right: 16,
-    bottom: 28,
+    marginTop: "auto",
+    paddingTop: 20,
   },
   footerLine: {
     height: 1,
@@ -228,5 +297,18 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: "rgba(255,255,255,0.7)",
     fontFamily: Fonts.LeagueSpartanRegular,
+    marginBottom: 16,
+  },
+  logoutCard: {
+    marginTop: 0,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.2)",
+    backgroundColor: "rgba(255,255,255,0.1)",
+  },
+  logoutText: {
+    color: "rgba(255,255,255,0.7)",
+  },
+  logoutDesc: {
+    color: "rgba(255,255,255,0.7)",
   },
 });

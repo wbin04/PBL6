@@ -2,6 +2,7 @@ import axios, { AxiosInstance, AxiosRequestConfig, AxiosResponse } from 'axios';
 import * as SecureStore from 'expo-secure-store';
 import { API_CONFIG, STORAGE_KEYS, ERROR_MESSAGES } from '@/constants';
 import { ApiError } from '@/types';
+import { authEvents, AUTH_EVENTS } from './authEvents';
 
 class ApiClient {
   private client: AxiosInstance;
@@ -34,12 +35,6 @@ class ApiClient {
     // Response interceptor to handle token refresh
     this.client.interceptors.response.use(
       (response) => {
-        // Log successful responses
-        // console.log('API Response:', {
-        //   status: response.status,
-        //   url: response.config.url,
-        //   data: response.data
-        // });
         return response;
       },
       async (error) => {
@@ -68,8 +63,12 @@ class ApiClient {
             }
           } catch (refreshError) {
             // Refresh failed, logout user
+            console.log('Refresh token failed, clearing tokens and navigating to login');
             await this.clearTokens();
-            // You might want to dispatch a logout action here
+            
+            // Force app to show login screen by dispatching logout action
+            // Note: This requires access to the Redux store, which we'll handle differently
+            this.handleSessionExpiry();
           }
         }
 
@@ -89,6 +88,12 @@ class ApiClient {
     await SecureStore.deleteItemAsync(STORAGE_KEYS.ACCESS_TOKEN);
     await SecureStore.deleteItemAsync(STORAGE_KEYS.REFRESH_TOKEN);
     await SecureStore.deleteItemAsync(STORAGE_KEYS.USER);
+  }
+
+  private handleSessionExpiry() {
+    // Emit session expired event
+    authEvents.emit(AUTH_EVENTS.SESSION_EXPIRED);
+    console.log('Session expired - event emitted');
   }
 
   private handleError(error: any): ApiError {

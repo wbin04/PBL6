@@ -27,6 +27,9 @@ import {
   X,
 } from "lucide-react-native";
 import { useNavigation } from "@react-navigation/native";
+import { useDispatch } from 'react-redux';
+import { AppDispatch } from '@/store';
+import { logout } from '@/store/slices/authSlice';
 import Sidebar from "@/components/sidebar";
 import { Fonts } from "@/constants/Fonts";
 
@@ -109,6 +112,7 @@ function FaceScanModal({
 
 export default function ShipperAccountScreen() {
   const navigation: any = useNavigation();
+  const dispatch = useDispatch<AppDispatch>();
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
   const [isActive, setIsActive] = useState(false);
@@ -122,6 +126,16 @@ export default function ShipperAccountScreen() {
   const handleFaceScanComplete = () => {
     setIsActive(true);
     setShowFaceScan(false);
+  };
+
+  const handleLogout = async () => {
+    try {
+      await dispatch(logout()).unwrap();
+      console.log('Logout successful, user will be redirected to login');
+      // App.tsx will handle navigation to login screen
+    } catch (error) {
+      console.error('Logout error:', error);
+    }
   };
 
   const go = (screenName: string) => {
@@ -233,7 +247,7 @@ export default function ShipperAccountScreen() {
             icon={<LogOut size={18} color="#fff" />}
             iconBg="#2563eb"
             label="Đăng xuất"
-            onPress={() => go("Login")}
+            onPress={handleLogout}
           />
 
           <SettingItem
