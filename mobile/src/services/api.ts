@@ -350,3 +350,37 @@ export const shipperApi = {
   },
 };
 
+// Authentication API
+export const authApi = {
+  // Register new user
+  register: async (data: {
+    fullname: string;
+    username?: string;
+    email: string;
+    phone_number: string; // Sửa từ phone thành phone_number
+    password: string;
+    password_confirm?: string;
+    role?: string;
+  }) => {
+    return apiClient.post('/auth/register/', data);
+  },
+
+  // Login user
+  login: async (data: {
+    email: string;
+    password: string;
+  }) => {
+    return apiClient.post('/auth/login/', data);
+  },
+
+  // Logout user
+  logout: async () => {
+    return apiClient.post('/auth/logout/');
+  },
+
+  // Refresh token
+  refreshToken: async (refreshToken: string) => {
+    return apiClient.post('/auth/refresh/', { refresh: refreshToken });
+  },
+};
+

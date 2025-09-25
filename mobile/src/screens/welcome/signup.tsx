@@ -1,5 +1,4 @@
 import { FontAwesome } from "@expo/vector-icons";
-import { Picker } from "@react-native-picker/picker";
 import { useNavigation } from "@react-navigation/native"; 
 import { ArrowLeft, Eye, EyeOff } from "lucide-react-native";
 import React, { useState } from "react";
@@ -17,46 +16,80 @@ import {
 import BottomBar from "@/components/BottomBar";
 import { Colors } from "@/constants/Colors";
 import { Fonts } from "@/constants/Fonts";
-import { useDatabase } from "@/hooks/useDatabase";
-
-type Role = "customer" | "seller" | "shipper";
+import { authApi } from "@/services/api";
 
 export default function RegisterScreen() {
   const navigation = useNavigation<any>(); 
-  const { registerUser } = useDatabase();
 
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
-  const [role, setRole] = useState<Role>("customer");
   const [loading, setLoading] = useState(false);
   const [form, setForm] = useState({
-    fullName: "",
-    email: "",
-    phone: "",
-    password: "",
-    confirm: "",
+    fullName: "Test",
+    username: "test2",
+    email: "test2@gmail.com",
+    phone: "0987654322",
+    password: "123456",
+    confirm: "123456",
   });
 
   const onChange = (k: keyof typeof form, v: string) =>
     setForm((s) => ({ ...s, [k]: v }));
 
-  const goHome = () => {
-    navigation.navigate("MainTabs", { screen: "Home" });
+  const goToLogin = () => {
+    navigation.navigate("Login" as never);
   };
 
-  const onSubmit = () => {
+  const onSubmit = async () => {
+    console.log('=== ĐĂNG KÝ BẮT ĐẦU ===');
+    console.log('Form data:', form);
+    
+    // Validation cơ bản
+    if (!form.fullName.trim()) {
+      Alert.alert("Lỗi", "Vui lòng nhập họ và tên");
+      return;
+    }
+    if (!form.email.trim()) {
+      Alert.alert("Lỗi", "Vui lòng nhập email");
+      return;
+    }
+    if (!form.phone.trim()) {
+      Alert.alert("Lỗi", "Vui lòng nhập số điện thoại");
+      return;
+    }
+    if (!form.password) {
+      Alert.alert("Lỗi", "Vui lòng nhập mật khẩu");
+      return;
+    }
+    if (form.password !== form.confirm) {
+      Alert.alert("Lỗi", "Mật khẩu xác nhận không khớp");
+      return;
+    }
+
     try {
       setLoading(true);
-      registerUser?.({
-        fullName: form.fullName.trim(),
+      console.log('Calling backend register API...');
+      
+      const result = await authApi.register({
+        fullname: form.fullName.trim(),
+        username: form.username.trim(), // Sử dụng email làm username
         email: form.email.trim().toLowerCase(),
-        phone: form.phone.replace(/\s+/g, ""),
+        phone_number: form.phone.replace(/\s+/g, ""), // Sửa từ phone thành phone_number
         password: form.password,
-        role,
+        password_confirm: form.confirm, // Thêm password_confirm
+        role: "Khách hàng", // Mặc định là khách hàng
       });
-      goHome();
+      
+      console.log('Register result:', result);
+      console.log('Registration successful');
+      
+      Alert.alert("Thành công", "Đăng ký tài khoản thành công!", [
+        { text: "OK", onPress: goToLogin }
+      ]);
     } catch (e: any) {
-      Alert.alert("Đăng ký thất bại", e?.message || "Có lỗi xảy ra");
+      console.error('Register error:', e);
+      const errorMessage = e?.response?.data?.message || e?.message || "Có lỗi xảy ra";
+      Alert.alert("Đăng ký thất bại", errorMessage);
     } finally {
       setLoading(false);
     }
@@ -85,6 +118,18 @@ export default function RegisterScreen() {
               value={form.fullName}
               onChangeText={(v) => onChange("fullName", v)}
               placeholder="Nguyễn Văn A"
+              placeholderTextColor="#8f8f8f"
+              style={styles.input}
+              editable={!loading}
+            />
+          </View>
+
+          <Text style={styles.label}>Username</Text>
+          <View style={styles.inputWrap}>
+            <TextInput
+              value={form.username}
+              onChangeText={(v) => onChange("username", v)}
+              placeholder="username"
               placeholderTextColor="#8f8f8f"
               style={styles.input}
               editable={!loading}
@@ -170,25 +215,13 @@ export default function RegisterScreen() {
             </TouchableOpacity>
           </View>
 
-          <Text style={styles.label}>Vai trò</Text>
-          <View style={styles.pickerWrap}>
-            <Picker
-              selectedValue={role}
-              onValueChange={(val) => setRole(val as Role)}
-              style={styles.picker}
-              dropdownIconColor="#391713"
-              enabled={!loading}
-            >
-              <Picker.Item label="Người mua" value="customer" style={styles.pickerItem} />
-              <Picker.Item label="Người bán" value="seller" style={styles.pickerItem} />
-              <Picker.Item label="Shipper" value="shipper" style={styles.pickerItem} />
-            </Picker>
-          </View>
-
           {/* Đăng ký */}
           <TouchableOpacity
             style={[styles.primaryBtn, loading && { opacity: 0.7 }]}
-            onPress={onSubmit} 
+            onPress={() => {
+              console.log('=== NÚT ĐĂNG KÝ ĐƯỢC NHẤN ===');
+              onSubmit();
+            }} 
             disabled={loading}
           >
             <Text style={styles.primaryText}>{loading ? "Đang tạo..." : "Đăng ký"}</Text>
@@ -201,7 +234,7 @@ export default function RegisterScreen() {
               style={styles.socialBtn}
               onPress={() => {
                 Alert.alert("Đăng ký MXH", "Đăng ký bằng Google");
-                goHome(); 
+                goToLogin(); 
               }}
               disabled={loading}
             >
@@ -211,7 +244,7 @@ export default function RegisterScreen() {
               style={styles.socialBtn}
               onPress={() => {
                 Alert.alert("Đăng ký MXH", "Đăng ký bằng Facebook");
-                goHome(); 
+                goToLogin(); 
               }}
               disabled={loading}
             >
@@ -307,23 +340,6 @@ const styles = StyleSheet.create({
     fontFamily: Fonts.LeagueSpartanRegular,
   },
   eyeBtn: { position: "absolute", right: 12, height: 48, justifyContent: "center" },
-
-  pickerWrap: {
-  borderRadius: 16,
-  backgroundColor: "rgba(245,203,88,0.3)",
-  overflow: "hidden",},
-    picker: {
-    height: 48,
-    color: "#391713",
-    fontFamily: Fonts.LeagueSpartanRegular,
-    fontSize: 15,
-    },
-    pickerItem: {
-    fontFamily: Fonts.LeagueSpartanRegular,
-    fontSize: 15,
-    color: "#391713",
-    },
-
 
   primaryBtn: {
     backgroundColor: ACCENT,
