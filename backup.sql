@@ -810,7 +810,9 @@ CREATE TABLE public.users (
     is_active boolean NOT NULL,
     date_joined timestamp with time zone NOT NULL,
     first_name character varying(150) NOT NULL,
-    last_name character varying(150) NOT NULL
+    last_name character varying(150) NOT NULL,
+    is_shipper_registered boolean,
+    is_store_registered boolean
 );
 
 
@@ -1202,6 +1204,8 @@ COPY public.django_migrations (id, app, name, applied) FROM stdin;
 42	stores	0003_remove_store_user_store_manager	2025-08-17 20:38:09.289703+07
 43	shipper	0001_initial	2025-08-21 11:11:32.630028+07
 132	orders	0007_order_cancelled_by_role_order_cancelled_date	2025-09-19 16:25:53.219614+07
+133	authentication	0002_alter_user_options	2025-09-25 20:35:33.329761+07
+134	authentication	0003_auto_20250925_2035	2025-09-25 20:35:33.342474+07
 50	authentication	0009_alter_user_options	2025-08-26 14:01:53.748621+07
 84	menu	0001_initial	2025-09-04 15:41:41.716532+07
 85	menu	0004_remove_food_created_date	2025-09-04 15:41:41.720535+07
@@ -1361,6 +1365,8 @@ COPY public.order_detail (order_id, food_id, quantity, food_note, id, food_optio
 56	43	1	Topping for 4Xúc xích thêm	47	\N	15000.00	\N
 56	44	2	Topping for 4Xúc xích thêm	48	\N	20000.00	\N
 56	45	1	Topping for 4Xúc xích thêm	49	\N	18000.00	\N
+57	31	1	\N	50	\N	45000.00	\N
+58	19	1	\N	51	\N	55000.00	\N
 \.
 
 
@@ -1393,25 +1399,27 @@ COPY public.orders (id, created_date, total_money, user_id, order_status, note, 
 35	2025-09-18 18:45:02.666962+07	33000.000	2	Chờ xác nhận		cash	Bin	Liên Chiểu, Đà Nẵng	1231231233	\N	\N	\N	15000	35	4	Chờ xác nhận	33000.00	0.00	33000.00	\N	\N
 36	2025-09-18 18:46:20.532147+07	35000.000	2	Chờ xác nhận		cash	Bin	Liên Chiểu, Đà Nẵng	1231231233	\N	\N	\N	15000	36	5	Chờ xác nhận	35000.00	0.00	35000.00	\N	\N
 37	2025-09-18 18:49:18.646445+07	35000.000	2	Chờ xác nhận		cash	Bin	Liên Chiểu, Đà Nẵng	1231231233	\N	\N	\N	15000	37	5	Chờ xác nhận	35000.00	0.00	35000.00	\N	\N
-38	2025-09-18 18:55:20.881645+07	35000.000	2	Đã hủy	ok	cash	Bin	Liên Chiểu, Đà Nẵng	1231231233	\N	\N	Thay đổi số điện thoại	15000	38	5	Chờ xác nhận	35000.00	0.00	35000.00	Khách hàng	2025-09-19 16:49:58.664405+07
 51	2025-09-21 14:12:55.687254+07	35000.000	2	Chờ xác nhận		cash	Bin	Liên Chiểu, Đà Nẵng	1231231233	\N	1	\N	15000	51	5	Đã xác nhận	35000.00	0.00	35000.00	\N	\N
-47	2025-09-19 17:04:14.899306+07	75000.000	2	Đã hủy		cash	Bin	Liên Chiểu, Đà Nẵng	1231231233	\N	\N	Thêm mã giảm giá	15000	47	5	Chờ xác nhận	75000.00	0.00	75000.00	Khách hàng	2025-09-19 17:04:26.361029+07
 43	2025-09-18 19:14:12.878399+07	93000.000	2	Đã giao	okok	cash	Bin	Liên Chiểu, Đà Nẵng	1231231233	\N	\N	\N	15000	43	5	Chờ xác nhận	93000.00	0.00	93000.00	\N	\N
-42	2025-09-18 19:13:26.308529+07	35000.000	2	Đã hủy	ngon	cash	Bin	Liên Chiểu, Đà Nẵng	1231231233	\N	\N	\N	15000	42	5	Chờ xác nhận	35000.00	0.00	35000.00	\N	\N
-41	2025-09-18 19:08:06.813251+07	35000.000	2	Đã hủy		cash	Bin	Liên Chiểu, Đà Nẵng	1231231233	\N	\N	Không muốn nhận hàng nữa	15000	41	5	Chờ xác nhận	35000.00	0.00	35000.00	\N	\N
-40	2025-09-18 19:07:13.299986+07	35000.000	2	Đã hủy		cash	Bin	Liên Chiểu, Đà Nẵng	1231231233	\N	\N	huỷ	15000	40	5	Chờ xác nhận	35000.00	0.00	35000.00	\N	\N
-54	2025-09-21 14:22:15.43575+07	33000.000	2	Đã hủy		cash	Bin	Liên Chiểu, Đà Nẵng	1231231233	\N	\N	Thay đổi thời gian giao hàng	15000	54	4	Chờ xác nhận	33000.00	0.00	33000.00	Khách hàng	2025-09-21 14:22:29.573743+07
-49	2025-09-20 15:29:30.082957+07	130000.000	2	Chờ xác nhận	gọi trước	cash	Bin2	Liên Chiểu, Đà Nẵng	1231231233	\N	\N	\N	15000	48	5	Chờ xác nhận	130000.00	0.00	130000.00	\N	\N
 48	2025-09-20 15:29:30.067759+07	55000.000	2	Đã giao	gọi trước	cash	Bin2	Liên Chiểu, Đà Nẵng	1231231233	\N	\N	\N	15000	48	1	Chờ xác nhận	55000.00	0.00	55000.00	\N	\N
-27	2025-08-31 18:46:35.032024+07	59186.000	2	Đã huỷ	xin hộp giấy	COD	Bin	Liên Chiểu, Đà Nẵng	1231231233	12	\N	Test cancellation by store	15000	27	2	Chờ xác nhận	114436.00	34915.40	79520.60	Cửa hàng	2025-09-19 16:41:17.74935+07
-46	2025-09-19 15:57:02.170729+07	68000.000	2	Đã hủy	note1	cash	Bin	Liên Chiểu, Đà Nẵng	1231231233	\N	\N	Không muốn nhận hàng nữa	15000	45	1	Chờ xác nhận	68000.00	0.00	68000.00	Khách hàng	2025-09-19 16:42:05.631334+07
-45	2025-09-19 15:57:02.157826+07	35000.000	2	Đã hủy	note1	cash	Bin	Liên Chiểu, Đà Nẵng	1231231233	\N	\N	Thay đổi số điện thoại	15000	45	5	Chờ xác nhận	35000.00	0.00	35000.00	Khách hàng	2025-09-19 16:42:28.77168+07
-44	2025-09-19 15:42:47.131866+07	146000.000	2	Đã hủy		cash	Bin	Liên Chiểu, Đà Nẵng	1231231233	\N	\N	ok	15000	44	5	Chờ xác nhận	146000.00	0.00	146000.00	Khách hàng	2025-09-19 16:43:45.058926+07
-39	2025-09-18 19:00:18.777955+07	35000.000	2	Đã hủy		cash	Bin	Liên Chiểu, Đà Nẵng	1231231233	\N	\N	Kh muoon	15000	39	5	Chờ xác nhận	35000.00	0.00	35000.00	Khách hàng	2025-09-19 16:49:00.06432+07
 50	2025-09-21 14:10:30.990345+07	68000.000	2	Chờ xác nhận		cash	Bin	Liên Chiểu, Đà Nẵng	1231231233	\N	\N	\N	15000	50	5	Chờ xác nhận	68000.00	0.00	68000.00	\N	\N
+58	2025-09-25 09:49:42.035866+07	70000.000	8	Đã giao		cash	Shipper1	Quận Tân Bình, TP.HCM	0906789012	\N	1	\N	15000	58	3	Đã giao	70000.00	0.00	70000.00	\N	\N
 52	2025-09-21 14:15:16.597643+07	35000.000	2	Đã giao		cash	Bin	Liên Chiểu, Đà Nẵng	1231231233	\N	1	\N	15000	52	5	Đã giao	35000.00	0.00	35000.00	\N	\N
 55	2025-09-21 17:38:41.640005+07	35000.000	8	Đã giao		cash	Shipper1	Quận Tân Bình, TP.HCM	0906789012	\N	1	\N	15000	55	5	Đã giao	35000.00	0.00	35000.00	\N	\N
-56	2025-09-21 20:30:15.986044+07	88000.000	8	Đã hủy		cash	Shipper1	Quận Tân Bình, TP.HCM	0906789012	\N	\N	Không muốn nhận hàng nữa	15000	56	4	Chờ xác nhận	88000.00	0.00	88000.00	Khách hàng	2025-09-21 20:58:47.275771+07
+49	2025-09-20 15:29:30.082957+07	130000.000	2	Đã huỷ	gọi trước	cash	Bin2	Liên Chiểu, Đà Nẵng	1231231233	\N	\N	Hủy bởi quản lý	15000	48	5	Chờ xác nhận	130000.00	0.00	130000.00	Cửa hàng	2025-09-25 21:50:07.858788+07
+38	2025-09-18 18:55:20.881645+07	35000.000	2	Đã huỷ	ok	cash	Bin	Liên Chiểu, Đà Nẵng	1231231233	\N	\N	Thay đổi số điện thoại	15000	38	5	Chờ xác nhận	35000.00	0.00	35000.00	Khách hàng	2025-09-19 16:49:58.664405+07
+47	2025-09-19 17:04:14.899306+07	75000.000	2	Đã huỷ		cash	Bin	Liên Chiểu, Đà Nẵng	1231231233	\N	\N	Thêm mã giảm giá	15000	47	5	Chờ xác nhận	75000.00	0.00	75000.00	Khách hàng	2025-09-19 17:04:26.361029+07
+42	2025-09-18 19:13:26.308529+07	35000.000	2	Đã huỷ	ngon	cash	Bin	Liên Chiểu, Đà Nẵng	1231231233	\N	\N	\N	15000	42	5	Chờ xác nhận	35000.00	0.00	35000.00	\N	\N
+41	2025-09-18 19:08:06.813251+07	35000.000	2	Đã huỷ		cash	Bin	Liên Chiểu, Đà Nẵng	1231231233	\N	\N	Không muốn nhận hàng nữa	15000	41	5	Chờ xác nhận	35000.00	0.00	35000.00	\N	\N
+40	2025-09-18 19:07:13.299986+07	35000.000	2	Đã huỷ		cash	Bin	Liên Chiểu, Đà Nẵng	1231231233	\N	\N	huỷ	15000	40	5	Chờ xác nhận	35000.00	0.00	35000.00	\N	\N
+54	2025-09-21 14:22:15.43575+07	33000.000	2	Đã huỷ		cash	Bin	Liên Chiểu, Đà Nẵng	1231231233	\N	\N	Thay đổi thời gian giao hàng	15000	54	4	Chờ xác nhận	33000.00	0.00	33000.00	Khách hàng	2025-09-21 14:22:29.573743+07
+46	2025-09-19 15:57:02.170729+07	68000.000	2	Đã huỷ	note1	cash	Bin	Liên Chiểu, Đà Nẵng	1231231233	\N	\N	Không muốn nhận hàng nữa	15000	45	1	Chờ xác nhận	68000.00	0.00	68000.00	Khách hàng	2025-09-19 16:42:05.631334+07
+45	2025-09-19 15:57:02.157826+07	35000.000	2	Đã huỷ	note1	cash	Bin	Liên Chiểu, Đà Nẵng	1231231233	\N	\N	Thay đổi số điện thoại	15000	45	5	Chờ xác nhận	35000.00	0.00	35000.00	Khách hàng	2025-09-19 16:42:28.77168+07
+44	2025-09-19 15:42:47.131866+07	146000.000	2	Đã huỷ		cash	Bin	Liên Chiểu, Đà Nẵng	1231231233	\N	\N	ok	15000	44	5	Chờ xác nhận	146000.00	0.00	146000.00	Khách hàng	2025-09-19 16:43:45.058926+07
+39	2025-09-18 19:00:18.777955+07	35000.000	2	Đã huỷ		cash	Bin	Liên Chiểu, Đà Nẵng	1231231233	\N	\N	Kh muoon	15000	39	5	Chờ xác nhận	35000.00	0.00	35000.00	Khách hàng	2025-09-19 16:49:00.06432+07
+57	2025-09-25 09:49:14.085123+07	60000.000	8	Đã huỷ		cash	Shipper1	Quận Tân Bình, TP.HCM	0906789012	\N	\N	Hủy bởi quản lý	15000	57	5	Chờ xác nhận	60000.00	0.00	60000.00	Cửa hàng	2025-09-25 15:20:12.331998+07
+56	2025-09-21 20:30:15.986044+07	88000.000	8	Đã huỷ		cash	Shipper1	Quận Tân Bình, TP.HCM	0906789012	\N	\N	Không muốn nhận hàng nữa	15000	56	4	Chờ xác nhận	88000.00	0.00	88000.00	Khách hàng	2025-09-21 20:58:47.275771+07
+27	2025-08-31 18:46:35.032024+07	59186.000	2	Đã huỷ	xin hộp giấy	COD	Bin	Liên Chiểu, Đà Nẵng	1231231233	12	\N	Test cancellation by store	15000	27	2	Chờ xác nhận	114436.00	34915.40	79520.60	Cửa hàng	2025-09-19 16:41:17.74935+07
 53	2025-09-21 14:21:24.308769+07	30000.000	2	Đã huỷ		cash	Bin	Liên Chiểu, Đà Nẵng	1231231233	\N	1	\N	15000	53	5	Đã xác nhận	30000.00	0.00	30000.00	\N	\N
 \.
 
@@ -1439,10 +1447,10 @@ COPY public.promo (id, name, category, discount_value, start_date, end_date, min
 
 COPY public.rating_food (id, user_id, food_id, content, point, order_id) FROM stdin;
 2	1	1	ngon	5	\N
-3	2	1	ok	4	\N
 4	2	33	Khá ngon	5	43
 5	2	46	Khá ngon	5	43
 6	2	2	Ok	5	48
+3	2	1	ok	3	\N
 \.
 
 
@@ -1455,6 +1463,8 @@ COPY public.roles (id, role_name) FROM stdin;
 3	Chủ cửa hàng
 2	Quản lý
 1	Khách hàng
+7	Shipper
+8	Cửa hàng
 \.
 
 
@@ -1463,8 +1473,9 @@ COPY public.roles (id, role_name) FROM stdin;
 --
 
 COPY public.shipper (id, user_id) FROM stdin;
-1	8
 2	9
+1	8
+4	10
 \.
 
 
@@ -1479,6 +1490,8 @@ COPY public.stores (id, store_name, image, description, user_id) FROM stdin;
 4	Pizza Hut	assets/pizzahut-logo.png	Chuyên pizza và đồ ăn Ý	5
 5	Dominos Pizza	assets/dominos-logo.png	Giao pizza nhanh chóng	4
 0	Toàn hệ thống		Khuyến mãi áp dụng cho tất cả cửa hàng	1
+6	Test	assets/store-icon.png	Hà nội	11
+7	Test3	assets/store-icon.png	Huế	12
 \.
 
 
@@ -1486,16 +1499,19 @@ COPY public.stores (id, store_name, image, description, user_id) FROM stdin;
 -- Data for Name: users; Type: TABLE DATA; Schema: public; Owner: postgres
 --
 
-COPY public.users (id, fullname, username, password, email, address, phone_number, created_date, role_id, last_login, is_superuser, is_staff, is_active, date_joined, first_name, last_name) FROM stdin;
-1	Admin	admin	123	admin@gmail.com	Hồ Chí Minh	0456456456	2025-08-11 02:33:59.153353	2	\N	f	f	t	2025-08-11 09:33:59.153353+07	Admin	User
-3	KFC Vietnam	kfc	123	kfc@gmail.com	Quận 1, TP.HCM	0901234567	2025-08-11 02:33:59.153353	3	\N	f	f	t	2025-08-11 09:33:59.153353+07	KFC	Manager
-4	Dominos Pizza	domino	123	domino@gmail.com	Quận 3, TP.HCM	0902345678	2025-08-11 02:33:59.153353	3	\N	f	f	t	2025-08-11 09:33:59.153353+07	Dominos	Manager
-5	Pizza Hut	pizzahut	123	pizzahut@gmail.com	Quận 7, TP.HCM	0903456789	2025-08-11 02:33:59.153353	3	\N	f	f	t	2025-08-11 09:33:59.153353+07	Pizza	Manager
-6	Burger King	burgerking	123	burgerking@gmail.com	Quận 2, TP.HCM	0904567890	2025-08-11 02:33:59.153353	3	\N	f	f	t	2025-08-11 09:33:59.153353+07	Burger	Manager
-7	McDonalds Vietnam	mcdonald	123	mcdonald@gmail.com	Quận 5, TP.HCM	0905678901	2025-08-11 02:33:59.153353	3	\N	f	f	t	2025-08-11 09:33:59.153353+07	McDonald	Manager
-8	Shipper1	shipper1	123	shipper1@gmail.com	Quận Tân Bình, TP.HCM	0906789012	2025-08-11 02:33:59.153353	4	\N	f	f	t	2025-08-11 09:33:59.153353+07	Shipper	One
-9	Shipper2	shipper2	123	shipper2@gmail.com	Quận Gò Vấp, TP.HCM	0907890123	2025-08-11 02:33:59.153353	4	\N	f	f	t	2025-08-11 09:33:59.153353+07	Shipper	Two
-2	Bin	bin	123	bin@gmail.com	Liên Chiểu, Đà Nẵng	1231231233	2025-08-08 14:42:24.012483	1	\N	f	f	t	2025-08-10 22:42:24.012483+07	Bin	User
+COPY public.users (id, fullname, username, password, email, address, phone_number, created_date, role_id, last_login, is_superuser, is_staff, is_active, date_joined, first_name, last_name, is_shipper_registered, is_store_registered) FROM stdin;
+3	KFC Vietnam	kfc	123	kfc@gmail.com	Quận 1, TP.HCM	0901234567	2025-08-11 02:33:59.153353	3	\N	f	f	t	2025-08-11 09:33:59.153353+07	KFC	Manager	\N	\N
+4	Dominos Pizza	domino	123	domino@gmail.com	Quận 3, TP.HCM	0902345678	2025-08-11 02:33:59.153353	3	\N	f	f	t	2025-08-11 09:33:59.153353+07	Dominos	Manager	\N	\N
+5	Pizza Hut	pizzahut	123	pizzahut@gmail.com	Quận 7, TP.HCM	0903456789	2025-08-11 02:33:59.153353	3	\N	f	f	t	2025-08-11 09:33:59.153353+07	Pizza	Manager	\N	\N
+6	Burger King	burgerking	123	burgerking@gmail.com	Quận 2, TP.HCM	0904567890	2025-08-11 02:33:59.153353	3	\N	f	f	t	2025-08-11 09:33:59.153353+07	Burger	Manager	\N	\N
+7	McDonalds Vietnam	mcdonald	123	mcdonald@gmail.com	Quận 5, TP.HCM	0905678901	2025-08-11 02:33:59.153353	3	\N	f	f	t	2025-08-11 09:33:59.153353+07	McDonald	Manager	\N	\N
+1	Admin	admin	123	admin@gmail.com	Hồ Chí Minh	0456456456	2025-08-10 12:33:59.153353	2	\N	f	f	t	2025-08-11 09:33:59.153353+07	Admin	User	\N	\N
+10	Test	test	123	test@gmail.com	Đà Nẵng	0987654321	2025-09-23 18:59:21.470963	4	\N	f	f	t	2025-09-25 19:59:21.470963+07			f	\N
+2	Bin	bin	123	bin@gmail.com	Liên Chiểu, Đà Nẵng	1231231233	2025-08-07 10:42:24.012483	1	\N	f	f	t	2025-08-10 22:42:24.012483+07	Bin	User	\N	\N
+9	Shipper2	shipper2	123	shipper2@gmail.com	Quận Gò Vấp, TP.HCM2	0907890123	2025-08-10 19:33:59.153353	4	\N	f	f	t	2025-08-11 09:33:59.153353+07	Shipper	Two	\N	\N
+8	Shipper1	shipper1	123	shipper1@gmail.com	Đà nẵngg	0123456789	2025-08-09 22:33:59.153353	4	\N	f	f	t	2025-08-11 09:33:59.153353+07	Shipper	One	\N	\N
+11	Test	test2	123	test2@gmail.com	Hà nội	0987654322	2025-09-24 02:25:49.941872	8	\N	f	f	t	2025-09-25 20:25:49.941872+07			\N	f
+12	Test3	test3	123456	test3@gmail.com	Huế	0987654323	2025-09-25 00:44:52.852511	8	\N	f	f	t	2025-09-25 21:44:52.852511+07			\N	f
 \.
 
 
@@ -1568,7 +1584,7 @@ SELECT pg_catalog.setval('public.django_content_type_id_seq', 19, true);
 -- Name: django_migrations_id_seq; Type: SEQUENCE SET; Schema: public; Owner: postgres
 --
 
-SELECT pg_catalog.setval('public.django_migrations_id_seq', 132, true);
+SELECT pg_catalog.setval('public.django_migrations_id_seq', 134, true);
 
 
 --
@@ -1589,14 +1605,14 @@ SELECT pg_catalog.setval('public.food_size_id_seq', 16, true);
 -- Name: item_id_seq; Type: SEQUENCE SET; Schema: public; Owner: postgres
 --
 
-SELECT pg_catalog.setval('public.item_id_seq', 49, true);
+SELECT pg_catalog.setval('public.item_id_seq', 51, true);
 
 
 --
 -- Name: order_detail_id_seq; Type: SEQUENCE SET; Schema: public; Owner: postgres
 --
 
-SELECT pg_catalog.setval('public.order_detail_id_seq', 49, true);
+SELECT pg_catalog.setval('public.order_detail_id_seq', 51, true);
 
 
 --
@@ -1610,7 +1626,7 @@ SELECT pg_catalog.setval('public.order_promo_id_seq', 6, true);
 -- Name: orders_id_seq; Type: SEQUENCE SET; Schema: public; Owner: postgres
 --
 
-SELECT pg_catalog.setval('public.orders_id_seq', 56, true);
+SELECT pg_catalog.setval('public.orders_id_seq', 58, true);
 
 
 --
@@ -1631,35 +1647,35 @@ SELECT pg_catalog.setval('public.rating_food_id_seq', 6, true);
 -- Name: roles_id_seq; Type: SEQUENCE SET; Schema: public; Owner: postgres
 --
 
-SELECT pg_catalog.setval('public.roles_id_seq', 6, true);
+SELECT pg_catalog.setval('public.roles_id_seq', 8, true);
 
 
 --
 -- Name: shipper_id_seq; Type: SEQUENCE SET; Schema: public; Owner: postgres
 --
 
-SELECT pg_catalog.setval('public.shipper_id_seq', 1, false);
+SELECT pg_catalog.setval('public.shipper_id_seq', 4, true);
 
 
 --
 -- Name: stores_id_seq; Type: SEQUENCE SET; Schema: public; Owner: postgres
 --
 
-SELECT pg_catalog.setval('public.stores_id_seq', 1, true);
+SELECT pg_catalog.setval('public.stores_id_seq', 7, true);
 
 
 --
 -- Name: users_groups_id_seq; Type: SEQUENCE SET; Schema: public; Owner: postgres
 --
 
-SELECT pg_catalog.setval('public.users_groups_id_seq', 1, false);
+SELECT pg_catalog.setval('public.users_groups_id_seq', 1, true);
 
 
 --
 -- Name: users_id_seq; Type: SEQUENCE SET; Schema: public; Owner: postgres
 --
 
-SELECT pg_catalog.setval('public.users_id_seq', 1, false);
+SELECT pg_catalog.setval('public.users_id_seq', 12, true);
 
 
 --
