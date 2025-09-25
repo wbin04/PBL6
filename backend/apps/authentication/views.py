@@ -170,3 +170,26 @@ def admin_customer_detail(request, customer_id):
             serializer.save()
             return Response(serializer.data)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def admin_toggle_customer_status(request, customer_id):
+    """Toggle customer active/inactive status"""
+    if not is_admin(request.user):
+        return Response({'error': 'Admin access required'}, status=status.HTTP_403_FORBIDDEN)
+    
+    try:
+        customer = User.objects.get(id=customer_id, role_id=1)
+    except User.DoesNotExist:
+        return Response({'error': 'Customer not found'}, status=status.HTTP_404_NOT_FOUND)
+    
+    # Toggle the is_active status
+    customer.is_active = not customer.is_active
+    customer.save()
+    
+    serializer = UserSerializer(customer)
+    return Response({
+        'message': f'Customer {"activated" if customer.is_active else "deactivated"} successfully',
+        'customer': serializer.data
+    })

@@ -86,3 +86,14 @@ class RoleSerializer(serializers.ModelSerializer):
     class Meta:
         model = Role
         fields = '__all__'
+
+
+class UserSerializer(serializers.ModelSerializer):
+    role = serializers.CharField(source='role.role_name', read_only=True)
+    role_id = serializers.IntegerField(source='role.id', read_only=True)
+    
+    class Meta:
+        model = User
+        fields = ['id', 'username', 'email', 'fullname', 'phone_number', 
+                 'address', 'created_date', 'role', 'role_id', 'is_active']
+        read_only_fields = ['id', 'created_date']

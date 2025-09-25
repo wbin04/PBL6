@@ -1,202 +1,453 @@
-import React, { useState } from 'react';
-import { View, Text, TouchableOpacity, ScrollView, Modal, KeyboardAvoidingView, Platform, StyleSheet, Image } from 'react-native';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { View, Text, TouchableOpacity, ScrollView, Modal, KeyboardAvoidingView, Platform, StyleSheet, Image, ActivityIndicator, RefreshControl, Alert, Animated } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { IMAGE_MAP } from '../assets/imageMap';
 import { X } from 'lucide-react-native';
 import { Fonts } from '../constants/Fonts';
+import { ordersApi, apiClient } from '@/services/api';
+import { API_CONFIG } from "@/constants";
+import * as SecureStore from 'expo-secure-store';
+import { STORAGE_KEYS } from '@/constants';
 
 const getStatusColor = (status: string) => {
   switch (status) {
     case 'Đang giao': return '#f59e0b';
     case 'Đã giao': return '#10b981';
     case 'Chờ xác nhận': return '#3b82f6';
-    case 'Đã hủy': return '#ef4444';
+    case 'Đã xác nhận': return '#8b5cf6';
+    case 'Đang chuẩn bị': return '#f97316';
+    case 'Sẵn sàng': return '#06b6d4';
+    case 'Đã lấy hàng': return '#84cc16';
+    case 'Đã huỷ': return '#ef4444';
+    case 'Đã huỷ': return '#ef4444';
     default: return '#6b7280';
   }
 };
 
-const initialOrders = [
-  {
-    id: 'ORD-001',
-    customer: 'Nguyễn Văn A',
-    storeName: 'Quán Phở Hà Nội',
-    image: require('../assets/images/burger-palace.png'),
-    items: [
-      { name: 'Phở Bò', size: 'Lớn', quantity: 1, price: 65000 },
-      { name: 'Trà Sữa', size: 'Vừa', quantity: 2, price: 30000 },
-    ],
-    totalDisplay: '130,000 ₫',
-    status: 'Đang giao',
-    address: '123 Lê Lợi, Quận 1, TP.HCM',
-    timeDisplay: '10:30',
-    timeline: [
-      { status: 'Đặt hàng', time: '10:30', completed: true },
-      { status: 'Xác nhận', time: '10:32', completed: true },
-      { status: 'Chuẩn bị', time: '10:35', completed: true },
-      { status: 'Giao hàng', time: '10:50', completed: true },
-      { status: 'Hoàn thành', time: '', completed: false },
-    ],
-  },
-  {
-    id: 'ORD-002',
-    customer: 'Trần Thị B',
-    storeName: 'Bánh Mì Sài Gòn',
-    image: require('../assets/images/gourmet-burger.png'),
-    items: [
-      { name: 'Bánh Mì Thịt', size: 'Đặc biệt', quantity: 2, price: 25000 },
-      { name: 'Cà Phê Sữa', size: 'Vừa', quantity: 1, price: 15000 },
-    ],
-    totalDisplay: '70,000 ₫',
-    status: 'Chờ xác nhận',
-    address: '456 Nguyễn Trãi, Quận 5, TP.HCM',
-    timeDisplay: '10:25',
-    timeline: [
-      { status: 'Đặt hàng', time: '10:25', completed: true },
-      { status: 'Xác nhận', time: '', completed: false },
-      { status: 'Chuẩn bị', time: '', completed: false },
-      { status: 'Giao hàng', time: '', completed: false },
-      { status: 'Hoàn thành', time: '', completed: false },
-    ],
-  },
-  {
-    id: 'ORD-003',
-    customer: 'Lê Minh C',
-    storeName: 'Pizza Palace',
-    image: require('../assets/images/delicious-toppings-pizza.png'),
-    items: [
-      { name: 'Pizza Hải sản', size: 'Lớn', quantity: 1, price: 150000 },
-      { name: 'Coca Cola', size: 'Lon', quantity: 2, price: 15000 },
-    ],
-    totalDisplay: '200,000 ₫',
-    status: 'Đã giao',
-    address: '789 Điện Biên Phủ, Quận 3, TP.HCM',
-    timeDisplay: '09:20',
-    timeline: [
-      { status: 'Đặt hàng', time: '09:20', completed: true },
-      { status: 'Xác nhận', time: '09:22', completed: true },
-      { status: 'Chuẩn bị', time: '09:25', completed: true },
-      { status: 'Giao hàng', time: '09:45', completed: true },
-      { status: 'Hoàn thành', time: '10:15', completed: true },
-    ],
-  },
-  {
-    id: 'ORD-004',
-    customer: 'Phan Thị D',
-    storeName: 'Quán Cơm Tấm',
-    image: require('../assets/images/vegetable-rice-bowl.png'),
-    items: [
-      { name: 'Cơm Tấm Sườn', size: 'Thường', quantity: 1, price: 45000 },
-      { name: 'Chả Cá', size: 'Thường', quantity: 1, price: 25000 },
-    ],
-    totalDisplay: '75,000 ₫',
-    status: 'Đã hủy',
-    address: '321 Lý Tự Trọng, Quận 1, TP.HCM',
-    timeDisplay: '09:00',
-    timeline: [
-      { status: 'Đặt hàng', time: '09:00', completed: true },
-      { status: 'Xác nhận', time: '09:02', completed: true },
-      { status: 'Hủy đơn', time: '09:15', completed: true },
-    ],
-    cancelReason: 'Khách hàng hủy do thay đổi kế hoạch',
-  },
-];
+// Format price display
+const formatPrice = (price: any) => {
+  if (typeof price === 'number') {
+    return `${price.toLocaleString('vi-VN')}₫`;
+  }
+  if (typeof price === 'string') {
+    const numPrice = parseFloat(price);
+    if (!isNaN(numPrice)) {
+      return `${numPrice.toLocaleString('vi-VN')}₫`;
+    }
+  }
+  return price || '0₫';
+};
+
+// Function to create image source URL
+const getImageSource = (imageValue: any) => {
+  if (!imageValue) {
+    return require('../assets/images/placeholder.png');
+  }
+
+  // If image is already a full URL
+  if (typeof imageValue === 'string' && imageValue.startsWith('http')) {
+    return { uri: imageValue };
+  }
+
+  // If it's a string path from API
+  if (typeof imageValue === 'string') {
+    // Check if it's an IMAGE_MAP key first (for backward compatibility)
+    if (IMAGE_MAP[imageValue]) {
+      return IMAGE_MAP[imageValue];
+    }
+
+    // Otherwise, construct full URL from media path
+    const baseUrl = API_CONFIG.BASE_URL.replace("/api", ""); // Remove /api from base URL
+    const fullUrl = `${baseUrl}/media/${imageValue}`;
+    return { uri: fullUrl };
+  }
+
+  // If it's already an object (local require) or number
+  return imageValue;
+};
+
 
 const statusTabs = [
   { key: 'all', label: 'Tất cả' },
-  { key: 'pending', label: 'Chờ xác nhận' },
-  { key: 'delivering', label: 'Đang giao' },
-  { key: 'delivered', label: 'Đã giao' },
-  { key: 'cancelled', label: 'Đã hủy' },
+  { key: 'Chờ xác nhận', label: 'Chờ xác nhận' },
+  { key: 'Đã xác nhận', label: 'Đã xác nhận' },
+  { key: 'Đang chuẩn bị', label: 'Đang chuẩn bị' },
+  { key: 'Sẵn sàng', label: 'Sẵn sàng' },
+  { key: 'Đã lấy hàng', label: 'Đã lấy hàng' },
+  { key: 'Đang giao', label: 'Đang giao' },
+  { key: 'Đã giao', label: 'Đã giao' },
+  { key: 'Đã huỷ', label: 'Đã huỷ' },
 ];
 
-const statusMapping = {
-  pending: 'Chờ xác nhận',
-  delivering: 'Đang giao',
-  delivered: 'Đã giao',
-  cancelled: 'Đã hủy',
-};
+
 
 export default function OrderListScreen() {
-  const [orders, setOrders] = useState(initialOrders);
-  const [orderFilter, setOrderFilter] = useState('all');
+  const [orders, setOrders] = useState<any[]>([]);
+  const [orderFilter, setOrderFilter] = useState('Tất cả');
   const [orderDetailModalVisible, setOrderDetailModalVisible] = useState(false);
   const [selectedOrder, setSelectedOrder] = useState<any>(null);
+  const [loading, setLoading] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [currentUser, setCurrentUser] = useState<any>(null);
+  const [statusCounts, setStatusCounts] = useState<Record<string, number>>({});
+  const scrollViewRef = useRef<ScrollView>(null);
+  const fadeAnim = useRef(new Animated.Value(1)).current;
 
-  const openOrderDetailModal = (order: any) => {
-    setSelectedOrder(order);
-    setOrderDetailModalVisible(true);
+  // Get current user info
+  const getCurrentUser = useCallback(async () => {
+    try {
+      const userStr = await SecureStore.getItemAsync(STORAGE_KEYS.USER);
+      if (userStr) {
+        const user = JSON.parse(userStr);
+        setCurrentUser(user);
+        console.log('Current user:', user);
+        console.log('User role:', user.role);
+      }
+    } catch (error) {
+      console.error('Error getting current user:', error);
+    }
+  }, []);
+
+  // Check if current user is manager (role = "Quản lý")
+  const isManager = currentUser?.role === 'Quản lý';
+
+  console.log('=== Role Check ===');
+  console.log('Current user role:', currentUser?.role);
+  console.log('Is manager:', isManager);
+  console.log('==================');
+
+  // Fetch orders from API with pagination
+  const fetchOrders = useCallback(async (showLoading = true) => {
+    try {
+      if (showLoading) {
+        setLoading(true);
+      }
+      setError(null);
+
+      console.log('=== Fetching Orders ===');
+      console.log('Current filter:', orderFilter);
+
+      // Fetch all orders from all pages
+      let allOrders: any[] = [];
+      let currentPage = 1;
+      let totalPages = 1;
+
+      do {
+        const params: any = {
+          page: currentPage,
+          per_page: 20 // Increase per_page to reduce API calls
+        };
+
+        console.log(`Fetching page ${currentPage}...`);
+        const response = await ordersApi.admin.getOrders(params) as any;
+        console.log(`Page ${currentPage} response:`, response);
+        console.log(`Page ${currentPage} orders array:`, response.orders);
+        console.log(`Page ${currentPage} total_pages:`, response.total_pages);
+
+        if (response.orders && Array.isArray(response.orders)) {
+          allOrders = [...allOrders, ...response.orders];
+          totalPages = response.total_pages || 1;
+          console.log(`Page ${currentPage}: got ${response.orders.length} orders, total pages: ${totalPages}`);
+        } else if (Array.isArray(response)) {
+          allOrders = [...allOrders, ...response];
+          break; // No pagination info, assume single page
+        } else {
+          console.log(`No orders in page ${currentPage}`);
+          break;
+        }
+
+        currentPage++;
+      } while (currentPage <= totalPages);
+
+      console.log('=== Final Results ===');
+      console.log('Total orders loaded:', allOrders.length);
+
+      // Store ALL orders
+      setOrders(allOrders);
+
+      // Calculate status counts from ALL orders
+      const counts: Record<string, number> = { all: allOrders.length };
+      allOrders.forEach((order: any) => {
+        const status = order.order_status;
+        counts[status] = (counts[status] || 0) + 1;
+      });
+      setStatusCounts(counts);
+      console.log('Status counts calculated:', counts);
+
+    } catch (error: any) {
+      console.error('Error fetching orders:', error);
+      setError(error.message || 'Không thể tải danh sách đơn hàng');
+      setOrders([]);
+    } finally {
+      setLoading(false);
+      if (refreshing) {
+        setRefreshing(false);
+      }
+    }
+  }, [refreshing]); // Remove orderFilter dependency
+
+  // Filter orders for display based on selected tab
+  const getStatusKeyForFilter = (filter: string): string => {
+    switch (filter) {
+      case 'Đang chờ': return 'Chờ xác nhận';
+      case 'Đã xác nhận': return 'confirmed';
+      case 'Đang chuẩn bị': return 'preparing';
+      case 'Sẵn sàng': return 'ready';
+      case 'Đang giao': return 'delivering';
+      case 'Đã hoàn thành': return 'Đã giao';
+      case 'Đã huỷ': return 'Đã huỷ';
+      default: return '';
+    }
   };
+
+  const getFilteredOrders = () => {
+    console.log('=== Filtering Orders ===');
+    console.log('Current filter:', orderFilter);
+    console.log('Total orders available:', orders.length);
+
+    if (orderFilter === 'Tất cả') {
+      console.log('Showing all orders:', orders.length);
+      return orders;
+    }
+
+    const statusKey = getStatusKeyForFilter(orderFilter);
+    console.log('Status key for filter:', statusKey);
+
+    const filtered = orders.filter(order => {
+      console.log(`Order ${order.id}: status="${order.order_status}" vs filter="${statusKey}"`);
+      return order.order_status === statusKey;
+    });
+
+    console.log('Filtered orders count:', filtered.length);
+    console.log('======================');
+    return filtered;
+  };
+
+  // Get filtered orders for display
+  const filteredOrdersForDisplay = getFilteredOrders();
+
+  // Load user and orders when component mounts or filter changes
+  useEffect(() => {
+    getCurrentUser();
+  }, [getCurrentUser]);
+
+  useEffect(() => {
+    if (currentUser) {
+      fetchOrders();
+    }
+  }, [fetchOrders, currentUser]);
+
+  // Refresh handler
+  const onRefresh = useCallback(() => {
+    setRefreshing(true);
+    fetchOrders(false);
+  }, [fetchOrders]);
+
+  const openOrderDetailModal = async (order: any) => {
+    try {
+      setLoading(true);
+      console.log('Fetching order detail for ID:', order.id);
+
+      // Fetch detailed order data
+      const detailedOrder = await ordersApi.admin.getOrder(order.id) as any;
+      console.log('Detailed order:', detailedOrder);
+
+      setSelectedOrder(detailedOrder);
+      setOrderDetailModalVisible(true);
+    } catch (error: any) {
+      console.error('Error fetching order detail:', error);
+      Alert.alert('Lỗi', 'Không thể tải chi tiết đơn hàng');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const closeOrderDetailModal = () => {
     setOrderDetailModalVisible(false);
     setSelectedOrder(null);
   };
 
-  const filterOrders = () => {
-    if (orderFilter === 'all') return orders;
-    const mappedStatus = statusMapping[orderFilter as keyof typeof statusMapping];
-    return orders.filter(order => order.status === mappedStatus);
-  };
+  const updateOrderStatus = async (orderId: number, newStatus: string, cancelReason?: string) => {
+    try {
+      setLoading(true);
+      console.log('Updating order status:', { orderId, newStatus, cancelReason, isManager });
 
-  const updateOrderStatus = (orderId: string, newStatus: string) => {
-    setOrders(prevOrders =>
-      prevOrders.map(order =>
-        order.id === orderId ? { ...order, status: newStatus } : order
-      )
-    );
-    if (selectedOrder && selectedOrder.id === orderId) {
-      setSelectedOrder({ ...selectedOrder, status: newStatus });
+      // For managers, only allow cancellation
+      if (isManager && newStatus !== 'Đã huỷ') {
+        Alert.alert(
+          'Hạn chế quyền hạn',
+          'Quản lý chỉ có thể hủy đơn hàng. Việc thay đổi trạng thái đơn hàng khác thuộc về cửa hàng.',
+          [{ text: 'OK' }]
+        );
+        return;
+      }
+
+      const data: any = { order_status: newStatus };
+      if (cancelReason) {
+        data.cancel_reason = cancelReason;
+      }
+
+      // For managers cancelling orders, the backend will automatically set cancelled_by_role to "Quản lý"
+      const updatedOrder = await ordersApi.admin.updateOrderStatus(orderId, data) as any;
+      console.log('Order status updated:', updatedOrder);
+
+      // Update orders list
+      setOrders(prevOrders =>
+        prevOrders.map(order =>
+          order.id === orderId ? { ...order, order_status: newStatus, cancel_reason: cancelReason } : order
+        )
+      );
+
+      // Update selected order if it's the same
+      if (selectedOrder && selectedOrder.id === orderId) {
+        setSelectedOrder({ ...selectedOrder, order_status: newStatus, cancel_reason: cancelReason });
+      }
+
+      const message = newStatus === 'Đã huỷ' ? 'Đã hủy đơn hàng' : 'Đã cập nhật trạng thái đơn hàng';
+      Alert.alert('Thành công', message);
+
+    } catch (error: any) {
+      console.error('Error updating order status:', error);
+      Alert.alert('Lỗi', 'Không thể cập nhật trạng thái đơn hàng');
+    } finally {
+      setLoading(false);
     }
   };
 
   return (
     <SafeAreaView style={styles.safeArea}>
       <View style={styles.container}>
-        <View style={styles.filterTabs}>
-          {statusTabs.map(tab => (
-            <TouchableOpacity
-              key={tab.key}
-              style={[styles.filterTab, orderFilter === tab.key && styles.filterTabActive]}
-              onPress={() => setOrderFilter(tab.key)}
-            >
-              <Text style={[styles.filterTabText, orderFilter === tab.key && styles.filterTabTextActive]}>{tab.label}</Text>
-            </TouchableOpacity>
-          ))}
-        </View>
-        <ScrollView style={styles.scrollView}>
-          {filterOrders().map((order, idx) => (
-            <TouchableOpacity key={idx} style={styles.orderCard} activeOpacity={0.9} onPress={() => openOrderDetailModal(order)}>
-              <View style={styles.orderCardHeader}>
-                <Image
-                  source={typeof order.image === 'string'
-                    ? IMAGE_MAP[order.image] || require('../assets/images/placeholder.png')
-                    : order.image}
-                  style={styles.orderImage}
-                />
-                <View style={styles.orderCardInfo}>
-                  <Text style={styles.orderCardId}>{order.id}</Text>
-                  <Text style={styles.orderCardCustomer}>{order.customer}</Text>
-                  <Text style={styles.orderCardItems}>
-                    {order.items.map((item: any) => `${item.name} (${item.size})`).join(', ')}
-                  </Text>
-                  <Text style={styles.orderCardAddress}>{order.address}</Text>
-                  <Text style={styles.orderCardStore}>Cửa hàng: {order.storeName}</Text>
-                </View>
-                <View style={styles.orderActions}>
-                  {order.status !== 'Đã giao' && order.status !== 'Đã hủy' && (
-                    <TouchableOpacity style={styles.cancelOrderButton} onPress={() => updateOrderStatus(order.id, 'Đã hủy')}>
-                      <X size={16} color="#ef4444" />
-                    </TouchableOpacity>
-                  )}
-                </View>
-              </View>
-              <View style={styles.orderCardFooter}>
-                <Text style={styles.orderCardTotal}>{order.totalDisplay}</Text>
-                <View style={[styles.statusBadge, { backgroundColor: getStatusColor(order.status) }]}>
-                  <Text style={styles.statusText}>{order.status}</Text>
-                </View>
-              </View>
-            </TouchableOpacity>
-          ))}
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          style={styles.filterTabsContainer}
+          contentContainerStyle={styles.filterTabs}
+        >
+          {statusTabs.map((tab, index) => {
+            const count = statusCounts[tab.key] || 0;
+            const isActive = orderFilter === tab.key;
+
+            return (
+              <TouchableOpacity
+                key={tab.key}
+                style={[
+                  styles.filterTab,
+                  isActive && styles.filterTabActive,
+                  { transform: [{ scale: isActive ? 1.05 : 1 }] }
+                ]}
+                onPress={() => {
+                  // Animate content fade out and in
+                  Animated.sequence([
+                    Animated.timing(fadeAnim, {
+                      toValue: 0.7,
+                      duration: 150,
+                      useNativeDriver: true,
+                    }),
+                    Animated.timing(fadeAnim, {
+                      toValue: 1,
+                      duration: 200,
+                      useNativeDriver: true,
+                    }),
+                  ]).start();
+
+                  setOrderFilter(tab.key);
+                }}
+                activeOpacity={0.7}
+              >
+                <Text style={[styles.filterTabText, isActive && styles.filterTabTextActive]}>
+                  {tab.label}{count > 0 && ` (${count})`}
+                </Text>
+              </TouchableOpacity>
+            );
+          })}
+        </ScrollView>
+        <ScrollView
+          style={styles.scrollView}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={onRefresh}
+              colors={['#ea580c']}
+              tintColor="#ea580c"
+            />
+          }
+        >
+          {loading && !refreshing ? (
+            <View style={styles.loadingContainer}>
+              <ActivityIndicator size="large" color="#ea580c" />
+              <Text style={styles.loadingText}>Đang tải đơn hàng...</Text>
+            </View>
+          ) : error ? (
+            <View style={styles.errorContainer}>
+              <Text style={styles.errorText}>{error}</Text>
+              <TouchableOpacity style={styles.retryButton} onPress={() => fetchOrders()}>
+                <Text style={styles.retryButtonText}>Thử lại</Text>
+              </TouchableOpacity>
+            </View>
+          ) : filteredOrdersForDisplay.length === 0 ? (
+            <View style={styles.emptyContainer}>
+              <Text style={styles.emptyText}>
+                {orderFilter === 'Tất cả' ? 'Chưa có đơn hàng nào' : `Không có đơn hàng ${orderFilter}`}
+              </Text>
+            </View>
+          ) : (
+            <Animated.View style={{ opacity: fadeAnim }}>
+              {filteredOrdersForDisplay.map((order, idx) => (
+                <TouchableOpacity
+                  key={order.id}
+                  style={styles.orderCard}
+                  activeOpacity={0.9}
+                  onPress={() => openOrderDetailModal(order)}
+                  disabled={loading}
+                >
+                  <View style={styles.orderCardHeader}>
+                    <Image
+                      source={getImageSource(order.store_image)}
+                      style={styles.orderImage}
+                      onError={() => console.log('Order image load error:', order.id)}
+                    />
+                    <View style={styles.orderCardInfo}>
+                      <Text style={styles.orderCardId}>#{order.id}</Text>
+                      <Text style={styles.orderCardCustomer}>{order.user?.fullname || 'Khách hàng'}</Text>
+                      <Text style={styles.orderCardPhone}>📞 {order.phone_number || 'Chưa có SĐT'}</Text>
+                      <Text style={styles.orderCardAddress} numberOfLines={2}>
+                        📍 {order.ship_address || 'Chưa có địa chỉ'}
+                      </Text>
+                      <Text style={styles.orderCardStore} numberOfLines={1}>
+                        🏪 {order.store_name || 'Chưa xác định cửa hàng'}
+                      </Text>
+                      <Text style={styles.orderCardItems} numberOfLines={1}>
+                        {order.items?.map((item: any) =>
+                          `${item.food?.title}${item.food_option ? ` (${item.food_option.size_name})` : ''} x${item.quantity}`
+                        ).join(', ') || 'Đang tải món ăn...'}
+                      </Text>
+                    </View>
+                    <View style={styles.orderActions}>
+                      {order.order_status !== 'Đã giao' && order.order_status !== 'Đã huỷ' && (
+                        <TouchableOpacity
+                          style={styles.cancelOrderButton}
+                          onPress={(e) => {
+                            e.stopPropagation();
+                            updateOrderStatus(order.id, 'Đã huỷ', isManager ? 'Hủy bởi quản lý' : 'Hủy bởi cửa hàng');
+                          }}
+                          disabled={loading}
+                        >
+                          <X size={16} color="#ef4444" />
+                        </TouchableOpacity>
+                      )}
+                    </View>
+                  </View>
+                  <View style={styles.orderCardFooter}>
+                    <Text style={styles.orderCardTotal}>{formatPrice(order.total_money)}</Text>
+                    <View style={[styles.statusBadge, { backgroundColor: getStatusColor(order.order_status) }]}>
+                      <Text style={styles.statusText}>{order.order_status}</Text>
+                    </View>
+                  </View>
+                </TouchableOpacity>
+              ))}
+            </Animated.View>
+          )}
         </ScrollView>
       </View>
 
@@ -220,57 +471,132 @@ export default function OrderListScreen() {
                   <>
                     <View style={styles.orderDetailSection}>
                       <Text style={styles.orderDetailSectionTitle}>Thông tin đơn hàng</Text>
-                      <View style={styles.orderDetailItem}><Text style={styles.orderDetailLabel}>Mã đơn hàng:</Text><Text style={styles.orderDetailValue}>{selectedOrder.id}</Text></View>
-                      <View style={styles.orderDetailItem}><Text style={styles.orderDetailLabel}>Khách hàng:</Text><Text style={styles.orderDetailValue}>{selectedOrder.customer}</Text></View>
-                      <View style={styles.orderDetailItem}><Text style={styles.orderDetailLabel}>Cửa hàng:</Text><Text style={styles.orderDetailValue}>{selectedOrder.storeName}</Text></View>
-                      <View style={styles.orderDetailItem}><Text style={styles.orderDetailLabel}>Địa chỉ giao:</Text><Text style={styles.orderDetailValue}>{selectedOrder.address}</Text></View>
-                      <View style={styles.orderDetailItem}><Text style={styles.orderDetailLabel}>Trạng thái:</Text><View style={[styles.orderDetailStatusBadge, { backgroundColor: getStatusColor(selectedOrder.status) }]}><Text style={styles.orderDetailStatusText}>{selectedOrder.status}</Text></View></View>
+                      <View style={styles.orderDetailItem}>
+                        <Text style={styles.orderDetailLabel}>Mã đơn hàng:</Text>
+                        <Text style={styles.orderDetailValue}>#{selectedOrder.id}</Text>
+                      </View>
+                      <View style={styles.orderDetailItem}>
+                        <Text style={styles.orderDetailLabel}>Khách hàng:</Text>
+                        <Text style={styles.orderDetailValue}>{selectedOrder.user?.fullname || 'Khách hàng'}</Text>
+                      </View>
+                      <View style={styles.orderDetailItem}>
+                        <Text style={styles.orderDetailLabel}>Số điện thoại:</Text>
+                        <Text style={styles.orderDetailValue}>{selectedOrder.phone_number}</Text>
+                      </View>
+                      <View style={styles.orderDetailItem}>
+                        <Text style={styles.orderDetailLabel}>Cửa hàng:</Text>
+                        <Text style={styles.orderDetailValue}>{selectedOrder.store_name || 'Chưa xác định'}</Text>
+                      </View>
+                      <View style={styles.orderDetailItem}>
+                        <Text style={styles.orderDetailLabel}>Địa chỉ giao:</Text>
+                        <Text style={styles.orderDetailValue}>{selectedOrder.ship_address}</Text>
+                      </View>
+                      <View style={styles.orderDetailItem}>
+                        <Text style={styles.orderDetailLabel}>Thời gian đặt:</Text>
+                        <Text style={styles.orderDetailValue}>{selectedOrder.created_date_display || 'Chưa xác định'}</Text>
+                      </View>
+                      <View style={styles.orderDetailItem}>
+                        <Text style={styles.orderDetailLabel}>Trạng thái:</Text>
+                        <View style={[styles.orderDetailStatusBadge, { backgroundColor: getStatusColor(selectedOrder.order_status) }]}>
+                          <Text style={styles.orderDetailStatusText}>{selectedOrder.order_status}</Text>
+                        </View>
+                      </View>
+                      {selectedOrder.note && (
+                        <View style={styles.orderDetailItem}>
+                          <Text style={styles.orderDetailLabel}>Ghi chú:</Text>
+                          <Text style={styles.orderDetailValue}>{selectedOrder.note}</Text>
+                        </View>
+                      )}
                     </View>
 
                     <View style={styles.orderDetailSection}>
                       <Text style={styles.orderDetailSectionTitle}>Món ăn đã đặt</Text>
-                      {selectedOrder.items.map((item: any, idx: number) => (
+                      {selectedOrder.items?.map((item: any, idx: number) => (
                         <View key={idx} style={styles.orderDetailFoodItem}>
-                          <Text style={styles.orderDetailFoodName}>{item.name}</Text>
-                          <Text style={styles.orderDetailFoodSize}>Size: {item.size}</Text>
-                          <Text style={styles.orderDetailFoodQuantity}>x{item.quantity}</Text>
-                          <Text style={styles.orderDetailFoodPrice}>{item.price.toLocaleString()}đ</Text>
-                        </View>
-                      ))}
-                      <View style={styles.orderDetailTotal}><Text style={styles.orderDetailTotalLabel}>Tổng cộng:</Text><Text style={styles.orderDetailTotalValue}>{selectedOrder.totalDisplay}</Text></View>
-                    </View>
-
-                    <View style={styles.orderDetailSection}>
-                      <Text style={styles.orderDetailSectionTitle}>Lịch sử đơn hàng</Text>
-                      {selectedOrder.timeline.map((event: any, idx: number) => (
-                        <View key={idx} style={styles.timelineItem}>
-                          <View style={styles.timelineDot} />
-                          <View style={styles.timelineContent}>
-                            <Text style={styles.timelineTitle}>{event.status}</Text>
-                            <Text style={styles.timelineTime}>{event.time}</Text>
+                          <View style={{ flex: 1 }}>
+                            <Text style={styles.orderDetailFoodName}>{item.food?.title || 'Món ăn'}</Text>
+                            {item.food_option && (
+                              <Text style={styles.orderDetailFoodSize}>Size: {item.food_option.size_name}</Text>
+                            )}
+                            {item.food_note && (
+                              <Text style={styles.orderDetailFoodSize}>Ghi chú: {item.food_note}</Text>
+                            )}
                           </View>
+                          <Text style={styles.orderDetailFoodQuantity}>x{item.quantity}</Text>
+                          <Text style={styles.orderDetailFoodPrice}>{formatPrice(item.subtotal)}</Text>
                         </View>
                       ))}
+                      <View style={styles.orderDetailTotal}>
+                        <Text style={styles.orderDetailTotalLabel}>Tổng cộng:</Text>
+                        <Text style={styles.orderDetailTotalValue}>{formatPrice(selectedOrder.total_money)}</Text>
+                      </View>
                     </View>
 
-                    {selectedOrder.status !== 'Đã giao' && selectedOrder.status !== 'Đã hủy' && (
+                    {selectedOrder.cancel_reason && (
+                      <View style={styles.orderDetailSection}>
+                        <Text style={styles.orderDetailSectionTitle}>Lý do hủy</Text>
+                        <Text style={styles.orderDetailValue}>{selectedOrder.cancel_reason}</Text>
+                      </View>
+                    )}
+
+                    {selectedOrder.order_status !== 'Đã giao' && selectedOrder.order_status !== 'Đã huỷ' && (
                       <View style={styles.orderDetailActions}>
-                        {selectedOrder.status === 'Chờ xác nhận' && (
-                          <TouchableOpacity style={styles.confirmOrderButton} onPress={() => updateOrderStatus(selectedOrder.id, 'Đang chuẩn bị')}>
-                            <Text style={styles.confirmOrderButtonText}>Xác nhận</Text>
-                          </TouchableOpacity>
+                        {/* Only show status transition buttons for store managers, not for general managers */}
+                        {!isManager && (
+                          <>
+                            {selectedOrder.order_status === 'Chờ xác nhận' && (
+                              <TouchableOpacity
+                                style={styles.confirmOrderButton}
+                                onPress={() => updateOrderStatus(selectedOrder.id, 'Đã xác nhận')}
+                                disabled={loading}
+                              >
+                                <Text style={styles.confirmOrderButtonText}>Xác nhận</Text>
+                              </TouchableOpacity>
+                            )}
+                            {selectedOrder.order_status === 'Đã xác nhận' && (
+                              <TouchableOpacity
+                                style={styles.confirmOrderButton}
+                                onPress={() => updateOrderStatus(selectedOrder.id, 'Đang chuẩn bị')}
+                                disabled={loading}
+                              >
+                                <Text style={styles.confirmOrderButtonText}>Chuẩn bị</Text>
+                              </TouchableOpacity>
+                            )}
+                            {selectedOrder.order_status === 'Đang chuẩn bị' && (
+                              <TouchableOpacity
+                                style={styles.confirmOrderButton}
+                                onPress={() => updateOrderStatus(selectedOrder.id, 'Sẵn sàng')}
+                                disabled={loading}
+                              >
+                                <Text style={styles.confirmOrderButtonText}>Sẵn sàng</Text>
+                              </TouchableOpacity>
+                            )}
+                            {(selectedOrder.order_status === 'Sẵn sàng' || selectedOrder.order_status === 'Đã lấy hàng') && (
+                              <TouchableOpacity
+                                style={styles.confirmOrderButton}
+                                onPress={() => updateOrderStatus(selectedOrder.id, 'Đang giao')}
+                                disabled={loading}
+                              >
+                                <Text style={styles.confirmOrderButtonText}>Giao hàng</Text>
+                              </TouchableOpacity>
+                            )}
+                            {selectedOrder.order_status === 'Đang giao' && (
+                              <TouchableOpacity
+                                style={styles.confirmOrderButton}
+                                onPress={() => updateOrderStatus(selectedOrder.id, 'Đã giao')}
+                                disabled={loading}
+                              >
+                                <Text style={styles.confirmOrderButtonText}>Đã giao</Text>
+                              </TouchableOpacity>
+                            )}
+                          </>
                         )}
-                        {selectedOrder.status === 'Đang chuẩn bị' && (
-                          <TouchableOpacity style={styles.confirmOrderButton} onPress={() => updateOrderStatus(selectedOrder.id, 'Đang giao')}>
-                            <Text style={styles.confirmOrderButtonText}>Chuẩn bị</Text>
-                          </TouchableOpacity>
-                        )}
-                        {selectedOrder.status === 'Đang giao' && (
-                          <TouchableOpacity style={styles.confirmOrderButton} onPress={() => updateOrderStatus(selectedOrder.id, 'Đã giao')}>
-                            <Text style={styles.confirmOrderButtonText}>Đã giao</Text>
-                          </TouchableOpacity>
-                        )}
-                        <TouchableOpacity style={styles.cancelOrderDetailButton} onPress={() => updateOrderStatus(selectedOrder.id, 'Đã hủy')}>
+                        {/* Cancel button - available for both managers and store managers */}
+                        <TouchableOpacity
+                          style={styles.cancelOrderDetailButton}
+                          onPress={() => updateOrderStatus(selectedOrder.id, 'Đã huỷ', isManager ? 'Hủy bởi quản lý' : 'Hủy bởi cửa hàng')}
+                          disabled={loading}
+                        >
                           <Text style={styles.cancelOrderDetailButtonText}>Hủy</Text>
                         </TouchableOpacity>
                       </View>
@@ -291,30 +617,184 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#fff7ed' },
 
   // Filter Tabs
-  filterTabs: { flexDirection: 'row', marginVertical: 12, gap: 8, justifyContent: 'center' },
-  filterTab: { paddingHorizontal: 12, paddingVertical: 6, backgroundColor: '#f3f4f6', borderRadius: 6 },
-  filterTabActive: { backgroundColor: '#f59e0b' },
-  filterTabText: { fontSize: 12, color: '#6b7280', fontFamily: Fonts.LeagueSpartanRegular },
-  filterTabTextActive: { fontSize: 12, color: '#fff', fontFamily: Fonts.LeagueSpartanSemiBold },
+  // Filter Tabs
+  filterTabsContainer: {
+    marginVertical: 8,
+    backgroundColor: '#fff', // Đổi từ '#ccc' thành màu nền chính
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 4,
+    elevation: 3,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f1f5f9',
+    maxHeight: 60, // Giới hạn chiều cao
+  },
+  filterTabs: {
+    flexDirection: 'row',
+    gap: 12,
+    paddingHorizontal: 16,
+    alignItems: 'center',
+    paddingVertical: 8,
+    flexWrap: 'nowrap', // Không cho wrap xuống dòng
+  },
+  filterTab: {
+    paddingHorizontal: 10, // Giảm từ 12 xuống 10
+    paddingVertical: 6,
+    backgroundColor: '#f8fafc',
+    borderRadius: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
+    elevation: 1,
+    flexShrink: 1, // Đổi từ 0 thành 1 để cho phép co lại
+    minWidth: 70, // Giảm minWidth
+    height: 36, // Cố định chiều cao cho tất cả tabs
+  },
+  filterTabActive: {
+    backgroundColor: '#ea580c',
+    borderColor: '#c2410c',
+    shadowColor: '#ea580c',
+    shadowOpacity: 0.25,
+    shadowRadius: 6,
+    elevation: 4,
+    transform: [{ scale: 1.02 }],
+  },
+  filterTabText: {
+    fontSize: 13,
+    color: '#64748b',
+    fontFamily: Fonts.LeagueSpartanMedium,
+    textAlign: 'center',
+    lineHeight: 16,
+    fontWeight: '600',
+  },
+  filterTabTextActive: {
+    fontSize: 13,
+    color: '#fff',
+    fontFamily: Fonts.LeagueSpartanBold,
+    fontWeight: '700',
+  },
 
-  scrollView: { flex: 1, paddingHorizontal: 12 },
+  scrollView: { flex: 1, paddingHorizontal: 16, backgroundColor: '#fff7ed' },
 
   // Order Card
-  orderCard: { backgroundColor: '#f8f9fa', borderRadius: 8, padding: 12, marginBottom: 8, borderWidth: 1, borderColor: '#e5e7eb' },
-  orderCardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 8 },
-  orderImage: { width: 48, height: 48, borderRadius: 8, marginRight: 12 },
-  orderCardInfo: { flex: 1 },
-  orderCardId: { fontSize: 12, fontFamily: Fonts.LeagueSpartanBold, color: '#1f2937' },
-  orderCardCustomer: { fontSize: 14, fontFamily: Fonts.LeagueSpartanSemiBold, color: '#1f2937', marginTop: 2 },
-  orderCardItems: { fontSize: 12, color: '#6b7280', fontFamily: Fonts.LeagueSpartanRegular, marginBottom: 8 },
-  orderCardAddress: { fontSize: 12, color: '#6b7280', fontFamily: Fonts.LeagueSpartanRegular, marginTop: 4 },
-  orderCardStore: { fontSize: 12, color: '#059669', fontFamily: Fonts.LeagueSpartanMedium, marginBottom: 4 },
-  orderCardFooter: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  orderCardTotal: { fontSize: 14, fontFamily: Fonts.LeagueSpartanBold, color: '#1f2937' },
-  statusBadge: { paddingHorizontal: 8, paddingVertical: 4, borderRadius: 12 },
-  statusText: { fontSize: 10, color: '#fff', fontFamily: Fonts.LeagueSpartanSemiBold },
-  orderActions: { flexDirection: 'row', gap: 8 },
-  cancelOrderButton: { padding: 6, backgroundColor: '#fef2f2', borderRadius: 4, borderWidth: 1, borderColor: '#fecaca' },
+  orderCard: {
+    backgroundColor: '#ffffff',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: '#e5e7eb',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  orderCardHeader: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    marginBottom: 12
+  },
+  orderImage: {
+    width: 60,
+    height: 60,
+    borderRadius: 10,
+    marginRight: 16,
+    borderWidth: 1,
+    borderColor: '#e5e7eb',
+  },
+  orderCardInfo: { flex: 1, paddingRight: 8 },
+  orderCardId: {
+    fontSize: 16,
+    fontFamily: Fonts.LeagueSpartanBold,
+    color: '#ea580c',
+    marginBottom: 4,
+  },
+  orderCardCustomer: {
+    fontSize: 16,
+    fontFamily: Fonts.LeagueSpartanSemiBold,
+    color: '#1f2937',
+    marginBottom: 6,
+  },
+  orderCardPhone: {
+    fontSize: 14,
+    color: '#059669',
+    fontFamily: Fonts.LeagueSpartanMedium,
+    marginBottom: 4,
+  },
+  orderCardAddress: {
+    fontSize: 13,
+    color: '#6b7280',
+    fontFamily: Fonts.LeagueSpartanRegular,
+    lineHeight: 18,
+    marginBottom: 6,
+  },
+  orderCardItems: {
+    fontSize: 12,
+    color: '#9ca3af',
+    fontFamily: Fonts.LeagueSpartanRegular,
+    fontStyle: 'italic',
+  },
+  orderCardStore: {
+    fontSize: 12,
+    color: '#059669',
+    fontFamily: Fonts.LeagueSpartanMedium,
+    marginBottom: 4
+  },
+  orderCardFooter: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginTop: 8,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: '#f3f4f6',
+  },
+  orderCardTotal: {
+    fontSize: 18,
+    fontFamily: Fonts.LeagueSpartanBold,
+    color: '#dc2626',
+  },
+  statusBadge: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+    elevation: 1,
+  },
+  statusText: {
+    fontSize: 12,
+    color: '#fff',
+    fontFamily: Fonts.LeagueSpartanBold,
+    fontWeight: '600',
+  },
+  orderActions: {
+    flexDirection: 'column',
+    alignItems: 'center',
+    justifyContent: 'flex-start',
+    marginLeft: 8,
+  },
+  cancelOrderButton: {
+    padding: 8,
+    backgroundColor: '#fef2f2',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#fecaca',
+    shadowColor: '#ef4444',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+    elevation: 1,
+  },
 
   // Modal
   overlay: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.5)', zIndex: 1, justifyContent: 'center', alignItems: 'center' },
@@ -356,7 +836,61 @@ const styles = StyleSheet.create({
   // Modal Actions
   orderDetailActions: { padding: 20, borderTopWidth: 1, borderTopColor: '#f3f4f6', gap: 12 },
   confirmOrderButton: { backgroundColor: '#10b981', paddingVertical: 12, borderRadius: 8, width: 100, alignSelf: 'center', alignItems: 'center' },
-  confirmOrderButtonText: { fontSize: 16, fontFamily: Fonts.LeagueSpartanBold,  color: 'white' },
-  cancelOrderDetailButton: { backgroundColor: '#dc2626', paddingVertical: 12, borderRadius: 8, width: 100, alignSelf: 'center',alignItems: 'center' },
+  confirmOrderButtonText: { fontSize: 16, fontFamily: Fonts.LeagueSpartanBold, color: 'white' },
+  cancelOrderDetailButton: { backgroundColor: '#dc2626', paddingVertical: 12, borderRadius: 8, width: 100, alignSelf: 'center', alignItems: 'center' },
   cancelOrderDetailButtonText: { fontSize: 16, fontFamily: Fonts.LeagueSpartanBold, color: 'white' },
+
+  // Loading states
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingVertical: 40
+  },
+  loadingText: {
+    fontSize: 14,
+    color: '#6b7280',
+    marginTop: 12,
+    fontFamily: Fonts.LeagueSpartanRegular
+  },
+
+  // Error states
+  errorContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingVertical: 40
+  },
+  errorText: {
+    fontSize: 14,
+    color: '#ef4444',
+    textAlign: 'center',
+    marginBottom: 16,
+    fontFamily: Fonts.LeagueSpartanRegular
+  },
+  retryButton: {
+    backgroundColor: '#ea580c',
+    paddingHorizontal: 20,
+    paddingVertical: 8,
+    borderRadius: 8
+  },
+  retryButtonText: {
+    fontSize: 14,
+    color: '#fff',
+    fontFamily: Fonts.LeagueSpartanMedium
+  },
+
+  // Empty states  
+  emptyContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingVertical: 40
+  },
+  emptyText: {
+    fontSize: 14,
+    color: '#6b7280',
+    textAlign: 'center',
+    fontFamily: Fonts.LeagueSpartanRegular
+  },
 });

@@ -128,7 +128,7 @@ function AdminDashboardScreen() {
                    activeSection === 'orders' ? 'Quản lý đơn hàng' :
                    activeSection === 'promotions' ? 'Khuyến mãi hệ thống' :
                    activeSection === 'analytics' ? 'Báo cáo doanh thu' :
-                   'Cài đặt'}
+                   'Quản lý shipper'}
                 </Text>
                 <Text style={styles.headerSubtitle}>
                   {activeSection === 'dashboard' ? 'Tổng quan hệ thống quản lý' :

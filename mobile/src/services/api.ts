@@ -21,12 +21,18 @@ class ApiClient {
   }
 
   private setupInterceptors() {
-    // Request interceptor: Bỏ qua kiểm tra access token để cho phép gọi API không cần đăng nhập
+    // Request interceptor: Add authentication header when available
     this.client.interceptors.request.use(
       async (config) => {
-        // Không thêm Authorization header, không kiểm tra token
-        // Có thể thêm log nếu muốn
-        // console.log('API Request:', { method: config.method?.toUpperCase(), url: config.url, data: config.data });
+        try {
+          const accessToken = await SecureStore.getItemAsync(STORAGE_KEYS.ACCESS_TOKEN);
+          if (accessToken) {
+            config.headers.Authorization = `Bearer ${accessToken}`;
+          }
+        } catch (error) {
+          console.log('Error getting access token:', error);
+        }
+        // console.log('API Request:', { method: config.method?.toUpperCase(), url: config.url, headers: config.headers });
         return config;
       },
       (error) => Promise.reject(error)
@@ -184,4 +190,163 @@ class ApiClient {
 }
 
 export const apiClient = new ApiClient();
+
+// Orders API functions
+export const ordersApi = {
+  // Get all orders with pagination and filters
+  getOrders: async (params?: {
+    page?: number;
+    status?: string;
+    delivery_status?: string;
+  }) => {
+    const queryParams = new URLSearchParams();
+    if (params?.page) queryParams.append('page', params.page.toString());
+    if (params?.status) queryParams.append('status', params.status);
+    if (params?.delivery_status) queryParams.append('delivery_status', params.delivery_status);
+    
+    const url = `/orders/${queryParams.toString() ? `?${queryParams.toString()}` : ''}`;
+    return apiClient.get(url);
+  },
+
+  // Get single order details
+  getOrder: async (orderId: number) => {
+    return apiClient.get(`/orders/${orderId}/`);
+  },
+
+  // Update order status (customer cancel)
+  updateOrderStatus: async (orderId: number, data: {
+    order_status: string;
+    cancel_reason?: string;
+  }) => {
+    return apiClient.put(`/orders/${orderId}/status/`, data);
+  },
+
+  // Cancel order group
+  cancelOrderGroup: async (orderId: number, data?: {
+    check_only?: boolean;
+    confirmed?: boolean;
+  }) => {
+    return apiClient.post(`/orders/${orderId}/cancel-group/`, data);
+  },
+
+  // Admin endpoints
+  admin: {
+    // Get all orders (admin/store manager)
+    getOrders: async (params?: {
+      page?: number;
+      status?: string;
+      search?: string;
+    }) => {
+      const queryParams = new URLSearchParams();
+      if (params?.page) queryParams.append('page', params.page.toString());
+      if (params?.status) queryParams.append('status', params.status);
+      if (params?.search) queryParams.append('search', params.search);
+      
+      const url = `/orders/admin/${queryParams.toString() ? `?${queryParams.toString()}` : ''}`;
+      return apiClient.get(url);
+    },
+
+    // Get single order detail (admin)
+    getOrder: async (orderId: number) => {
+      return apiClient.get(`/orders/admin/${orderId}/`);
+    },
+
+    // Update order status (admin/store manager)
+    updateOrderStatus: async (orderId: number, data: {
+      order_status: string;
+      cancel_reason?: string;
+    }) => {
+      return apiClient.patch(`/orders/admin/${orderId}/status/`, data);
+    },
+
+    // Assign shipper to order
+    assignShipper: async (orderId: number, data: {
+      shipper_id: number | null;
+    }) => {
+      return apiClient.put(`/orders/admin/${orderId}/assign-shipper/`, data);
+    },
+  },
+};
+
+// Shipper API
+export const shipperApi = {
+  // Get all shippers with pagination and search
+  getShippers: async (params?: {
+    page?: number;
+    per_page?: number;
+    search?: string;
+    role?: string;
+  }) => {
+    return apiClient.get('/shipper/shippers/', { params });
+  },
+
+  // Get shipper by ID
+  getShipper: async (shipperId: number) => {
+    return apiClient.get(`/shipper/shippers/${shipperId}/`);
+  },
+
+  // Get shipper by user_id
+  getShipperByUser: async (userId: number) => {
+    return apiClient.get('/shipper/shippers/by_user/', {
+      params: { user_id: userId }
+    });
+  },
+
+  // Create shipper from existing user
+  createShipper: async (data: { user_id: number }) => {
+    return apiClient.post('/shipper/shippers/', data);
+  },
+
+  // Create user and shipper together
+  createShipperWithUser: async (data: {
+    fullname: string;
+    username: string;
+    phone: string;
+    email: string;
+    address?: string;
+    password: string;
+  }) => {
+    return apiClient.post('/shipper/shippers/create_with_user/', data);
+  },
+
+  // Update shipper information
+  updateShipper: async (shipperId: number, data: {
+    fullname?: string;
+    phone?: string;
+    email?: string;
+    address?: string;
+  }) => {
+    return apiClient.patch(`/shipper/shippers/${shipperId}/`, data);
+  },
+
+  // Delete shipper
+  deleteShipper: async (shipperId: number) => {
+    return apiClient.delete(`/shipper/shippers/${shipperId}/`);
+  },
+
+  // Get available users (users with Shipper role but no shipper profile)
+  getAvailableUsers: async () => {
+    return apiClient.get('/shipper/shippers/available_users/');
+  },
+
+  // Get shipper statistics
+  getStatistics: async () => {
+    return apiClient.get('/shipper/shippers/statistics/');
+  },
+
+  // Get orders by shipper ID
+  getOrdersByShipper: async (shipperId: number, params?: { 
+    delivery_status?: string; 
+    page?: number; 
+    per_page?: number; 
+  }) => {
+    const queryParams = new URLSearchParams();
+    if (params?.delivery_status) queryParams.append('delivery_status', params.delivery_status);
+    if (params?.page) queryParams.append('page', params.page.toString());
+    if (params?.per_page) queryParams.append('per_page', params.per_page.toString());
+    
+    const queryString = queryParams.toString() ? `?${queryParams.toString()}` : '';
+    return apiClient.get(`/orders/shipper/${shipperId}/orders/${queryString}`);
+  },
+};
 
