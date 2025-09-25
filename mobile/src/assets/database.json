@@ -1,0 +1,509 @@
+{
+  "categories": [
+    { "id": 1, "name": "Ăn vặt", "icon": "🥨" },
+    { "id": 2, "name": "Bữa chính", "icon": "🍽️" },
+    { "id": 3, "name": "Đồ chay", "icon": "🥦" },
+    { "id": 4, "name": "Tráng miệng", "icon": "🧁" },
+    { "id": 5, "name": "Đồ uống", "icon": "🥤" }
+  ],
+  "restaurants": [
+    {
+      "id": 1,
+      "slug": "nha-hang-rose-garden",
+      "name": "Nhà Hàng Rose Garden",
+      "categories": "Burger • Gà • Cơm • Cánh gà",
+      "rating": 4.7,
+      "reviewCount": 328,
+      "priceRange": "80K–180K",
+      "delivery": "Miễn phí",
+      "time": "20 phút",
+      "image": "restaurant-meat-vegetables.png",
+      "category": "Bữa chính",
+      "address": "123 Đường Hoa Hồng, Quận 1, TP.HCM",
+      "phone": "028 3899 1234",
+      "openingHours": "08:00 - 22:00",
+      "description": "Nhà hàng món Âu–Á với nguyên liệu tươi, bít tết và cơm gà là các món bán chạy.",
+      "coords": { "lat": 10.7793, "lng": 106.6991 },
+      "menuIds": [9],
+      "ownerUserId": 2,
+      "reviews": [
+        { "id": 1, "user": "Minh Anh", "avatar": "M", "rating": 5, "comment": "Bít tết mềm, sốt ngon.", "date": "3 ngày trước", "images": ["restaurant-meat-vegetables.png"], "helpful": 9, "verified": true },
+        { "id": 2, "user": "Hải Đăng", "avatar": "H", "rating": 4, "comment": "Không gian đẹp, ra món hơi lâu lúc đông.", "date": "1 tuần trước", "images": [], "helpful": 4, "verified": true }
+      ]
+    },
+    {
+      "id": 2,
+      "slug": "quan-ca-phe-golden-spoon",
+      "name": "Quán Cà Phê Golden Spoon",
+      "categories": "Pizza • Mì Ý • Ý • Salad",
+      "rating": 4.5,
+      "reviewCount": 210,
+      "priceRange": "30K–120K",
+      "delivery": "Miễn phí",
+      "time": "15 phút",
+      "image": "delicious-toppings-pizza.png",
+      "category": "Bữa chính",
+      "address": "45 Đinh Tiên Hoàng, Quận 1, TP.HCM",
+      "phone": "028 3838 5678",
+      "openingHours": "07:00 - 21:30",
+      "description": "Cà phê & đồ Ý thân thiện, nổi bật với pizza mỏng và cà phê pha máy.",
+      "coords": { "lat": 10.7865, "lng": 106.7027 },
+      "menuIds": [8, 20],
+      "ownerUserId": 3,
+      "reviews": [
+        { "id": 1, "user": "Yến Nhi", "avatar": "Y", "rating": 5, "comment": "Pizza giòn, thơm. Cà phê đậm vừa.", "date": "5 ngày trước", "images": ["delicious-toppings-pizza.png"], "helpful": 7, "verified": true }
+      ]
+    },
+    {
+      "id": 3,
+      "slug": "bep-to-tuoi",
+      "name": "Bếp Tô Tươi",
+      "categories": "Lành mạnh • Tô • Chay • Sinh tố",
+      "rating": 4.8,
+      "reviewCount": 154,
+      "priceRange": "50K–90K",
+      "delivery": "15.000 VNĐ",
+      "time": "25 phút",
+      "image": "fresh-salad-bowl.png",
+      "category": "Đồ chay",
+      "address": "12 Nguyễn Trãi, Quận 5, TP.HCM",
+      "phone": "028 3777 2222",
+      "openingHours": "09:00 - 21:00",
+      "description": "Đồ chay, sinh tố xanh và các tô healthy theo mùa.",
+      "coords": { "lat": 10.7561, "lng": 106.6676 },
+      "menuIds": [12, 19],
+      "ownerUserId": 2,
+      "reviews": [
+        { "id": 1, "user": "Quốc Bảo", "avatar": "Q", "rating": 5, "comment": "Tô Buddha thơm, no bụng.", "date": "2 tuần trước", "images": ["vegetable-rice-bowl.png"], "helpful": 3, "verified": true }
+      ]
+    },
+    {
+      "id": 4,
+      "slug": "cung-dien-burger",
+      "name": "Cung Điện Burger",
+      "categories": "Burger • Khoai tây chiên • Mỹ • Thức ăn nhanh",
+      "rating": 4.3,
+      "reviewCount": 412,
+      "priceRange": "30K–95K",
+      "delivery": "Miễn phí",
+      "time": "18 phút",
+      "image": "gourmet-burger.png",
+      "category": "Bữa chính",
+      "address": "88 Trần Hưng Đạo, Quận 1, TP.HCM",
+      "phone": "028 3910 9090",
+      "openingHours": "10:00 - 23:00",
+      "description": "Burger bò nướng lửa, bánh mì bơ và combo khoai giòn.",
+      "coords": { "lat": 10.7691, "lng": 106.7006 },
+      "menuIds": [4, 5],
+      "ownerUserId": 1,
+      "reviews": [
+        { "id": 1, "user": "Minh Anh", "avatar": "M", "rating": 5, "comment": "Burger rất ngon, thịt bò tươi và phô mai tan chảy. Giao nhanh, gói cẩn thận.", "date": "2 ngày trước", "images": ["gourmet-burger.png"], "helpful": 12, "verified": true },
+        { "id": 2, "user": "Thanh Hoa", "avatar": "T", "rating": 4, "comment": "Ngon nhưng hơi mặn một chút. Nhân viên thân thiện.", "date": "1 tuần trước", "images": [], "helpful": 8, "verified": true }
+      ]
+    },
+    {
+      "id": 5,
+      "slug": "giac-mo-ngot-ngao",
+      "name": "Giấc Mơ Ngọt Ngào",
+      "categories": "Tráng miệng • Bánh • Kem • Bánh ngọt",
+      "rating": 4.9,
+      "reviewCount": 265,
+      "priceRange": "30K–60K",
+      "delivery": "10.000 VNĐ",
+      "time": "30 phút",
+      "image": "chocolate-berry-cupcake.png",
+      "category": "Tráng miệng",
+      "address": "5 Pasteur, Quận 3, TP.HCM",
+      "phone": "028 3822 1111",
+      "openingHours": "09:00 - 22:00",
+      "description": "Tiệm bánh & tráng miệng phong cách Âu, tiramisu và cupcake berry đặc trưng.",
+      "coords": { "lat": 10.7841, "lng": 106.6953 },
+      "menuIds": [14, 15],
+      "ownerUserId": 3,
+      "reviews": [
+        { "id": 1, "user": "Lan Hương", "avatar": "L", "rating": 5, "comment": "Cupcake mềm, không quá ngọt.", "date": "5 ngày trước", "images": ["chocolate-berry-cupcake.png"], "helpful": 5, "verified": true }
+      ]
+    },
+    {
+      "id": 6,
+      "slug": "goc-an-vat",
+      "name": "Góc Ăn Vặt",
+      "categories": "Ăn vặt • Khoai tây chiên • Cánh gà • Khai vị",
+      "rating": 4.2,
+      "reviewCount": 189,
+      "priceRange": "20K–55K",
+      "delivery": "Miễn phí",
+      "time": "12 phút",
+      "image": "fresh-vegetable-spring-rolls.png",
+      "category": "Ăn vặt",
+      "address": "27 Hoàng Sa, Phú Nhuận, TP.HCM",
+      "phone": "028 3999 7777",
+      "openingHours": "14:00 - 22:30",
+      "description": "Quán ăn vặt nhanh, khoai chiên & cánh gà sốt cay là best-seller.",
+      "coords": { "lat": 10.7999, "lng": 106.6796 },
+      "menuIds": [2],
+      "ownerUserId": 2,
+      "reviews": [
+        { "id": 1, "user": "Đình Tú", "avatar": "Đ", "rating": 4, "comment": "Khoai nóng giòn, giao nhanh.", "date": "3 ngày trước", "images": ["fresh-vegetable-spring-rolls.png"], "helpful": 2, "verified": true }
+      ]
+    },
+    {
+      "id": 7,
+      "slug": "gio-tra",
+      "name": "Giờ Trà",
+      "categories": "Trà sữa • Cà phê • Sinh tố • Đồ uống",
+      "rating": 4.6,
+      "reviewCount": 305,
+      "priceRange": "20K–45K",
+      "delivery": "5.000 VNĐ",
+      "time": "10 phút",
+      "image": "vegetable-rice-bowl.png",
+      "category": "Đồ uống",
+      "address": "101 Nguyễn Văn Cừ, Quận 5, TP.HCM",
+      "phone": "028 3855 3333",
+      "openingHours": "09:00 - 22:00",
+      "description": "Trà sữa trân châu đường đen, sinh tố trái cây theo mùa.",
+      "coords": { "lat": 10.7592, "lng": 106.6824 },
+      "menuIds": [21],
+      "ownerUserId": 3,
+      "reviews": [
+        { "id": 1, "user": "Tấn Dũng", "avatar": "T", "rating": 5, "comment": "Trà sữa chuẩn vị, trân châu mềm.", "date": "1 tuần trước", "images": ["vegetable-rice-bowl.png"], "helpful": 6, "verified": true }
+      ]
+    }
+  ],
+  "foods": [
+    { "id": 1, "name": "Chả giò rau củ", "restaurant": "Quán Á Đông", "restaurantId": null, "rating": 5.0, "price": "35.000 VNĐ", "image": "fresh-vegetable-spring-rolls.png", "category": "Ăn vặt" },
+    { "id": 2, "name": "Khoai tây chiên", "restaurant": "Góc Ăn Vặt", "restaurantId": 6, "rating": 4.2, "price": "25.000 VNĐ", "image": "chocolate-berry-cupcake.png", "category": "Ăn vặt" },
+    { "id": 3, "name": "Cánh gà nướng", "restaurant": "Cửa Hàng Cánh Gà", "restaurantId": null, "rating": 4.8, "price": "45.000 VNĐ", "image": "fresh-vegetable-spring-rolls.png", "category": "Ăn vặt" },
+    { "id": 4, "name": "Bánh mì mini", "restaurant": "Cung Điện Burger", "restaurantId": 4, "rating": 4.5, "price": "30.000 VNĐ", "image": "gourmet-burger.png", "category": "Ăn vặt" },
+    {
+      "id": 5,
+      "name": "Burger cao cấp",
+      "restaurant": "Cung Điện Burger",
+      "restaurantId": 4,
+      "rating": 5.0,
+      "price": "85.000 VNĐ",
+      "image": "gourmet-burger.png",
+      "category": "Bữa chính",
+      "reviews": [
+        { "id": 101, "user": "Quang Dũng", "avatar": "Q", "rating": 5, "comment": "Tuyệt vời! Burger to, ngon, giá hợp lý.", "date": "2 tuần trước", "images": ["gourmet-burger.png", "restaurant-meat-vegetables.png"], "helpful": 15, "verified": false },
+        { "id": 102, "user": "Hoàng Nam", "avatar": "H", "rating": 5, "comment": "Thịt bò mềm, phô mai thơm. Đóng gói đẹp.", "date": "1 tháng trước", "images": ["gourmet-burger.png"], "helpful": 20, "verified": true }
+      ]
+    },
+    { "id": 6, "name": "Đĩa sushi tổng hợp", "restaurant": "Bếp Tokyo", "restaurantId": null, "rating": 4.8, "price": "150.000 VNĐ", "image": "assorted-sushi.png", "category": "Bữa chính" },
+    { "id": 7, "name": "Miếng lasagna", "restaurant": "Góc Ý", "restaurantId": null, "rating": 4.7, "price": "95.000 VNĐ", "image": "lasagna-slice.png", "category": "Bữa chính" },
+    { "id": 8, "name": "Pizza Margherita", "restaurant": "Góc Pizza", "restaurantId": 2, "rating": 4.5, "price": "120.000 VNĐ", "image": "delicious-toppings-pizza.png", "category": "Bữa chính" },
+    { "id": 9, "name": "Bít tết nướng", "restaurant": "Nhà Hàng Rose Garden", "restaurantId": 1, "rating": 4.9, "price": "140.000 VNĐ", "image": "restaurant-meat-vegetables.png", "category": "Bữa chính" },
+    { "id": 10, "name": "Tô rau củ", "restaurant": "Món Ăn Lành Mạnh", "restaurantId": null, "rating": 4.6, "price": "65.000 VNĐ", "image": "vegetable-rice-bowl.png", "category": "Đồ chay" },
+    { "id": 11, "name": "Salad vườn tươi", "restaurant": "Lá Xanh", "restaurantId": null, "rating": 4.3, "price": "55.000 VNĐ", "image": "fresh-salad-bowl.png", "category": "Đồ chay" },
+    { "id": 12, "name": "Tô quinoa Buddha", "restaurant": "Bếp Tô Tươi", "restaurantId": 3, "rating": 4.7, "price": "75.000 VNĐ", "image": "vegetable-rice-bowl.png", "category": "Đồ chay" },
+    { "id": 13, "name": "Bánh mì bơ", "restaurant": "Lá Xanh", "restaurantId": null, "rating": 4.4, "price": "40.000 VNĐ", "image": "fresh-salad-bowl.png", "category": "Đồ chay" },
+    { "id": 14, "name": "Bánh cupcake berry", "restaurant": "Giấc Mơ Ngọt Ngào", "restaurantId": 5, "rating": 4.9, "price": "35.000 VNĐ", "image": "chocolate-berry-cupcake.png", "category": "Tráng miệng" },
+    { "id": 15, "name": "Bánh socola", "restaurant": "Giấc Mơ Ngọt Ngào", "restaurantId": 5, "rating": 4.8, "price": "40.000 VNĐ", "image": "chocolate-berry-cupcake.png", "category": "Tráng miệng" },
+    { "id": 16, "name": "Kem sundae", "restaurant": "Món Kem Đông Lạnh", "restaurantId": null, "rating": 4.6, "price": "45.000 VNĐ", "image": "chocolate-berry-cupcake.png", "category": "Tráng miệng" },
+    { "id": 17, "name": "Tiramisu", "restaurant": "Góc Ý", "restaurantId": null, "rating": 4.9, "price": "50.000 VNĐ", "image": "chocolate-berry-cupcake.png", "category": "Tráng miệng" },
+    { "id": 18, "name": "Nước cam tươi", "restaurant": "Quầy Nước Ép", "restaurantId": null, "rating": 4.5, "price": "25.000 VNĐ", "image": "fresh-salad-bowl.png", "category": "Đồ uống" },
+    { "id": 19, "name": "Sinh tố xanh", "restaurant": "Bếp Tô Tươi", "restaurantId": 3, "rating": 4.7, "price": "35.000 VNĐ", "image": "vegetable-rice-bowl.png", "category": "Đồ uống" },
+    { "id": 20, "name": "Cà phê đá", "restaurant": "Quán Cà Phê", "restaurantId": 2, "rating": 4.3, "price": "20.000 VNĐ", "image": "fresh-salad-bowl.png", "category": "Đồ uống" },
+    { "id": 21, "name": "Trà sữa trân châu", "restaurant": "Giờ Trà", "restaurantId": 7, "rating": 4.6, "price": "30.000 VNĐ", "image": "vegetable-rice-bowl.png", "category": "Đồ uống" }
+  ],
+  "banners": [
+    { "id": 1, "title": "Trải nghiệm món ăn mới ngon tuyệt", "discount": "GIẢM 30%", "image": "delicious-toppings-pizza.png" },
+    { "id": 2, "title": "Nguyên liệu tươi mỗi ngày", "discount": "GIẢM 25%", "image": "fresh-salad-bowl.png" },
+    { "id": 3, "title": "Burger chất lượng cao cấp", "discount": "GIẢM 20%", "image": "gourmet-burger.png" }
+  ],
+  "users": [
+    {
+      "id": 1,
+      "fullName": "Phạm Tuấn",
+      "email": "tuan@example.com",
+      "phone": "+84 912 345 678",
+      "avatar": "T",
+      "roles": ["customer", "seller", "admin"],
+      "createdAt": "2025-08-01T09:00:00+07:00",
+      "defaultAddressId": 101,
+      "defaultPaymentMethod": { "type": "card", "id": 501 }
+    },
+    {
+      "id": 2,
+      "fullName": "Nguyễn Minh Anh",
+      "email": "minhanh@example.com",
+      "phone": "+84 933 111 222",
+      "avatar": "M",
+      "roles": ["customer", "seller"],
+      "createdAt": "2025-08-05T10:30:00+07:00",
+      "defaultAddressId": 102,
+      "defaultPaymentMethod": { "type": "bank", "id": 401 }
+    },
+    {
+      "id": 3,
+      "fullName": "Trần Gia Huy",
+      "email": "huy@example.com",
+      "phone": "+84 936 555 444",
+      "avatar": "H",
+      "roles": ["customer", "seller"],
+      "createdAt": "2025-08-12T14:00:00+07:00",
+      "defaultAddressId": 103
+    },
+    {
+      "id": 4,
+      "fullName": "Lê Bảo",
+      "email": "shipper.lebao@example.com",
+      "phone": "+84 988 111 000",
+      "avatar": "B",
+      "roles": ["shipper"],
+      "createdAt": "2025-08-15T08:00:00+07:00",
+      "defaultAddressId": 104
+    },
+    {
+      "id": 1001,
+      "name": "Nguyễn Văn A",
+      "email": "customer.demo@example.com",
+      "phone": "+84 912 000 001",
+      "role": "customer",
+      "password": "demo1234",
+      "addresses": [
+        {
+          "id": 9001,
+          "fullName": "Nguyễn Văn A",
+          "phone": "+84 912 000 001",
+          "street": "12/5 Đường Hoa Cúc",
+          "ward": "Phường 7",
+          "district": "Phú Nhuận",
+          "province": "TP.HCM",
+          "isDefault": true
+        },
+        {
+          "id": 9002,
+          "fullName": "Nguyễn Văn A",
+          "phone": "+84 912 000 001",
+          "street": "45 Đinh Tiên Hoàng",
+          "ward": "Bến Nghé",
+          "district": "Quận 1",
+          "province": "TP.HCM",
+          "isDefault": false
+        }
+      ],
+      "wallet": {
+        "balance": 250000,
+        "transactionHistory": [
+          { "id": "wtxn_01", "type": "credit", "amount": 300000, "desc": "Nạp ví", "at": "2025-09-10T09:00:00+07:00" },
+          { "id": "wtxn_02", "type": "debit", "amount": 135000, "desc": "Thanh toán ord_2002", "at": "2025-09-10T12:10:00+07:00", "orderId": "ord_2002" },
+          { "id": "wtxn_03", "type": "debit", "amount": 15000, "desc": "Phí giao hàng ord_2002", "at": "2025-09-10T12:10:10+07:00", "orderId": "ord_2002" }
+        ]
+      },
+      "orders": ["ord_2001", "ord_2002"],
+      "favorites": {
+        "restaurantIds": [4, 1],
+        "foodIds": [5, 14, 21]
+      }
+    },
+    {
+      "id": 2001,
+      "name": "Lê Bảo (Shipper Demo)",
+      "email": "shipper.demo@example.com",
+      "phone": "+84 988 000 002",
+      "role": "shipper",
+      "password": "demo1234",
+      "profile": {
+        "birthDate": "1995-03-15",
+        "joinDate": "2024-12-01",
+        "rating": 4.86,
+        "totalDeliveries": 325,
+        "completionRate": 98.2
+      },
+      "vehicle": { "type": "motorbike", "plateNumber": "59X3-123.45" },
+      "bankAccounts": [
+        { "bankName": "Vietcombank", "accountNumber": "00110002222", "accountHolder": "Le Bao" }
+      ],
+      "deliveries": ["ord_2003", "ord_2004"]
+    }
+  ],
+  "auth": {
+    "credentials": [
+      { "userId": 1, "email": "tuan@example.com", "phone": "+84912345678", "passwordHash": "$2b$10$demoHASHtuan", "salt": "salt_tuan", "lastLoginAt": "2025-08-29T21:15:00+07:00", "status": "active" },
+      { "userId": 2, "email": "minhanh@example.com", "phone": "+84933111222", "passwordHash": "$2b$10$demoHASHanh", "salt": "salt_anh", "lastLoginAt": "2025-08-28T08:12:00+07:00", "status": "active" },
+      { "userId": 3, "email": "huy@example.com", "phone": "+84936555444", "passwordHash": "$2b$10$demoHASHhuy", "salt": "salt_huy", "lastLoginAt": null, "status": "inactive" },
+      { "userId": 4, "email": "shipper.lebao@example.com", "phone": "+84988111000", "passwordHash": "$2b$10$demoHASHbao", "salt": "salt_bao", "lastLoginAt": "2025-08-25T10:00:00+07:00", "status": "active" }
+    ],
+    "sessions": [
+      { "id": "sess_01HZYX123ABC", "userId": 1, "token": "jwt_demo_token_1", "createdAt": "2025-08-29T21:15:00+07:00", "expiresAt": "2025-09-05T21:15:00+07:00", "device": "Android", "ip": "203.0.113.10" }
+    ],
+    "rolePermissions": {
+      "customer": ["order:create", "order:read", "payment:use", "address:manage", "review:create"],
+      "seller": ["restaurant:manage", "menu:manage", "order:read", "promotion:manage"],
+      "shipper": ["delivery:accept", "delivery:update", "delivery:read"],
+      "admin": ["user:manage", "role:assign", "order:read", "finance:read", "platform:settings"]
+    }
+  },
+  "addresses": [
+    { "id": 101, "userId": 1, "label": "Nhà riêng", "fullName": "Phạm Tuấn", "phone": "+84 912 345 678", "line1": "12/5 Đường Hoa Cúc", "line2": "Phường 7", "ward": "Phường 7", "district": "Phú Nhuận", "city": "TP.HCM", "country": "VN", "isDefault": true, "coords": { "lat": 10.8021, "lng": 106.6802 }, "note": "Gọi trước khi giao" },
+    { "id": 102, "userId": 2, "label": "Văn phòng", "fullName": "Nguyễn Minh Anh", "phone": "+84 933 111 222", "line1": "45 Đinh Tiên Hoàng", "line2": "Tầng 5", "ward": "Bến Nghé", "district": "Quận 1", "city": "TP.HCM", "country": "VN", "isDefault": true, "coords": { "lat": 10.7865, "lng": 106.7027 }, "note": "Lễ tân nhận hộ" },
+    { "id": 103, "userId": 3, "label": "Nhà", "fullName": "Trần Gia Huy", "phone": "+84 936 555 444", "line1": "22/7 Đoàn Thị Điểm", "line2": "", "ward": "Phường 1", "district": "Phú Nhuận", "city": "TP.HCM", "country": "VN", "isDefault": true, "coords": { "lat": 10.794, "lng": 106.676 }, "note": "" },
+    { "id": 104, "userId": 4, "label": "Nhà", "fullName": "Lê Bảo", "phone": "+84 988 111 000", "line1": "35/2 Nguyễn Trãi", "line2": "", "ward": "Phường 3", "district": "Quận 5", "city": "TP.HCM", "country": "VN", "isDefault": true, "coords": { "lat": 10.753, "lng": 106.669 }, "note": "" }
+  ],
+  "bankAccounts": [
+    { "id": 401, "userId": 2, "bankName": "Vietcombank", "accountHolder": "Nguyen Minh Anh", "accountNumberMasked": "*** *** 1234", "accountNumber": "00110001234", "swiftCode": "BFTVVNVX", "isDefault": true, "createdAt": "2025-08-05T10:35:00+07:00" },
+    { "id": 402, "userId": 1, "bankName": "Techcombank", "accountHolder": "Pham Tuan", "accountNumberMasked": "*** *** 7777", "accountNumber": "1903777777", "swiftCode": "VTCBVNVX", "isDefault": false, "createdAt": "2025-08-20T11:00:00+07:00" }
+  ],
+  "cards": [
+    { "id": 501, "userId": 1, "brand": "Visa", "network": "visa", "holderName": "PHAM TUAN", "last4": "4242", "expMonth": 12, "expYear": 2027, "isDefault": true, "token": "tok_demo_visa_4242", "billingAddressId": 101, "createdAt": "2025-08-10T14:22:00+07:00" },
+    { "id": 502, "userId": 1, "brand": "Mastercard", "network": "mastercard", "holderName": "PHAM TUAN", "last4": "5454", "expMonth": 5, "expYear": 2028, "isDefault": false, "token": "tok_demo_mc_5454", "billingAddressId": 101, "createdAt": "2025-08-20T09:05:00+07:00" },
+    { "id": 503, "userId": 3, "brand": "JCB", "network": "jcb", "holderName": "TRAN GIA HUY", "last4": "8888", "expMonth": 3, "expYear": 2029, "isDefault": true, "token": "tok_demo_jcb_8888", "billingAddressId": 103, "createdAt": "2025-08-22T09:05:00+07:00" }
+  ],
+  "sellers": [
+    { "userId": 1, "displayName": "Cung Điện Burger - Owner", "restaurantIds": [4], "status": "active" },
+    { "userId": 2, "displayName": "Tasty Group", "restaurantIds": [1, 3, 6], "status": "active" },
+    { "userId": 3, "displayName": "Golden & Sweet", "restaurantIds": [2, 5, 7], "status": "active" }
+  ],
+  "couriers": [
+    {
+      "userId": 4,
+      "vehicle": { "type": "motorbike", "plate": "59X3-123.45" },
+      "serviceArea": ["Quận 1", "Quận 3", "Quận 5"],
+      "onDuty": true,
+      "rating": 4.9,
+      "completedTrips": 312
+    }
+  ],
+  "orders": [
+    {
+      "id": "ord_1001",
+      "userId": 1,
+      "status": "delivered",
+      "createdAt": "2025-08-20T12:30:00+07:00",
+      "deliveredAt": "2025-08-20T13:10:00+07:00",
+      "items": [
+        { "foodId": 5, "qty": 1, "price": 85000, "restaurantId": 4 },
+        { "foodId": 8, "qty": 1, "price": 120000, "restaurantId": 2 }
+      ]
+    },
+    {
+      "id": "ord_1002",
+      "userId": 2,
+      "status": "cancelled",
+      "createdAt": "2025-08-22T18:10:00+07:00",
+      "items": [
+        { "foodId": 14, "qty": 2, "price": 35000, "restaurantId": 5 }
+      ]
+    },
+    {
+      "id": "ord_1003",
+      "userId": 3,
+      "status": "delivered",
+      "createdAt": "2025-08-25T09:05:00+07:00",
+      "deliveredAt": "2025-08-25T09:40:00+07:00",
+      "items": [
+        { "foodId": 19, "qty": 1, "price": 35000, "restaurantId": 3 }
+      ]
+    },
+    {
+      "id": "ord_2001",
+      "userId": 1001,
+      "status": "pending",
+      "createdAt": "2025-09-17T10:00:00+07:00",
+      "items": [
+        { "foodId": 14, "qty": 1, "price": 35000, "restaurantId": 5 },
+        { "foodId": 21, "qty": 1, "price": 30000, "restaurantId": 7 }
+      ],
+      "shippingFee": 15000,
+      "addressId": 9001
+    },
+    {
+      "id": "ord_2002",
+      "userId": 1001,
+      "status": "completed",
+      "createdAt": "2025-09-10T12:00:00+07:00",
+      "deliveredAt": "2025-09-10T12:20:00+07:00",
+      "items": [
+        { "foodId": 5, "qty": 1, "price": 85000, "restaurantId": 4 },
+        { "foodId": 18, "qty": 1, "price": 25000, "restaurantId": null }
+      ],
+      "shippingFee": 15000,
+      "addressId": 9001,
+      "payment": { "method": "wallet", "total": 125000 }
+    },
+    {
+      "id": "ord_2003",
+      "userId": 2,
+      "status": "delivering",
+      "createdAt": "2025-09-17T11:15:00+07:00",
+      "assignedCourierUserId": 2001,
+      "items": [
+        { "foodId": 8, "qty": 1, "price": 120000, "restaurantId": 2 }
+      ],
+      "pickupAt": "2025-09-17T11:30:00+07:00",
+      "addressHint": "Tòa nhà văn phòng, gửi lễ tân"
+    },
+    {
+      "id": "ord_2004",
+      "userId": 3,
+      "status": "completed",
+      "createdAt": "2025-09-16T19:40:00+07:00",
+      "assignedCourierUserId": 2001,
+      "deliveredAt": "2025-09-16T20:05:00+07:00",
+      "items": [
+        { "foodId": 21, "qty": 2, "price": 30000, "restaurantId": 7 }
+      ],
+      "rating": { "stars": 5, "comment": "Giao nhanh, thân thiện" }
+    }
+  ],
+  "vouchers": [
+    {
+      "id": "vc_global30",
+      "code": "GLOBAL30",
+      "discountType": "percent",
+      "value": 30,
+      "minOrder": 100000,
+      "appliesTo": "global",
+      "validFrom": "2025-09-01",
+      "validTo": "2025-12-31",
+      "isActive": true
+    },
+    {
+      "id": "vc_restaurant4_20k",
+      "code": "BURGER20K",
+      "discountType": "amount",
+      "value": 20000,
+      "minOrder": 80000,
+      "appliesTo": { "type": "restaurant", "restaurantId": 4 },
+      "validFrom": "2025-09-10",
+      "validTo": "2025-10-31",
+      "isActive": true
+    },
+    {
+      "id": "vc_category_dessert10",
+      "code": "SWEET10",
+      "discountType": "percent",
+      "value": 10,
+      "minOrder": 50000,
+      "appliesTo": { "type": "category", "categoryName": "Tráng miệng" },
+      "validFrom": "2025-09-05",
+      "validTo": "2025-11-30",
+      "isActive": true
+    }
+  ],
+  "reviews": [
+    {
+      "id": "rv_3001",
+      "type": "restaurant",
+      "restaurantId": 4,
+      "userName": "Nguyễn Văn A",
+      "rating": 5,
+      "comment": "Burger ngon, ship nhanh.",
+      "createdAt": "2025-09-10T12:25:00+07:00",
+      "orderId": "ord_2002",
+      "verified": true
+    },
+    {
+      "id": "rv_3002",
+      "type": "food",
+      "foodId": 14,
+      "userName": "Minh Anh",
+      "rating": 4,
+      "comment": "Cupcake mềm, vị ổn.",
+      "createdAt": "2025-09-12T09:00:00+07:00",
+      "verified": true
+    }
+  ]
+}

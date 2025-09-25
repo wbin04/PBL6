@@ -2,6 +2,7 @@ import axios, { AxiosInstance, AxiosRequestConfig, AxiosResponse } from 'axios';
 import * as SecureStore from 'expo-secure-store';
 import { API_CONFIG, STORAGE_KEYS, ERROR_MESSAGES } from '@/constants';
 import { ApiError } from '@/types';
+import { authEvents, AUTH_EVENTS } from './authEvents';
 
 class ApiClient {
   private client: AxiosInstance;
@@ -20,13 +21,18 @@ class ApiClient {
   }
 
   private setupInterceptors() {
-    // Request interceptor to add auth token
+    // Request interceptor: Add authentication header when available
     this.client.interceptors.request.use(
       async (config) => {
-        const token = await SecureStore.getItemAsync(STORAGE_KEYS.ACCESS_TOKEN);
-        if (token) {
-          config.headers.Authorization = `Bearer ${token}`;
+        try {
+          const accessToken = await SecureStore.getItemAsync(STORAGE_KEYS.ACCESS_TOKEN);
+          if (accessToken) {
+            config.headers.Authorization = `Bearer ${accessToken}`;
+          }
+        } catch (error) {
+          console.log('Error getting access token:', error);
         }
+        // console.log('API Request:', { method: config.method?.toUpperCase(), url: config.url, headers: config.headers });
         return config;
       },
       (error) => Promise.reject(error)
@@ -34,8 +40,18 @@ class ApiClient {
 
     // Response interceptor to handle token refresh
     this.client.interceptors.response.use(
-      (response) => response,
+      (response) => {
+        return response;
+      },
       async (error) => {
+        // Log error responses
+        console.log('API Error:', {
+          status: error.response?.status,
+          url: error.config?.url,
+          data: error.response?.data,
+          message: error.message
+        });
+        
         const originalRequest = error.config;
 
         if (error.response?.status === 401 && !originalRequest._retry) {
@@ -53,8 +69,12 @@ class ApiClient {
             }
           } catch (refreshError) {
             // Refresh failed, logout user
+            console.log('Refresh token failed, clearing tokens and navigating to login');
             await this.clearTokens();
-            // You might want to dispatch a logout action here
+            
+            // Force app to show login screen by dispatching logout action
+            // Note: This requires access to the Redux store, which we'll handle differently
+            this.handleSessionExpiry();
           }
         }
 
@@ -76,11 +96,22 @@ class ApiClient {
     await SecureStore.deleteItemAsync(STORAGE_KEYS.USER);
   }
 
+  private handleSessionExpiry() {
+    // Emit session expired event
+    authEvents.emit(AUTH_EVENTS.SESSION_EXPIRED);
+    console.log('Session expired - event emitted');
+  }
+
   private handleError(error: any): ApiError {
+    console.log('API Client Error:', error);
+    
     if (error.response) {
       // Server responded with error status
       const status = error.response.status;
       const data = error.response.data;
+      
+      console.log('API Error Response Status:', status);
+      console.log('API Error Response Data:', data);
 
       if (status >= 500) {
         return { message: ERROR_MESSAGES.SERVER_ERROR };
@@ -98,20 +129,25 @@ class ApiClient {
         return { message: ERROR_MESSAGES.AUTH_ERROR };
       }
 
-      // Return server error message if available
+      // Handle Django error format: {'error': 'message'} or direct message
+      const errorMessage = data?.error || data?.message || data?.detail || ERROR_MESSAGES.VALIDATION_ERROR;
+      
       return {
-        message: data?.error?.message || data?.message || data?.detail || ERROR_MESSAGES.VALIDATION_ERROR,
+        message: errorMessage,
+        status,
         ...data,
       };
     }
 
     if (error.request) {
       // Network error
+      console.log('Network Error:', error.request);
       return { message: ERROR_MESSAGES.NETWORK_ERROR };
     }
 
     // Unknown error
-    return { message: ERROR_MESSAGES.UNKNOWN_ERROR };
+    console.log('Unknown Error:', error.message);
+    return { message: error.message || ERROR_MESSAGES.UNKNOWN_ERROR };
   }
 
   // HTTP Methods
@@ -154,3 +190,240 @@ class ApiClient {
 }
 
 export const apiClient = new ApiClient();
+
+// Orders API functions
+export const ordersApi = {
+  // Get all orders with pagination and filters
+  getOrders: async (params?: {
+    page?: number;
+    status?: string;
+    delivery_status?: string;
+  }) => {
+    const queryParams = new URLSearchParams();
+    if (params?.page) queryParams.append('page', params.page.toString());
+    if (params?.status) queryParams.append('status', params.status);
+    if (params?.delivery_status) queryParams.append('delivery_status', params.delivery_status);
+    
+    const url = `/orders/${queryParams.toString() ? `?${queryParams.toString()}` : ''}`;
+    return apiClient.get(url);
+  },
+
+  // Get single order details
+  getOrder: async (orderId: number) => {
+    return apiClient.get(`/orders/${orderId}/`);
+  },
+
+  // Update order status (customer cancel)
+  updateOrderStatus: async (orderId: number, data: {
+    order_status: string;
+    cancel_reason?: string;
+  }) => {
+    return apiClient.put(`/orders/${orderId}/status/`, data);
+  },
+
+  // Cancel order group
+  cancelOrderGroup: async (orderId: number, data?: {
+    check_only?: boolean;
+    confirmed?: boolean;
+  }) => {
+    return apiClient.post(`/orders/${orderId}/cancel-group/`, data);
+  },
+
+  // Admin endpoints
+  admin: {
+    // Get all orders (admin/store manager)
+    getOrders: async (params?: {
+      page?: number;
+      status?: string;
+      search?: string;
+    }) => {
+      const queryParams = new URLSearchParams();
+      if (params?.page) queryParams.append('page', params.page.toString());
+      if (params?.status) queryParams.append('status', params.status);
+      if (params?.search) queryParams.append('search', params.search);
+      
+      const url = `/orders/admin/${queryParams.toString() ? `?${queryParams.toString()}` : ''}`;
+      return apiClient.get(url);
+    },
+
+    // Get single order detail (admin)
+    getOrder: async (orderId: number) => {
+      return apiClient.get(`/orders/admin/${orderId}/`);
+    },
+
+    // Update order status (admin/store manager)
+    updateOrderStatus: async (orderId: number, data: {
+      order_status: string;
+      cancel_reason?: string;
+    }) => {
+      return apiClient.patch(`/orders/admin/${orderId}/status/`, data);
+    },
+
+    // Assign shipper to order
+    assignShipper: async (orderId: number, data: {
+      shipper_id: number | null;
+    }) => {
+      return apiClient.put(`/orders/admin/${orderId}/assign-shipper/`, data);
+    },
+  },
+};
+
+// Shipper API
+export const shipperApi = {
+  // Get all shippers with pagination and search
+  getShippers: async (params?: {
+    page?: number;
+    per_page?: number;
+    search?: string;
+    role?: string;
+  }) => {
+    return apiClient.get('/shipper/shippers/', { params });
+  },
+
+  // Get shipper by ID
+  getShipper: async (shipperId: number) => {
+    return apiClient.get(`/shipper/shippers/${shipperId}/`);
+  },
+
+  // Get shipper by user_id
+  getShipperByUser: async (userId: number) => {
+    return apiClient.get('/shipper/shippers/by_user/', {
+      params: { user_id: userId }
+    });
+  },
+
+  // Create shipper from existing user
+  createShipper: async (data: { user_id: number }) => {
+    return apiClient.post('/shipper/shippers/', data);
+  },
+
+  // Create user and shipper together
+  createShipperWithUser: async (data: {
+    fullname: string;
+    username: string;
+    phone: string;
+    email: string;
+    address?: string;
+    password: string;
+  }) => {
+    return apiClient.post('/shipper/shippers/create_with_user/', data);
+  },
+
+  // Update shipper information
+  updateShipper: async (shipperId: number, data: {
+    fullname?: string;
+    phone?: string;
+    email?: string;
+    address?: string;
+  }) => {
+    return apiClient.patch(`/shipper/shippers/${shipperId}/`, data);
+  },
+
+  // Delete shipper
+  deleteShipper: async (shipperId: number) => {
+    return apiClient.delete(`/shipper/shippers/${shipperId}/`);
+  },
+
+  // Get available users (users with Shipper role but no shipper profile)
+  getAvailableUsers: async () => {
+    return apiClient.get('/shipper/shippers/available_users/');
+  },
+
+  // Get shipper statistics
+  getStatistics: async () => {
+    return apiClient.get('/shipper/shippers/statistics/');
+  },
+
+  // Get orders by shipper ID
+  getOrdersByShipper: async (shipperId: number, params?: { 
+    delivery_status?: string; 
+    page?: number; 
+    per_page?: number; 
+  }) => {
+    const queryParams = new URLSearchParams();
+    if (params?.delivery_status) queryParams.append('delivery_status', params.delivery_status);
+    if (params?.page) queryParams.append('page', params.page.toString());
+    if (params?.per_page) queryParams.append('per_page', params.per_page.toString());
+    
+    const queryString = queryParams.toString() ? `?${queryParams.toString()}` : '';
+    return apiClient.get(`/orders/shipper/${shipperId}/orders/${queryString}`);
+  },
+};
+
+// Authentication API
+export const authApi = {
+  // Register new user
+  register: async (data: {
+    fullname: string;
+    username?: string;
+    email: string;
+    phone_number: string; // Sửa từ phone thành phone_number
+    password: string;
+    password_confirm?: string;
+    role?: string;
+  }) => {
+    return apiClient.post('/auth/register/', data);
+  },
+
+  // Login user
+  login: async (data: {
+    email: string;
+    password: string;
+  }) => {
+    return apiClient.post('/auth/login/', data);
+  },
+
+  // Logout user
+  logout: async () => {
+    return apiClient.post('/auth/logout/');
+  },
+
+  // Refresh token
+  refreshToken: async (refreshToken: string) => {
+    return apiClient.post('/auth/refresh/', { refresh: refreshToken });
+  },
+  
+  // Registration status APIs
+  updateShipperRegistration: async (isRegistered: boolean) => {
+    return apiClient.post('/auth/registration/shipper/', { 
+      is_registered: isRegistered 
+    });
+  },
+  
+  updateStoreRegistration: async (isRegistered: boolean) => {
+    return apiClient.post('/auth/registration/store/', { 
+      is_registered: isRegistered 
+    });
+  },
+  
+  getRegistrationStatus: async () => {
+    return apiClient.get('/auth/registration/status/');
+  },
+  
+  // Shipper application management (admin only)
+  getShipperApplications: async (params?: { page?: number; search?: string }) => {
+    return apiClient.get('/auth/shipper/applications/', { params });
+  },
+  
+  approveShipperApplication: async (userId: number) => {
+    return apiClient.post(`/auth/shipper/applications/${userId}/approve/`);
+  },
+  
+  rejectShipperApplication: async (userId: number) => {
+    return apiClient.post(`/auth/shipper/applications/${userId}/reject/`);
+  },
+  
+  // Store application management (admin only)
+  getStoreApplications: async (params?: { page?: number; search?: string }) => {
+    return apiClient.get('/auth/store/applications/', { params });
+  },
+  
+  approveStoreApplication: async (userId: number) => {
+    return apiClient.post(`/auth/store/applications/${userId}/approve/`);
+  },
+  
+  rejectStoreApplication: async (userId: number) => {
+    return apiClient.post(`/auth/store/applications/${userId}/reject/`);
+  },
+};
+

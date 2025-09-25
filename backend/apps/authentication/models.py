@@ -26,6 +26,10 @@ class User(AbstractBaseUser, PermissionsMixin):
     created_date = models.DateTimeField(auto_now_add=True)
     role = models.ForeignKey(Role, on_delete=models.SET_NULL, null=True, blank=True, db_column='role_id')
     
+    # Registration status fields
+    is_shipper_registered = models.BooleanField(null=True, blank=True, default=None)
+    is_store_registered = models.BooleanField(null=True, blank=True, default=None)
+    
     # Required fields for Django authentication
     last_login = models.DateTimeField(null=True, blank=True)
     is_superuser = models.BooleanField(default=False)
@@ -37,7 +41,7 @@ class User(AbstractBaseUser, PermissionsMixin):
     
     class Meta:
         db_table = 'users'
-        managed = False  # Use existing users table without migrations
+        managed = True  # Enable migrations to add new fields
     
     # Use email as the unique identifier for authentication
     USERNAME_FIELD = 'email'

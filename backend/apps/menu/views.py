@@ -8,6 +8,8 @@ from django.db.models import Q, Avg, Count, Value
 from django.db.models.functions import Coalesce
 from .models import Category, Food
 from .serializers import CategorySerializer, FoodSerializer, FoodListSerializer
+from apps.stores.models import Store
+from apps.stores.serializers import StoreSerializer
 
 
 @api_view(['GET'])
@@ -27,13 +29,28 @@ def category_list(request):
 
 @api_view(['GET'])
 @permission_classes([AllowAny])
+def store_list(request):
+    """Get all stores"""
+    stores = Store.objects.all()
+    serializer = StoreSerializer(stores, many=True)
+    # Return in paginated response format for frontend compatibility
+    return Response({
+        'count': stores.count(),
+        'next': None,
+        'previous': None,
+        'results': serializer.data,
+    })
+
+
+@api_view(['GET'])
+@permission_classes([AllowAny])
 def food_list(request):
     """Get foods with filters and pagination"""
     try:
         # Include all foods regardless of availability; frontend will handle disabled state
         # Prefetch ratings to compute average_rating and rating_count
         # Fetch foods without prefetching ratings to avoid missing column errors
-        foods = Food.objects.select_related('category')\
+        foods = Food.objects.select_related('category', 'store')\
             .annotate(
                 avg_rating=Coalesce(Avg('ratings__rating'), Value(0.0)),
                 rating_count_annotated=Count('ratings')
@@ -44,6 +61,11 @@ def food_list(request):
         category_id = request.GET.get('category')
         if category_id:
             foods = foods.filter(category_id=category_id)
+
+        # Filter by store
+        store_id = request.GET.get('store')
+        if store_id:
+            foods = foods.filter(store_id=store_id)
 
         # Search by title or description
         search = request.GET.get('search')
@@ -86,7 +108,7 @@ def food_list(request):
         paginator = Paginator(foods, page_size)
         page_obj = paginator.get_page(page)
 
-        serializer = FoodListSerializer(page_obj, many=True)
+        serializer = FoodListSerializer(page_obj, many=True, context={'request': request})
         return Response({
             'count': paginator.count,
             'num_pages': paginator.num_pages,
@@ -106,7 +128,7 @@ def food_detail(request, pk):
     """Get food detail"""
     try:
         # Fetch food with related category and compute ratings
-        food = Food.objects.select_related('category')\
+        food = Food.objects.select_related('category', 'store')\
             .annotate(
                 avg_rating=Coalesce(Avg('ratings__rating'), Value(0.0)),
                 rating_count_annotated=Count('ratings')
@@ -115,7 +137,7 @@ def food_detail(request, pk):
     except Food.DoesNotExist:
         return Response({'error': 'Food not found'}, status=status.HTTP_404_NOT_FOUND)
     
-    serializer = FoodSerializer(food)
+    serializer = FoodSerializer(food, context={'request': request})
     return Response(serializer.data)
 
 
@@ -129,7 +151,6 @@ def category_foods(request, category_id):
         return Response({'error': 'Category not found'}, status=status.HTTP_404_NOT_FOUND)
     try:
         # Include all foods in category regardless of availability, prefetch ratings
-        # Fetch category foods without prefetching ratings
         foods = Food.objects.filter(category=category)\
             .annotate(
                 avg_rating=Coalesce(Avg('ratings__rating'), Value(0.0)),
@@ -141,7 +162,7 @@ def category_foods(request, category_id):
         paginator = Paginator(foods, page_size)
         page_obj = paginator.get_page(page)
 
-        serializer = FoodListSerializer(page_obj, many=True)
+        serializer = FoodListSerializer(page_obj, many=True, context={'request': request})
         return Response({
             'category': CategorySerializer(category).data,
             'count': paginator.count,
@@ -160,16 +181,31 @@ def category_foods(request, category_id):
 def is_admin(user):
     return user.is_authenticated and user.role and user.role.id == 2
 
+def is_store_manager(user):
+    return user.is_authenticated and user.role and user.role.id == 3
+
+def is_admin_or_store_manager(user):
+    return user.is_authenticated and user.role and user.role.id in [2, 3]
+
 
 @api_view(['GET', 'POST'])
 @parser_classes([MultiPartParser, FormParser, JSONParser])
 @permission_classes([IsAuthenticated])
 def admin_foods_list(request):
-    if not is_admin(request.user):
-        return Response({'error': 'Admin access required'}, status=status.HTTP_403_FORBIDDEN)
+    if not is_admin_or_store_manager(request.user):
+        return Response({'error': 'Admin or Store Manager access required'}, status=status.HTTP_403_FORBIDDEN)
     
     if request.method == 'GET':
-        foods = Food.objects.select_related('category').order_by('-id')
+        foods = Food.objects.select_related('category', 'store').order_by('-id')
+        
+        # If user is store manager, filter by their store
+        if is_store_manager(request.user):
+            # Restrict to the store managed by the user
+            try:
+                user_store = Store.objects.get(manager=request.user)
+                foods = foods.filter(store=user_store)
+            except Store.DoesNotExist:
+                return Response({'error': 'Store not found for user'}, status=status.HTTP_404_NOT_FOUND)
         
         # Search filter
         search = request.GET.get('search')
@@ -182,6 +218,12 @@ def admin_foods_list(request):
         category_id = request.GET.get('category')
         if category_id:
             foods = foods.filter(category_id=category_id)
+        
+        # Store filter (for admin only)
+        if is_admin(request.user):
+            store_id = request.GET.get('store')
+            if store_id:
+                foods = foods.filter(store_id=store_id)
         
         # Pagination
         page = request.GET.get('page', 1)
@@ -199,13 +241,26 @@ def admin_foods_list(request):
     elif request.method == 'POST':
         # Handle file upload for new food image
         data = request.data.copy()
+        
+        # If user is store manager, automatically set store_id
+        if is_store_manager(request.user):
+            try:
+                user_store = Store.objects.get(manager=request.user)
+                data['store_id'] = user_store.id
+            except Store.DoesNotExist:
+                return Response({'error': 'Store not found for user'}, status=status.HTTP_404_NOT_FOUND)
+            except Exception as e:
+                return Response({'error': 'Store not found for user'}, status=status.HTTP_404_NOT_FOUND)
+        
         if 'image_file' in request.FILES:
             from django.core.files.storage import default_storage
+            import os
+            import uuid
             file = request.FILES['image_file']
-            filename = f"assets/{file.name}"
-            # Remove existing file to prevent name collision
-            if default_storage.exists(filename):
-                default_storage.delete(filename)
+            # Generate unique filename to avoid collisions
+            file_extension = os.path.splitext(file.name)[1]
+            unique_filename = f"{uuid.uuid4().hex}{file_extension}"
+            filename = f"assets/{unique_filename}"
             path = default_storage.save(filename, file)
             data['image'] = path
             # Remove file field to prevent serializer errors
@@ -221,11 +276,21 @@ def admin_foods_list(request):
 @parser_classes([MultiPartParser, FormParser, JSONParser])
 @permission_classes([IsAuthenticated])
 def admin_food_detail(request, food_id):
-    if not is_admin(request.user):
-        return Response({'error': 'Admin access required'}, status=status.HTTP_403_FORBIDDEN)
+    if not is_admin_or_store_manager(request.user):
+        return Response({'error': 'Admin or Store Manager access required'}, status=status.HTTP_403_FORBIDDEN)
     
     try:
         food = Food.objects.get(id=food_id)
+        
+        # If user is store manager, check if food belongs to their store
+        if is_store_manager(request.user):
+            try:
+                user_store = Store.objects.get(manager=request.user)
+                if food.store != user_store:
+                    return Response({'error': 'Access denied to this food item'}, status=status.HTTP_403_FORBIDDEN)
+            except Store.DoesNotExist:
+                return Response({'error': 'Store not found for user'}, status=status.HTTP_404_NOT_FOUND)
+                
     except Food.DoesNotExist:
         return Response({'error': 'Food not found'}, status=status.HTTP_404_NOT_FOUND)
     
@@ -236,20 +301,41 @@ def admin_food_detail(request, food_id):
     elif request.method == 'PUT':
         # Handle file upload for image
         data = request.data.copy()
+        old_image_path = None
+        
         if 'image_file' in request.FILES:
             from django.core.files.storage import default_storage
+            import os
+            import uuid
+            
+            # Store old image path for later deletion
+            if food.image:
+                old_image_path = food.image.name
+            
             file = request.FILES['image_file']
-            filename = f"assets/{file.name}"
-            # Delete existing to avoid collision
-            if default_storage.exists(filename):
-                default_storage.delete(filename)
+            # Generate unique filename to avoid collisions
+            file_extension = os.path.splitext(file.name)[1]
+            unique_filename = f"{uuid.uuid4().hex}{file_extension}"
+            filename = f"assets/{unique_filename}"
             path = default_storage.save(filename, file)
             data['image'] = path
+            
         # Remove file key to prevent validation errors
         data.pop('image_file', None)
         serializer = FoodSerializer(food, data=data, partial=True)
         if serializer.is_valid():
             serializer.save()
+            
+            # Try to delete old image file after successful save
+            if old_image_path and 'image_file' in request.FILES:
+                try:
+                    from django.core.files.storage import default_storage
+                    if default_storage.exists(old_image_path):
+                        default_storage.delete(old_image_path)
+                except Exception as e:
+                    # Log error but don't fail the request
+                    print(f"Warning: Could not delete old image file {old_image_path}: {e}")
+            
             return Response(serializer.data)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
     

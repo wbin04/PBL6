@@ -108,6 +108,73 @@ class APIClient {
     async delete(endpoint, options = {}) {
         return this.request(endpoint, { method: 'DELETE', ...options });
     }
+
+    // FormData methods for file uploads
+    async postFormData(endpoint, formData, options = {}) {
+        const url = `${this.baseURL}${endpoint}`;
+        const token = localStorage.getItem('access_token');
+        
+        const config = {
+            method: 'POST',
+            body: formData,
+            headers: {},
+            ...options,
+        };
+
+        if (token && !options.skipAuth) {
+            config.headers['Authorization'] = `Bearer ${token}`;
+        }
+
+        try {
+            const response = await fetch(url, config);
+            
+            // Handle 401 - token expired
+            if (response.status === 401 && !options.skipAuth) {
+                await this.refreshToken();
+                // Retry with new token
+                config.headers['Authorization'] = `Bearer ${localStorage.getItem('access_token')}`;
+                return await fetch(url, config).then(res => this.handleResponse(res));
+            }
+            
+            return await this.handleResponse(response);
+        } catch (error) {
+            console.error('API FormData Request failed:', error);
+            throw new Error('Network error: ' + error.message);
+        }
+    }
+
+    async putFormData(endpoint, formData, options = {}) {
+        const url = `${this.baseURL}${endpoint}`;
+        const token = localStorage.getItem('access_token');
+        
+        const config = {
+            method: 'PUT',
+            body: formData,
+            headers: {},
+            ...options,
+        };
+
+        if (token && !options.skipAuth) {
+            config.headers['Authorization'] = `Bearer ${token}`;
+        }
+
+        try {
+            const response = await fetch(url, config);
+            
+            // Handle 401 - token expired
+            if (response.status === 401 && !options.skipAuth) {
+                await this.refreshToken();
+                // Retry with new token
+                config.headers['Authorization'] = `Bearer ${localStorage.getItem('access_token')}`;
+                return await fetch(url, config).then(res => this.handleResponse(res));
+            }
+            
+            return await this.handleResponse(response);
+        } catch (error) {
+            console.error('API FormData Request failed:', error);
+            throw new Error('Network error: ' + error.message);
+        }
+    }
 }
 
 // Global API instance

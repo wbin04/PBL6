@@ -1,0 +1,314 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Quản lý cửa hàng - FastFood App</title>
+    <link rel="stylesheet" href="../assets/css/style.css">
+    <link rel="stylesheet" href="store-manager.css">
+</head>
+<body>
+    <header class="header">
+        <div class="container">
+            <a href="../index.html" class="logo">🏪 Quản lý cửa hàng</a>
+            
+            <nav class="nav">
+                <span>Cửa hàng: <span id="store-name">Đang tải...</span></span>
+                <span>Xin chào, <span id="user-name"></span></span>
+                <a href="#" onclick="logout()">Đăng xuất</a>
+            </nav>
+        </div>
+    </header>
+
+    <div class="admin-layout">
+        <aside class="sidebar">
+            <nav class="sidebar-nav">
+                <a href="#dashboard" class="nav-item active" onclick="showSection('dashboard')">
+                    📊 Dashboard
+                </a>
+                <a href="#foods" class="nav-item" onclick="showSection('foods')">
+                    🍔 Quản lý món ăn
+                </a>
+                <a href="#orders" class="nav-item" onclick="showSection('orders')">
+                    📋 Quản lý đơn hàng
+                </a>
+                <a href="#promotions" class="nav-item" onclick="showSection('promotions')">
+                    🎁 Quản lý khuyến mãi
+                </a>
+            </nav>
+        </aside>
+
+        <main class="main-content">
+            <!-- Dashboard Section -->
+            <section id="dashboard-section" class="content-section active">
+                <div class="section-header">
+                    <h2>Dashboard</h2>
+                </div>
+                <div class="stats-grid">
+                    <div class="stat-card">
+                        <h3>Tổng món ăn</h3>
+                        <p class="stat-number" id="total-foods">0</p>
+                    </div>
+                    <div class="stat-card">
+                        <h3>Đơn hàng hôm nay</h3>
+                        <p class="stat-number" id="today-orders">0</p>
+                    </div>
+                    <div class="stat-card">
+                        <h3>Doanh thu hôm nay</h3>
+                        <p class="stat-number" id="today-revenue">0đ</p>
+                    </div>
+                    <div class="stat-card">
+                        <h3>Đơn hàng chưa xử lý</h3>
+                        <p class="stat-number" id="pending-orders">0</p>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Foods Section -->
+            <section id="foods-section" class="content-section">
+                <div class="section-header">
+                    <h2>Quản lý món ăn</h2>
+                    <button class="btn btn-primary" onclick="openAddFoodModal()">Thêm món ăn</button>
+                </div>
+                
+                <div class="filters">
+                    <input type="text" id="food-search" placeholder="Tìm kiếm món ăn..." onkeyup="searchFoods()">
+                    <select id="category-filter" onchange="filterFoodsByCategory()">
+                        <option value="">Tất cả danh mục</option>
+                    </select>
+                </div>
+
+                <div class="table-container">
+                    <table class="data-table">
+                        <thead>
+                            <tr>
+                                <th>Hình ảnh</th>
+                                <th>Tên món ăn</th>
+                                <th>Danh mục</th>
+                                <th>Giá</th>
+                                <th>Trạng thái</th>
+                                <th>Thao tác</th>
+                            </tr>
+                        </thead>
+                        <tbody id="foods-table-body">
+                            <!-- Foods will be loaded here -->
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+
+            <!-- Promotions Section -->
+            <section id="promotions-section" class="content-section">
+                <div class="section-header">
+                    <h2>Quản lý khuyến mãi</h2>
+                    <button class="btn btn-primary" onclick="openAddPromoModal()">Thêm khuyến mãi</button>
+                </div>
+                
+                <div class="filters">
+                    <input type="text" id="promo-search" placeholder="Tìm kiếm khuyến mãi..." onkeyup="searchPromos()">
+                    <select id="promo-category-filter" onchange="filterPromosByCategory()">
+                        <option value="">Tất cả loại</option>
+                        <option value="PERCENT">Giảm theo %</option>
+                        <option value="AMOUNT">Giảm số tiền</option>
+                    </select>
+                    <select id="promo-status-filter" onchange="filterPromosByStatus()">
+                        <option value="">Tất cả trạng thái</option>
+                        <option value="active">Đang hoạt động</option>
+                        <option value="expired">Hết hạn</option>
+                        <option value="upcoming">Sắp diễn ra</option>
+                    </select>
+                </div>
+
+                <div class="table-container">
+                    <table class="data-table">
+                        <thead>
+                            <tr>
+                                <th>ID</th>
+                                <th>Tên khuyến mãi</th>
+                                <th>Loại</th>
+                                <th>Giá trị</th>
+                                <th>Đơn tối thiểu</th>
+                                <th>Giảm tối đa</th>
+                                <th>Thời gian</th>
+                                <th>Trạng thái</th>
+                                <th>Thao tác</th>
+                            </tr>
+                        </thead>
+                        <tbody id="promos-table-body">
+                            <!-- Promotions will be loaded here -->
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+
+            <!-- Orders Section -->
+            <section id="orders-section" class="content-section">
+                <div class="section-header">
+                    <h2>Quản lý đơn hàng</h2>
+                </div>
+                
+                <div class="filters">
+                    <input type="text" id="order-search" placeholder="Tìm kiếm đơn hàng..." onkeyup="searchOrders()">
+                    <select id="status-filter" onchange="filterOrdersByStatus()">
+                        <option value="">Tất cả trạng thái</option>
+                        <option value="Chờ xác nhận">Chờ xác nhận</option>
+                        <option value="Đã xác nhận">Đã xác nhận</option>
+                        <option value="Đang chuẩn bị">Đang chuẩn bị</option>
+                        <option value="Sẵn sàng">Sẵn sàng</option>
+                        <option value="Đang giao">Đang giao</option>
+                        <option value="Đã giao">Đã giao</option>
+                        <option value="Đã hủy">Đã hủy</option>
+                    </select>
+                    <input type="date" id="date-filter" onchange="filterOrdersByDate()">
+                </div>
+
+                <div class="table-container">
+                    <table class="data-table">
+                        <thead>
+                            <tr>
+                                <th>Mã đơn hàng</th>
+                                <th>Khách hàng</th>
+                                <th>Món ăn</th>
+                                <th>Tổng tiền</th>
+                                <th>Trạng thái</th>
+                                <th>Thời gian</th>
+                                <th>Thao tác</th>
+                            </tr>
+                        </thead>
+                        <tbody id="orders-table-body">
+                            <!-- Orders will be loaded here -->
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <!-- Add/Edit Food Modal -->
+    <div id="food-modal" class="modal-overlay hidden">
+        <div class="modal">
+            <div class="modal-header">
+                <h3 id="food-modal-title">Thêm món ăn</h3>
+                <button class="modal-close" onclick="closeFoodModal()">&times;</button>
+            </div>
+            <form id="food-form" onsubmit="saveFoodForm(event)">
+                <div class="form-group">
+                    <label for="food-title">Tên món ăn *</label>
+                    <input type="text" id="food-title" required>
+                </div>
+                <div class="form-group">
+                    <label for="food-description">Mô tả</label>
+                    <textarea id="food-description" rows="3"></textarea>
+                </div>
+                <div class="form-group">
+                    <label for="food-price">Giá *</label>
+                    <input type="number" id="food-price" required min="0">
+                </div>
+                <div class="form-group">
+                    <label for="food-category">Danh mục *</label>
+                    <select id="food-category" required>
+                        <option value="">Chọn danh mục</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="food-image">Hình ảnh</label>
+                    <input type="file" id="food-image" accept="image/*" onchange="handleImagePreview(this)">
+                    <div id="current-image" class="current-image hidden">
+                        <img id="current-image-preview" src="" alt="Current image">
+                    </div>
+                    <div id="image-preview-container" class="image-preview-container hidden">
+                        <div class="image-preview-wrapper">
+                            <img id="image-preview" src="" alt="Preview">
+                            <button type="button" class="remove-image-btn" onclick="removeImagePreview()" title="Xóa ảnh">
+                                ×
+                            </button>
+                        </div>
+                        <div class="image-info">
+                            <span id="image-name"></span>
+                            <span id="image-size"></span>
+                        </div>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label for="food-availability">Trạng thái</label>
+                    <select id="food-availability">
+                        <option value="Còn hàng">Còn hàng</option>
+                        <option value="Hết hàng">Hết hàng</option>
+                    </select>
+                </div>
+                <div class="modal-actions">
+                    <button type="button" class="btn btn-secondary" onclick="closeFoodModal()">Hủy</button>
+                    <button type="submit" class="btn btn-primary">Lưu</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Add/Edit Promotion Modal -->
+    <div id="promo-modal" class="modal-overlay hidden">
+        <div class="modal">
+            <div class="modal-header">
+                <h3 id="promo-modal-title">Thêm khuyến mãi</h3>
+                <button class="modal-close" onclick="closePromoModal()">&times;</button>
+            </div>
+            <form id="promo-form" onsubmit="savePromoForm(event)">
+                <div class="form-group">
+                    <label for="promo-name">Tên khuyến mãi *</label>
+                    <input type="text" id="promo-name" required placeholder="VD: Giảm 10% cho đơn hàng từ 100,000đ">
+                </div>
+                <div class="form-group">
+                    <label for="promo-category">Loại khuyến mãi *</label>
+                    <select id="promo-category" required onchange="toggleMaxDiscountField()">
+                        <option value="">Chọn loại khuyến mãi</option>
+                        <option value="PERCENT">Giảm theo phần trăm (%)</option>
+                        <option value="AMOUNT">Giảm số tiền cố định (đ)</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="promo-discount-value">Giá trị giảm *</label>
+                    <input type="number" id="promo-discount-value" required min="0" step="0.01">
+                    <small id="discount-value-hint">Nhập % (0-100) hoặc số tiền</small>
+                </div>
+                <div class="form-group" id="max-discount-group" style="display: none;">
+                    <label for="promo-max-discount">Giảm tối đa (đ)</label>
+                    <input type="number" id="promo-max-discount" min="0" step="1">
+                    <small>Chỉ áp dụng cho giảm theo phần trăm</small>
+                </div>
+                <div class="form-group">
+                    <label for="promo-minimum-pay">Đơn hàng tối thiểu (đ) *</label>
+                    <input type="number" id="promo-minimum-pay" required min="0" step="1">
+                </div>
+                <div class="form-group">
+                    <label for="promo-start-date">Ngày bắt đầu *</label>
+                    <input type="datetime-local" id="promo-start-date" required>
+                </div>
+                <div class="form-group">
+                    <label for="promo-end-date">Ngày kết thúc *</label>
+                    <input type="datetime-local" id="promo-end-date" required>
+                </div>
+                <div class="modal-actions">
+                    <button type="button" class="btn btn-secondary" onclick="closePromoModal()">Hủy</button>
+                    <button type="submit" class="btn btn-primary">Lưu</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Order Detail Modal -->
+    <div id="order-modal" class="modal-overlay hidden">
+        <div class="modal">
+            <div class="modal-header">
+                <h3>Chi tiết đơn hàng</h3>
+                <button class="modal-close" onclick="closeOrderModal()">&times;</button>
+            </div>
+            <div id="order-detail-content">
+                <!-- Order details will be loaded here -->
+            </div>
+        </div>
+    </div>
+
+    <script src="../assets/js/api.js"></script>
+    <script src="../assets/js/auth.js"></script>
+    <script src="store-manager.js"></script>
+</body>
+</html>

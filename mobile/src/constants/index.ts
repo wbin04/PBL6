@@ -2,17 +2,24 @@ import { Platform, NativeModules } from 'react-native';
 import Constants from 'expo-constants';
 
 export const getApiHost = (): string => {
+  console.log('=== API HOST DETECTION DEBUG ===');
+  
   // 1) Web: dùng hostname của trang
-  if (Platform.OS === 'web' && typeof window !== 'undefined') {
-    return window.location.hostname;
-  }
+  // if (Platform.OS === 'web' && typeof window !== 'undefined') {
+  //   return window.location.hostname;
+  // }
 
   // 2) Dev (Metro): lấy từ URL của bundle JS (chứa IP máy tính)
   const scriptURL: string | undefined = (NativeModules as any)?.SourceCode?.scriptURL;
+  console.log('Script URL:', scriptURL);
   if (scriptURL) {
     try {
-      return new URL(scriptURL).hostname; 
-    } catch {}
+      const hostname = new URL(scriptURL).hostname;
+      console.log('Hostname from script URL:', hostname);
+      return hostname; 
+    } catch (error) {
+      console.log('Error parsing script URL:', error);
+    }
   }
 
   // 3) Expo (SDK mới/cũ): lấy từ expoConfig/manifest
@@ -22,15 +29,25 @@ export const getApiHost = (): string => {
     (Constants as any)?.manifest?.hostUri ||
     (Constants as any)?.manifest?.debuggerHost;
 
+  console.log('Host-like from constants:', hostLike);
   if (hostLike) {
     try {
       const host = hostLike.split('//').pop()!.split(':')[0];
+      console.log('Parsed host from constants:', host);
       if (host) return host; 
-    } catch {}
+    } catch (error) {
+      console.log('Error parsing host from constants:', error);
+    }
   }
 
   // 4) Fallbacks
-  if (Platform.OS === 'android') return '10.0.2.2'; // emulator ↔ host
+  console.log('Platform OS:', Platform.OS);
+  if (Platform.OS === 'android') {
+    console.log('Using Android emulator fallback: 10.0.2.2');
+    return '10.0.2.2'; // emulator ↔ host
+  }
+  
+  console.log('Using localhost fallback');
   return 'localhost';
 };
 
@@ -40,6 +57,11 @@ export const API_CONFIG = {
   TIMEOUT: 10000,
   RETRY_ATTEMPTS: 3,
 };
+
+// Debug log the final API URL
+console.log('=== FINAL API CONFIG ===');
+console.log('Base URL:', API_CONFIG.BASE_URL);
+console.log('========================');
 
 // App Colors
 export const COLORS = {
@@ -176,6 +198,13 @@ export const ENDPOINTS = {
   FOOD_DETAIL: (id: number) => `/menu/items/${id}/`,
   CATEGORY_FOODS: (id: number) => `/menu/categories/${id}/foods/`,
   
+  // Stores
+  STORES: '/menu/stores/',
+  STORES_PUBLIC: '/stores/public/',
+  STORE_DETAIL: (id: number) => `/stores/${id}/`,
+  STORE_FOODS: (id: number) => `/stores/${id}/foods/`,
+  STORE_STATS: (id: number) => `/stores/${id}/stats/`,
+  
   // Cart
   CART: '/cart/',
   ADD_TO_CART: '/cart/add/',
@@ -187,6 +216,7 @@ export const ENDPOINTS = {
   ORDERS: '/orders/',
   ORDER_DETAIL: (id: number) => `/orders/${id}/`,
   UPDATE_ORDER_STATUS: (id: number) => `/orders/${id}/status/`,
+  ADMIN_UPDATE_ORDER_STATUS: (id: number) => `/orders/admin/${id}/status/`,
   
   // Payments
   CREATE_PAYMENT: '/payments/create/',

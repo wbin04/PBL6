@@ -47,6 +47,8 @@ const RatingScreen: React.FC = () => {
   const loadData = async () => {
     if (!route.params?.foodId) return;
     
+    console.log('RatingScreen - Loading data for foodId:', route.params.foodId);
+    
     try {
       setLoading(true);
       // Load food detail and ratings
@@ -54,6 +56,9 @@ const RatingScreen: React.FC = () => {
         menuService.getFoodDetail(route.params.foodId),
         ratingService.getRatingsForFood(route.params.foodId)
       ]);
+      
+      console.log('RatingScreen - Food data loaded:', foodData?.title);
+      console.log('RatingScreen - Ratings data loaded:', ratingsData?.length, 'ratings');
       
       setFoodDetail(foodData);
       setRatings(ratingsData);
@@ -461,3 +466,4 @@ const styles = StyleSheet.create({
 });
 
 export default RatingScreen;
+

@@ -675,3 +675,89 @@ body {
 .empty-state p {
     opacity: 0.7;
 }
+
+/* Image Preview Styling */
+#food-image-preview {
+    max-width: 100%;
+    max-height: 200px;
+    border-radius: 10px;
+    border: 2px solid var(--border-color);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    object-fit: cover;
+    margin: 10px 0;
+    transition: all 0.3s ease;
+    opacity: 1;
+}
+
+#food-image-preview:hover {
+    transform: scale(1.02);
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+}
+
+/* File input styling */
+.form-group input[type="file"] {
+    padding: 0.5rem;
+    border: 2px dashed var(--border-color);
+    border-radius: 8px;
+    background: #f8f9fa;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    position: relative;
+}
+
+.form-group input[type="file"]:hover {
+    border-color: var(--primary-color);
+    background: #fff;
+    border-style: solid;
+}
+
+.form-group input[type="file"]:focus {
+    border-color: var(--primary-color);
+    background: #fff;
+    border-style: solid;
+}
+
+/* Image preview container */
+.image-preview-container {
+    position: relative;
+    display: block;
+    width: 100%;
+    text-align: center;
+}
+
+.image-preview-container.has-image {
+    margin-bottom: 1rem;
+}
+
+/* Remove preview button */
+.remove-preview-btn {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    background: rgba(220, 53, 69, 0.9);
+    color: white;
+    border: none;
+    border-radius: 50%;
+    width: 30px;
+    height: 30px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 14px;
+    transition: all 0.3s ease;
+    z-index: 10;
+}
+
+.remove-preview-btn:hover {
+    background: rgba(220, 53, 69, 1);
+    transform: scale(1.1);
+}
+
+/* Form text styling */
+.form-text {
+    font-size: 0.875rem;
+    color: #6c757d;
+    margin-top: 0.25rem;
+    display: block;
+}

@@ -7,8 +7,12 @@ from django.db.models import Q
 from django.contrib.auth import authenticate
 from django.core.paginator import Paginator
 from django.db.models import Q
+from django.utils import timezone
+from django.db import transaction
 from .serializers import LoginSerializer, UserSerializer, RegisterSerializer
-from .models import User
+from .models import User, Role
+from apps.shipper.models import Shipper
+from apps.stores.models import Store
 
 
 @api_view(['POST'])
@@ -66,12 +70,14 @@ def refresh_view(request):
 
 
 @api_view(['GET'])
+@permission_classes([IsAuthenticated])
 def profile_view(request):
     serializer = UserSerializer(request.user)
     return Response(serializer.data)
 
 
 @api_view(['PUT'])
+@permission_classes([IsAuthenticated])
 def update_profile_view(request):
     serializer = UserSerializer(request.user, data=request.data, partial=True)
     
@@ -168,3 +174,308 @@ def admin_customer_detail(request, customer_id):
             serializer.save()
             return Response(serializer.data)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def admin_toggle_customer_status(request, customer_id):
+    """Toggle customer active/inactive status"""
+    if not is_admin(request.user):
+        return Response({'error': 'Admin access required'}, status=status.HTTP_403_FORBIDDEN)
+    
+    try:
+        customer = User.objects.get(id=customer_id, role_id=1)
+    except User.DoesNotExist:
+        return Response({'error': 'Customer not found'}, status=status.HTTP_404_NOT_FOUND)
+    
+    # Toggle the is_active status
+    customer.is_active = not customer.is_active
+    customer.save()
+    
+    serializer = UserSerializer(customer)
+    return Response({
+        'message': f'Customer {"activated" if customer.is_active else "deactivated"} successfully',
+        'customer': serializer.data
+    })
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def update_shipper_registration(request):
+    """Update user's shipper registration status"""
+    status_value = request.data.get('is_registered')
+    
+    if status_value is None:
+        return Response({'error': 'is_registered field is required'}, status=status.HTTP_400_BAD_REQUEST)
+    
+    # Convert string to boolean if needed
+    if isinstance(status_value, str):
+        status_value = status_value.lower() in ['true', '1', 'yes']
+    
+    request.user.is_shipper_registered = status_value
+    request.user.save()
+    
+    return Response({
+        'message': 'Shipper registration status updated successfully',
+        'is_shipper_registered': request.user.is_shipper_registered
+    })
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def update_store_registration(request):
+    """Update user's store registration status"""
+    status_value = request.data.get('is_registered')
+    
+    if status_value is None:
+        return Response({'error': 'is_registered field is required'}, status=status.HTTP_400_BAD_REQUEST)
+    
+    # Convert string to boolean if needed
+    if isinstance(status_value, str):
+        status_value = status_value.lower() in ['true', '1', 'yes']
+    
+    request.user.is_store_registered = status_value
+    request.user.save()
+    
+    return Response({
+        'message': 'Store registration status updated successfully',
+        'is_store_registered': request.user.is_store_registered
+    })
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def get_registration_status(request):
+    """Get user's registration status for shipper and store"""
+    return Response({
+        'is_shipper_registered': request.user.is_shipper_registered,
+        'is_store_registered': request.user.is_store_registered
+    })
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def get_shipper_applications(request):
+    """Get list of users who applied to be shippers (admin only)"""
+    if not is_admin(request.user):
+        return Response({'error': 'Admin access required'}, status=status.HTTP_403_FORBIDDEN)
+    
+    # Get users with is_shipper_registered = True
+    applications = User.objects.filter(is_shipper_registered=True).order_by('-created_date')
+    
+    # Apply search filter if provided
+    search = request.GET.get('search')
+    if search:
+        applications = applications.filter(
+            Q(fullname__icontains=search) |
+            Q(phone_number__icontains=search) |
+            Q(email__icontains=search)
+        )
+    
+    # Pagination
+    page = request.GET.get('page', 1)
+    paginator = Paginator(applications, 10)  # 10 applications per page
+    page_obj = paginator.get_page(page)
+    
+    serializer = UserSerializer(page_obj, many=True)
+    
+    return Response({
+        'applications': serializer.data,
+        'total_pages': paginator.num_pages,
+        'current_page': int(page),
+        'total_applications': paginator.count
+    })
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def approve_shipper_application(request, user_id):
+    """Approve shipper application (admin only)"""
+    if not is_admin(request.user):
+        return Response({'error': 'Admin access required'}, status=status.HTTP_403_FORBIDDEN)
+    
+    try:
+        user = User.objects.get(id=user_id, is_shipper_registered=True)
+    except User.DoesNotExist:
+        return Response({'error': 'Application not found'}, status=status.HTTP_404_NOT_FOUND)
+    
+    # Check if user already has a shipper record
+    if hasattr(user, 'shipper'):
+        return Response({'error': 'User is already a shipper'}, status=status.HTTP_400_BAD_REQUEST)
+    
+    try:
+        with transaction.atomic():
+            # Get or create shipper role
+            shipper_role, _ = Role.objects.get_or_create(role_name='Người vận chuyển')
+            
+            # Update user role and reset registration status using update() to avoid datetime field issues
+            User.objects.filter(id=user_id).update(
+                role=shipper_role,
+                is_shipper_registered=False
+            )
+            
+            # Refresh the user object
+            user.refresh_from_db()
+            
+            # Check if shipper already exists for this user
+            try:
+                shipper = Shipper.objects.get(user=user)
+                # Shipper already exists, just return success
+                return Response({
+                    'message': 'Shipper application approved successfully (shipper already exists)',
+                    'user': UserSerializer(user).data,
+                    'shipper_id': shipper.id
+                })
+            except Shipper.DoesNotExist:
+                # Create new shipper record
+                shipper = Shipper.objects.create(user=user)
+            
+            return Response({
+                'message': 'Shipper application approved successfully',
+                'user': UserSerializer(user).data,
+                'shipper_id': shipper.id
+            })
+        
+    except Exception as e:
+        return Response({
+            'error': f'Failed to create shipper record: {str(e)}'
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def reject_shipper_application(request, user_id):
+    """Reject shipper application (admin only)"""
+    if not is_admin(request.user):
+        return Response({'error': 'Admin access required'}, status=status.HTTP_403_FORBIDDEN)
+    
+    try:
+        user = User.objects.get(id=user_id, is_shipper_registered=True)
+    except User.DoesNotExist:
+        return Response({'error': 'Application not found'}, status=status.HTTP_404_NOT_FOUND)
+    
+    # Reset registration status without changing role
+    user.is_shipper_registered = False
+    user.save()
+    
+    return Response({
+        'message': 'Shipper application rejected',
+        'user': UserSerializer(user).data
+    })
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def get_store_applications(request):
+    """Get list of users who applied to be store managers (admin only)"""
+    if not is_admin(request.user):
+        return Response({'error': 'Admin access required'}, status=status.HTTP_403_FORBIDDEN)
+    
+    # Get users with is_store_registered = True
+    applications = User.objects.filter(is_store_registered=True).order_by('-created_date')
+    
+    # Apply search filter if provided
+    search = request.GET.get('search')
+    if search:
+        applications = applications.filter(
+            Q(fullname__icontains=search) |
+            Q(phone_number__icontains=search) |
+            Q(email__icontains=search)
+        )
+    
+    # Pagination
+    page = request.GET.get('page', 1)
+    paginator = Paginator(applications, 10)  # 10 applications per page
+    page_obj = paginator.get_page(page)
+    
+    serializer = UserSerializer(page_obj, many=True)
+    
+    return Response({
+        'applications': serializer.data,
+        'total_pages': paginator.num_pages,
+        'current_page': int(page),
+        'total_applications': paginator.count
+    })
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def approve_store_application(request, user_id):
+    """Approve store application (admin only)"""
+    if not is_admin(request.user):
+        return Response({'error': 'Admin access required'}, status=status.HTTP_403_FORBIDDEN)
+    
+    try:
+        user = User.objects.get(id=user_id, is_store_registered=True)
+    except User.DoesNotExist:
+        return Response({'error': 'Application not found'}, status=status.HTTP_404_NOT_FOUND)
+    
+    # Check if user already manages a store
+    if hasattr(user, 'managed_store'):
+        return Response({'error': 'User already manages a store'}, status=status.HTTP_400_BAD_REQUEST)
+    
+    try:
+        with transaction.atomic():
+            # Get or create store manager role (assuming role_id = 3 for store managers)
+            store_manager_role, _ = Role.objects.get_or_create(role_name='Cửa hàng')
+            
+            # Update user role and reset registration status using update() to avoid datetime field issues
+            User.objects.filter(id=user_id).update(
+                role=store_manager_role,
+                is_store_registered=False
+            )
+            
+            # Refresh the user object
+            user.refresh_from_db()
+            
+            # Check if store already exists for this user
+            try:
+                store = Store.objects.get(manager=user)
+                # Store already exists, just return success
+                return Response({
+                    'message': 'Store application approved successfully (store already exists)',
+                    'user': UserSerializer(user).data,
+                    'store_id': store.id,
+                }, status=status.HTTP_200_OK)
+            except Store.DoesNotExist:
+                # Create new store record with default values
+                store = Store.objects.create(
+                    store_name=user.fullname or f"Cửa hàng {user.username}",
+                    image="assets/store-icon.png",
+                    description=user.address or "Chưa cập nhật địa chỉ",
+                    manager=user
+                )
+            
+            return Response({
+                'message': 'Store application approved successfully',
+                'user': UserSerializer(user).data,
+                'store_id': store.id,
+                'store_name': store.store_name
+            })
+        
+    except Exception as e:
+        return Response({
+            'error': f'Failed to create store record: {str(e)}'
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def reject_store_application(request, user_id):
+    """Reject store application (admin only)"""
+    if not is_admin(request.user):
+        return Response({'error': 'Admin access required'}, status=status.HTTP_403_FORBIDDEN)
+    
+    try:
+        user = User.objects.get(id=user_id, is_store_registered=True)
+    except User.DoesNotExist:
+        return Response({'error': 'Application not found'}, status=status.HTTP_404_NOT_FOUND)
+    
+    # Reset registration status without changing role
+    user.is_store_registered = False
+    user.save()
+    
+    return Response({
+        'message': 'Store application rejected',
+        'user': UserSerializer(user).data
+    })

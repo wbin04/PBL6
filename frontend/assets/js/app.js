@@ -26,8 +26,8 @@ async function updateAuthUI() {
             if (userMenu) userMenu.classList.remove('hidden');
             if (userNameElement) userNameElement.textContent = user.username;
             
-            // Show admin link if user has admin role
-            if (adminLink && user.role === 'Admin') {
+            // Show admin link if user has admin role (role_id = 2)
+            if (adminLink && user.role_id === 2) {
                 adminLink.classList.remove('hidden');
             } else if (adminLink) {
                 adminLink.classList.add('hidden');

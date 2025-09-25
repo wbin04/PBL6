@@ -13,7 +13,6 @@ import {
 import * as SecureStore from 'expo-secure-store';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import { RootStackParamList } from '../../App';
 import { useDispatch, useSelector } from 'react-redux';
 import { RootState, AppDispatch } from '@/store';
 import { login } from '@/store/slices/authSlice';
@@ -21,7 +20,7 @@ import { Button } from '@/components';
 import { COLORS, SPACING, VALIDATION, API_CONFIG } from '@/constants';
 
 export const LoginScreen: React.FC = () => {
-  const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList, 'Login'>>();
+  const navigation = useNavigation();
   const dispatch = useDispatch<AppDispatch>();
   
   const { loading, error } = useSelector((state: RootState) => state.auth);
@@ -68,8 +67,12 @@ export const LoginScreen: React.FC = () => {
       console.log('Attempting login with:', { email, password });
       console.log('API URL being used:', API_CONFIG.BASE_URL);
       
-  await dispatch(login({ email: email.trim(), password })).unwrap();
-  console.log('Login successful, auth state changed');
+      const result = await dispatch(login({ email: email.trim(), password })).unwrap();
+      console.log('Login successful, user role:', result.user.role);
+      
+      // Don't navigate here - let App.tsx handle navigation based on authentication state
+      // The useEffect in App.tsx will handle role-based navigation
+      
     } catch (err: any) {
       console.error('Login error caught in handleLogin:', err);
       const message = typeof err === 'string' ? err : (err.message ?? JSON.stringify(err));
@@ -78,11 +81,12 @@ export const LoginScreen: React.FC = () => {
   };
 
   const handleRegister = () => {
-    navigation.navigate('Register');
+    (navigation as any).navigate('Register');
   };
 
   const handleForgotPassword = () => {
-    navigation.navigate('ForgotPassword');
+    // navigation.navigate('ForgotPassword');
+    console.log('Forgot password - to be implemented');
   };
 
   return (
