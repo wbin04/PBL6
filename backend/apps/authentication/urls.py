@@ -13,4 +13,5 @@ urlpatterns = [
     # Admin endpoints
     path('admin/customers/', views.admin_customers_list, name='admin_customers_list'),
     path('admin/customers/<int:customer_id>/', views.admin_customer_detail, name='admin_customer_detail'),
+    path('admin/customers/<int:customer_id>/toggle-status/', views.admin_toggle_customer_status, name='admin_toggle_customer_status'),
 ]

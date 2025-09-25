@@ -492,9 +492,10 @@ def admin_orders_list(request):
             Q(receiver_name__icontains=search)
         )
     
-    # Pagination
+    # Pagination with configurable per_page
     page = request.GET.get('page', 1)
-    paginator = Paginator(orders, 10)
+    per_page = min(int(request.GET.get('per_page', 10)), 100)  # Max 100 per page for performance
+    paginator = Paginator(orders, per_page)
     page_obj = paginator.get_page(page)
     
     serializer = OrderSerializer(page_obj, many=True)
@@ -801,4 +802,73 @@ def shipper_accept_order(request, order_id):
     return Response({
         'message': 'Order accepted successfully',
         'order': serializer.data
+    })
+
+
+@api_view(['GET'])
+# @permission_classes([IsAuthenticated])  # Tạm thời comment để test
+def get_orders_by_shipper(request, shipper_id):
+    """Get orders assigned to specific shipper"""
+    from apps.shipper.models import Shipper
+    
+    try:
+        shipper = Shipper.objects.get(id=shipper_id)
+    except Shipper.DoesNotExist:
+        return Response({'error': 'Shipper not found'}, status=status.HTTP_404_NOT_FOUND)
+    
+    # Get orders assigned to this shipper
+    orders = Order.objects.filter(shipper=shipper).order_by('-created_date')
+    
+    # Group by delivery_status
+    status_counts = {}
+    all_statuses = ['Chờ xác nhận', 'Đã xác nhận', 'Đang giao', 'Đã giao', 'Đã hủy', 'Đã huỷ']
+    
+    for status_name in all_statuses:
+        if status_name in ['Đã hủy', 'Đã huỷ']:
+            # For cancelled, count both delivery_status and order_status cancelled
+            count = orders.filter(
+                Q(delivery_status__in=['Đã hủy', 'Đã huỷ']) | 
+                Q(order_status__in=['Đã hủy', 'Đã huỷ'])
+            ).count()
+        else:
+            count = orders.filter(delivery_status=status_name).count()
+        status_counts[status_name] = count
+    
+    # Get filtered orders if status is specified
+    status_filter = request.GET.get('delivery_status')
+    if status_filter:
+        if status_filter in ['Đã hủy', 'Đã huỷ']:
+            orders = orders.filter(
+                Q(delivery_status__in=['Đã hủy', 'Đã huỷ']) | 
+                Q(order_status__in=['Đã hủy', 'Đã huỷ'])
+            )
+        else:
+            orders = orders.filter(delivery_status=status_filter)
+    
+    # Pagination
+    page = request.GET.get('page', 1)
+    per_page = request.GET.get('per_page', 20)
+    paginator = Paginator(orders, per_page)
+    page_obj = paginator.get_page(page)
+    
+    serializer = OrderSerializer(page_obj, many=True, context={'request': request})
+    return Response({
+        'shipper': {
+            'id': shipper.id,
+            'user_id': shipper.user.id,
+            'fullname': shipper.user.fullname,
+            'phone': shipper.user.phone_number,
+            'email': shipper.user.email,
+            'address': shipper.user.address,
+        },
+        'status_counts': status_counts,
+        'total_orders': orders.count() if not status_filter else Order.objects.filter(shipper=shipper).count(),
+        'orders': {
+            'count': paginator.count,
+            'num_pages': paginator.num_pages,
+            'current_page': page_obj.number,
+            'has_next': page_obj.has_next(),
+            'has_previous': page_obj.has_previous(),
+            'results': serializer.data
+        }
     })

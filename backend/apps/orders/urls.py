@@ -15,6 +15,7 @@ urlpatterns = [
     
     # Shipper endpoints
     path('shipper/', views.shipper_orders, name='shipper_orders'),
+    path('shipper/<int:shipper_id>/orders/', views.get_orders_by_shipper, name='get_orders_by_shipper'),
     path('shipper/<int:order_id>/accept/', views.shipper_accept_order, name='shipper_accept_order'),
     path('shipper/<int:order_id>/status/', views.update_delivery_status, name='update_delivery_status'),
 ]
