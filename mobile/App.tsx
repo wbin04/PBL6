@@ -1,3 +1,4 @@
+import 'react-native-get-random-values';
 import "react-native-gesture-handler";
 import "react-native-reanimated";
 import React, { useEffect, useState, useCallback } from "react";
@@ -10,6 +11,8 @@ import * as SplashScreen from "expo-splash-screen";
 import { useFonts } from "expo-font";
 import { SafeAreaProvider, useSafeAreaInsets } from "react-native-safe-area-context";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { VoucherProvider } from "./src/contexts/VoucherContext";
+import { ShipperProvider } from "./src/context/ShipperContext";
 import { fontAssets } from "@/constants/Fonts";
 
 // ICONS
@@ -50,7 +53,6 @@ import ReviewScreen from "@/screens/ReviewScreen";
 import CancelDetailScreen from "@/screens/CancelDetailScreen";
 import AddressPickerScreen from "@/screens/address/AddressPickerScreen";
 import { ProfileScreen } from "@/screens/ProfileScreen";
-import AdminHomeScreen from "@/screens/AdminHomeScreen";
 import RatingScreen from "@/screens/RatingScreen";
 
 // Redux
@@ -194,54 +196,44 @@ function AppNavigator() {
   }
 
   return (
-    <NavigationContainer>
-      <StatusBar style="auto" />
-      {isAuthenticated ? (
-        <Stack.Navigator screenOptions={{ headerShown: false }} initialRouteName="MainTabs">
-          <Stack.Screen name="MainTabs" component={MainTabs} />
-          <Stack.Screen name="Checkout" component={CheckoutScreen} />
-          <Stack.Screen name="Cart" component={CartScreen} />
-          <Stack.Screen name="RestaurantDetail" component={RestaurantDetail} />
-          <Stack.Screen name="StoreDetail" component={StoreDetailScreen} />
-          <Stack.Screen name="FoodDetail" component={FoodDetailScreen} />
-          <Stack.Screen name="FoodReviews" component={FoodReviewsScreen} />
-          <Stack.Screen name="RatingScreen" component={RatingScreen} />
-          <Stack.Screen name="CardPayment" component={CardPaymentScreen} />
-          <Stack.Screen name="BankPayment" component={BankPaymentScreen} />
-          <Stack.Screen name="AddressList" component={AddressListScreen} />
-          <Stack.Screen name="AddAddress" component={AddAddressScreen} />
-          <Stack.Screen name="Cancel" component={CancelScreen} />
-          <Stack.Screen name="Tracking" component={TrackingScreen} />
-          <Stack.Screen name="MapTracking" component={MapTrackingScreen} />
-          <Stack.Screen name="AddressSelection" component={AddressSelectionScreen} />
-          <Stack.Screen name="AddressPicker" component={AddressPickerScreen} />
-          <Stack.Screen name="Review" component={ReviewScreen} />
-          <Stack.Screen name="CancelDetail" component={CancelDetailScreen} />
-          <Stack.Screen name="Profile" component={ProfileScreen} />
-          <Stack.Screen name="PasswordSetting" component={PasswordSettingScreen} />
-          <Stack.Screen name="ShipperWallet" component={WalletScreen} />
-          <Stack.Screen name="ChangeWalletPassword" component={ChangeWalletPasswordScreen} />
-          <Stack.Screen name="ShipperProfile" component={ShipperProfileScreen} />
-          <Stack.Screen name="WalletTransactions" component={WalletTransactionsScreen} />
-          <Stack.Screen name="NotificationSetting" component={NotificationSettingsScreen} />
-          <Stack.Screen name="TwoFASetting" component={TwoFactorAuthScreen} />
-          <Stack.Screen name="WithdrawMethods" component={WithdrawalMethodsScreen} />
-          {user?.role === 'Quản lý' && (
-            <Stack.Screen name="AdminHome" component={AdminHomeScreen} />
-          )}
-        </Stack.Navigator>
-      ) : (
-        <Stack.Navigator screenOptions={{ headerShown: false }} initialRouteName="Login">
-          <Stack.Screen name="Login" component={LoginScreen} />
-          <Stack.Screen name="Register" component={RegisterScreen} />
-        </Stack.Navigator>
-      )}
-
-      <Sidebar
-        isOpen={sidebarOpen}
-        onClose={() => setSidebarOpen(false)}
-      />
-    </NavigationContainer>
+    <VoucherProvider>
+      <ShipperProvider>
+        <NavigationContainer>
+          <StatusBar style="auto" />
+          <Stack.Navigator screenOptions={{ headerShown: false }}>
+            <Stack.Screen name="AdminDashboard" component={require('./src/screens/AdminDashboardScreen').default} />
+            <Stack.Screen name="UpdateCustomerScreen" component={require('./src/screens/UpdateCustomerScreen').default} />
+            <Stack.Screen name="StoreDetailScreen" component={require('./src/screens/StoreDetailScreen').StoreDetailScreen} />
+            <Stack.Screen name="StoreDetailScreenV2" component={require('./src/screens/StoreDetailScreenV2').StoreDetailScreenV2} />
+            {/* Các màn khác nếu cần */}
+            <Stack.Screen name="MainTabs" component={MainTabs} />
+            <Stack.Screen name="Checkout" component={CheckoutScreen} />
+            <Stack.Screen name="Cart" component={CartScreen} />
+            <Stack.Screen name="RestaurantDetail" component={RestaurantDetail} />
+            <Stack.Screen name="StoreDetail" component={StoreDetailScreen} />
+            <Stack.Screen name="FoodDetail" component={FoodDetailScreen} />
+            <Stack.Screen name="FoodReviews" component={FoodReviewsScreen} />
+            <Stack.Screen name="CardPayment" component={CardPaymentScreen} />
+            <Stack.Screen name="BankPayment" component={BankPaymentScreen} />
+            <Stack.Screen name="AddressList" component={AddressListScreen} />
+            <Stack.Screen name="AddAddress" component={AddAddressScreen} />
+            <Stack.Screen name="Cancel" component={CancelScreen} />
+            <Stack.Screen name="Tracking" component={TrackingScreen} />
+            <Stack.Screen name="MapTracking" component={MapTrackingScreen} />
+            <Stack.Screen name="AddressSelection" component={AddressSelectionScreen} />
+            <Stack.Screen name="AddressPicker" component={AddressPickerScreen} />
+            <Stack.Screen name="Review" component={ReviewScreen} />
+            <Stack.Screen name="CancelDetail" component={CancelDetailScreen} />
+            <Stack.Screen name="Profile" component={ProfileScreen} />
+            <Stack.Screen name="FoodDetailPopup" component={require('./src/screens/FoodDetailPopup').default} />
+            <Stack.Screen name="VoucherManagementScreen" component={require('./src/screens/VoucherManagementScreen').default} />
+            <Stack.Screen name="VoucherEditScreen" component={require('./src/screens/VoucherEditScreen').default} />
+            <Stack.Screen name="ShipperEditScreen" component={require('./src/screens/ShipperEditScreen').default} />
+            <Stack.Screen name="ShipperDetailScreen" component={require('./src/screens/ShipperDetailScreen').default} />
+          </Stack.Navigator>
+        </NavigationContainer>
+      </ShipperProvider>
+    </VoucherProvider>
   );
 }
 

@@ -20,39 +20,12 @@ class ApiClient {
   }
 
   private setupInterceptors() {
-    // Request interceptor to add auth token
+    // Request interceptor: Bỏ qua kiểm tra access token để cho phép gọi API không cần đăng nhập
     this.client.interceptors.request.use(
       async (config) => {
-        try {
-          const token = await SecureStore.getItemAsync(STORAGE_KEYS.ACCESS_TOKEN);
-          const refreshToken = await SecureStore.getItemAsync(STORAGE_KEYS.REFRESH_TOKEN);
-          const user = await SecureStore.getItemAsync(STORAGE_KEYS.USER);
-          
-          console.log('=== AUTH DEBUG ===');
-          console.log('Access token exists:', !!token);
-          console.log('Refresh token exists:', !!refreshToken);
-          console.log('User data exists:', !!user);
-          
-          if (token) {
-            console.log('Token preview:', `${token.substring(0, 20)}...`);
-            config.headers.Authorization = `Bearer ${token}`;
-          } else {
-            console.log('❌ NO ACCESS TOKEN FOUND!');
-          }
-          
-          // Log requests for debugging
-          console.log('API Request:', {
-            method: config.method?.toUpperCase(),
-            url: config.url,
-            data: config.data,
-            hasAuth: !!config.headers.Authorization
-          });
-          console.log('=== END AUTH DEBUG ===');
-          
-        } catch (error) {
-          console.error('Error accessing SecureStore:', error);
-        }
-        
+        // Không thêm Authorization header, không kiểm tra token
+        // Có thể thêm log nếu muốn
+        // console.log('API Request:', { method: config.method?.toUpperCase(), url: config.url, data: config.data });
         return config;
       },
       (error) => Promise.reject(error)
