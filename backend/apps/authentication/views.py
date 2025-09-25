@@ -66,12 +66,14 @@ def refresh_view(request):
 
 
 @api_view(['GET'])
+@permission_classes([IsAuthenticated])
 def profile_view(request):
     serializer = UserSerializer(request.user)
     return Response(serializer.data)
 
 
 @api_view(['PUT'])
+@permission_classes([IsAuthenticated])
 def update_profile_view(request):
     serializer = UserSerializer(request.user, data=request.data, partial=True)
     

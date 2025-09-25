@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test Promotions Page</title>
+</head>
+<body>
+    <h1>Testing Promotions Page</h1>
+    <button onclick="testAPI()">Test API</button>
+    <div id="results"></div>
+
+    <script>
+        async function testAPI() {
+            const results = document.getElementById('results');
+            results.innerHTML = 'Testing...';
+            
+            try {
+                // Test stores API
+                const storesResponse = await fetch('http://localhost:8000/api/stores/');
+                const stores = await storesResponse.json();
+                console.log('Stores:', stores);
+                
+                // Test promotions API
+                const promosResponse = await fetch('http://localhost:8000/api/promotions/');
+                const promos = await promosResponse.json();
+                console.log('Promotions:', promos);
+                
+                results.innerHTML = `
+                    <h2>API Test Results:</h2>
+                    <p>Stores: ${stores.length} found</p>
+                    <p>Promotions: ${promos.length} found</p>
+                    <h3>Sample Store:</h3>
+                    <pre>${JSON.stringify(stores[0], null, 2)}</pre>
+                    <h3>Sample Promotion:</h3>
+                    <pre>${JSON.stringify(promos[0], null, 2)}</pre>
+                `;
+                
+            } catch (error) {
+                results.innerHTML = `<p style="color: red;">Error: ${error.message}</p>`;
+                console.error('API Test Error:', error);
+            }
+        }
+    </script>
+</body>
+</html>

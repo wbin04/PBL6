@@ -71,8 +71,15 @@ const CartScreen: React.FC = () => {
   };
 
 const handleQuantityChange = async (itemId: number, delta: number) => {
+  console.log('handleQuantityChange called with:', { itemId, delta });
+  
   const item = cartItems.find(item => item.id === itemId);
-  if (!item) return;
+  if (!item) {
+    console.log('Item not found for itemId:', itemId);
+    return;
+  }
+
+  console.log('Found item:', { id: item.id, quantity: item.quantity, foodId: item.food.id });
 
   const newQuantity = item.quantity + delta;
   
@@ -98,13 +105,19 @@ const handleQuantityChange = async (itemId: number, delta: number) => {
   try {
     setUpdating(prev => new Set(prev).add(itemId));
     
+    console.log('Updating cart item:', { itemId, newQuantity });
+    
     const result = await dispatch(updateCartItem({ 
-      foodId: item.food.id, 
+      itemId: itemId, 
       quantity: newQuantity 
     }));
     
-    // Kiểm tra nếu action bị reject
-    if (updateCartItem.rejected.match(result)) {
+    console.log('Update result:', result);
+    
+    // Check if the action was fulfilled
+    if (updateCartItem.fulfilled.match(result)) {
+      console.log('Cart updated successfully');
+    } else if (updateCartItem.rejected.match(result)) {
       throw new Error(result.payload as string || 'Cập nhật thất bại');
     }
     
@@ -143,7 +156,7 @@ const handleQuantityChange = async (itemId: number, delta: number) => {
           style: 'destructive',
           onPress: async () => {
             try {
-              await dispatch(removeFromCart(item.food.id));
+              await dispatch(removeFromCart(itemId));
               setSelectedItems(prev => {
                 const newSet = new Set(prev);
                 newSet.delete(itemId);

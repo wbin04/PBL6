@@ -20,10 +20,43 @@ const CheckoutFoodItem: React.FC<CheckoutFoodItemProps> = ({
   formatPrice,
   onPress,
 }) => {
-  const getImageUri = (imageUrl: string) => {
-    return imageUrl.startsWith('http')
-      ? imageUrl
-      : `${API_CONFIG.BASE_URL.replace(/\/api$/, '')}/media/${imageUrl}`;
+  const renderImage = () => {
+    const imageSource = item.food.image;
+    
+    // Nếu là number (local require)
+    if (typeof imageSource === 'number') {
+      return (
+        <Image
+          source={imageSource}
+          style={styles.image}
+          resizeMode="cover"
+        />
+      );
+    }
+    
+    // Nếu là string URL
+    if (typeof imageSource === 'string' && imageSource.length > 0) {
+      const uri = imageSource.startsWith('http')
+        ? imageSource
+        : `${API_CONFIG.BASE_URL.replace(/\/api$/, '')}/media/${imageSource}`;
+      
+      return (
+        <Image
+          source={{ uri }}
+          style={styles.image}
+          resizeMode="cover"
+        />
+      );
+    }
+    
+    // Fallback placeholder
+    return (
+      <Image
+        source={require('../assets/images/placeholder-logo.png')}
+        style={styles.image}
+        resizeMode="cover"
+      />
+    );
   };
 
   return (
@@ -32,11 +65,7 @@ const CheckoutFoodItem: React.FC<CheckoutFoodItemProps> = ({
       onPress={() => onPress?.(item.food.id)}
       activeOpacity={0.7}
     >
-      <Image
-        source={{ uri: getImageUri(item.food.image) }}
-        style={styles.image}
-        resizeMode="cover"
-      />
+      {renderImage()}
       
       <View style={styles.content}>
         <View style={styles.info}>
@@ -107,3 +136,4 @@ const styles = StyleSheet.create({
 });
 
 export default CheckoutFoodItem;
+

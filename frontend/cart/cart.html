@@ -34,6 +34,85 @@
             padding: 20px;
         }
 
+        .store-group {
+            margin-bottom: 30px;
+            border: 1px solid #eee;
+            border-radius: 10px;
+            overflow: hidden;
+        }
+
+        .store-header {
+            background: #f8f9fa;
+            padding: 15px 20px;
+            border-bottom: 1px solid #eee;
+            display: flex;
+            align-items: center;
+        }
+
+        .store-logo {
+            width: 50px;
+            height: 50px;
+            border-radius: 8px;
+            object-fit: cover;
+            margin-right: 15px;
+        }
+
+        .store-info {
+            flex: 1;
+        }
+
+        .store-name {
+            font-size: 1.3em;
+            font-weight: bold;
+            color: #333;
+            margin: 0 0 5px 0;
+        }
+
+        .store-description {
+            color: #666;
+            font-size: 0.9em;
+            margin: 0;
+        }
+
+        .store-items {
+            background: white;
+        }
+
+        .store-shipping {
+            background: #f8f9fa;
+            padding: 15px 20px;
+            border-top: 1px solid #eee;
+        }
+
+        .shipping-fee {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            color: #666;
+            margin-bottom: 10px;
+        }
+
+        .shipping-amount {
+            color: #ff6b35;
+            font-weight: bold;
+        }
+
+        .store-total {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-weight: bold;
+            color: #333;
+            font-size: 1.1em;
+            border-top: 1px solid #ddd;
+            padding-top: 10px;
+        }
+
+        .store-total-amount {
+            color: #ff6b35;
+            font-size: 1.2em;
+        }
+
         .cart-item {
             display: flex;
             align-items: center;
@@ -73,6 +152,30 @@
             color: #ff6b35;
             font-weight: bold;
             font-size: 1.1em;
+        }
+
+        .item-note-section {
+            margin-top: 10px;
+        }
+
+        .item-note-input {
+            width: 100%;
+            padding: 8px 12px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            font-size: 0.9em;
+            resize: none;
+            transition: border-color 0.3s;
+        }
+
+        .item-note-input:focus {
+            outline: none;
+            border-color: #ff6b35;
+        }
+
+        .item-note-input::placeholder {
+            color: #999;
+            font-style: italic;
         }
 
         .quantity-controls {
@@ -258,6 +361,7 @@
             <nav class="nav">
                 <a href="../index.html">Trang chủ</a>
                 <a href="../menu/categories.html">Thực đơn</a>
+                <a href="../promotions/promotions.html">Khuyến mãi</a>
                 <div id="guest-menu" class="hidden">
                     <a href="../auth/login.html">Đăng nhập</a>
                     <a href="../auth/register.html">Đăng ký</a>
@@ -306,7 +410,7 @@
                 </div>
                 <div class="summary-row">
                     <span>Phí giao hàng:</span>
-                    <span class="currency">15,000 ₫</span>
+                    <span class="currency" id="delivery-fee">0 ₫</span>
                 </div>
                 <div class="summary-row summary-total">
                     <span>Tổng cộng:</span>

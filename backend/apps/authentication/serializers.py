@@ -39,10 +39,11 @@ class LoginSerializer(serializers.Serializer):
 
 class UserSerializer(serializers.ModelSerializer):
     role = serializers.StringRelatedField(read_only=True)
+    role_id = serializers.IntegerField(source='role.id', read_only=True)
     
     class Meta:
         model = User
-        fields = ['id', 'username', 'email', 'fullname', 'phone_number', 'address', 'role', 'created_date']
+        fields = ['id', 'username', 'email', 'fullname', 'phone_number', 'address', 'role', 'role_id', 'created_date']
         read_only_fields = ['id', 'created_date']
 
 

@@ -2,6 +2,7 @@ import axios, { AxiosInstance, AxiosRequestConfig, AxiosResponse } from 'axios';
 import * as SecureStore from 'expo-secure-store';
 import { API_CONFIG, STORAGE_KEYS, ERROR_MESSAGES } from '@/constants';
 import { ApiError } from '@/types';
+import { authEvents, AUTH_EVENTS } from './authEvents';
 
 class ApiClient {
   private client: AxiosInstance;
@@ -20,13 +21,12 @@ class ApiClient {
   }
 
   private setupInterceptors() {
-    // Request interceptor to add auth token
+    // Request interceptor: Bỏ qua kiểm tra access token để cho phép gọi API không cần đăng nhập
     this.client.interceptors.request.use(
       async (config) => {
-        const token = await SecureStore.getItemAsync(STORAGE_KEYS.ACCESS_TOKEN);
-        if (token) {
-          config.headers.Authorization = `Bearer ${token}`;
-        }
+        // Không thêm Authorization header, không kiểm tra token
+        // Có thể thêm log nếu muốn
+        // console.log('API Request:', { method: config.method?.toUpperCase(), url: config.url, data: config.data });
         return config;
       },
       (error) => Promise.reject(error)
@@ -34,8 +34,18 @@ class ApiClient {
 
     // Response interceptor to handle token refresh
     this.client.interceptors.response.use(
-      (response) => response,
+      (response) => {
+        return response;
+      },
       async (error) => {
+        // Log error responses
+        console.log('API Error:', {
+          status: error.response?.status,
+          url: error.config?.url,
+          data: error.response?.data,
+          message: error.message
+        });
+        
         const originalRequest = error.config;
 
         if (error.response?.status === 401 && !originalRequest._retry) {
@@ -53,8 +63,12 @@ class ApiClient {
             }
           } catch (refreshError) {
             // Refresh failed, logout user
+            console.log('Refresh token failed, clearing tokens and navigating to login');
             await this.clearTokens();
-            // You might want to dispatch a logout action here
+            
+            // Force app to show login screen by dispatching logout action
+            // Note: This requires access to the Redux store, which we'll handle differently
+            this.handleSessionExpiry();
           }
         }
 
@@ -76,11 +90,22 @@ class ApiClient {
     await SecureStore.deleteItemAsync(STORAGE_KEYS.USER);
   }
 
+  private handleSessionExpiry() {
+    // Emit session expired event
+    authEvents.emit(AUTH_EVENTS.SESSION_EXPIRED);
+    console.log('Session expired - event emitted');
+  }
+
   private handleError(error: any): ApiError {
+    console.log('API Client Error:', error);
+    
     if (error.response) {
       // Server responded with error status
       const status = error.response.status;
       const data = error.response.data;
+      
+      console.log('API Error Response Status:', status);
+      console.log('API Error Response Data:', data);
 
       if (status >= 500) {
         return { message: ERROR_MESSAGES.SERVER_ERROR };
@@ -98,20 +123,25 @@ class ApiClient {
         return { message: ERROR_MESSAGES.AUTH_ERROR };
       }
 
-      // Return server error message if available
+      // Handle Django error format: {'error': 'message'} or direct message
+      const errorMessage = data?.error || data?.message || data?.detail || ERROR_MESSAGES.VALIDATION_ERROR;
+      
       return {
-        message: data?.error?.message || data?.message || data?.detail || ERROR_MESSAGES.VALIDATION_ERROR,
+        message: errorMessage,
+        status,
         ...data,
       };
     }
 
     if (error.request) {
       // Network error
+      console.log('Network Error:', error.request);
       return { message: ERROR_MESSAGES.NETWORK_ERROR };
     }
 
     // Unknown error
-    return { message: ERROR_MESSAGES.UNKNOWN_ERROR };
+    console.log('Unknown Error:', error.message);
+    return { message: error.message || ERROR_MESSAGES.UNKNOWN_ERROR };
   }
 
   // HTTP Methods
@@ -154,3 +184,4 @@ class ApiClient {
 }
 
 export const apiClient = new ApiClient();
+

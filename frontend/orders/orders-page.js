@@ -119,9 +119,16 @@ class OrdersPage {
     }
 
     renderOrderCard(order) {
-        const statusClass = `status-${order.order_status.toLowerCase()}`;
-        const statusText = this.getStatusText(order.order_status);
+        const statusClass = `status-${order.order_status.toLowerCase().replace(/\s+/g, '-')}`;
+        const statusText = order.order_status;
+        const deliveryStatusText = order.delivery_status || order.order_status;
         const formattedDate = new Date(order.created_date).toLocaleString('vi-VN');
+        
+        // Store information
+        const storeName = order.store_name || 'Cửa hàng chưa xác định';
+        const storeImage = order.store_image 
+            ? `http://localhost:8000/media/${order.store_image}` 
+            : 'http://localhost:8000/media/assets/default-store.png';
         
         return `
             <div class="order-card" data-order-id="${order.id}">
@@ -129,19 +136,30 @@ class OrdersPage {
                     <div class="order-info">
                         <div class="order-id">Đơn hàng #${order.id}</div>
                         <div class="order-date">${formattedDate}</div>
+                        <div class="store-info">
+                            <img src="${storeImage}" alt="${storeName}" class="store-image" 
+                                 onerror="this.src='http://localhost:8000/media/assets/default-store.png'">
+                            <span class="store-name">${storeName}</span>
+                        </div>
                     </div>
-                    <div class="order-status ${statusClass}">${statusText}</div>
+                    <div class="status-info">
+                        <div class="order-status ${statusClass}">${statusText}</div>
+                        <div class="delivery-status">${deliveryStatusText}</div>
+                    </div>
                 </div>
                 
                 <div class="order-body">
-                    <div class="order-items">
-                        ${this.renderOrderItems(order.items)}
-                    </div>
-                    
                     <div class="order-summary">
                         <div class="delivery-info">
-                            <strong>Giao đến:</strong> ${order.ship_address}<br>
-                            <strong>Người nhận:</strong> ${order.receiver_name} - ${order.phone_number}
+                            <strong>Người nhận:</strong> ${order.receiver_name}<br>
+                            <strong>Số điện thoại:</strong> ${order.phone_number}<br>
+                            <strong>Địa chỉ:</strong> ${order.ship_address}<br>
+                            ${order.note ? `<strong>Ghi chú:</strong> ${order.note}<br>` : ''}
+                            <strong>Phương thức:</strong> ${order.payment_method || 'COD'}
+                        </div>
+                        <div class="total-amount">
+                            ${this.formatCurrency(order.total_money)}
+                            ${order.shipping_fee ? `<div class="shipping-fee">Phí ship: ${this.formatCurrency(order.shipping_fee)}</div>` : ''}
                         </div>
                     </div>
                     
@@ -150,7 +168,7 @@ class OrdersPage {
                         ${order.order_status === 'Chờ xác nhận' ? `
                             <button class="action-btn btn-cancel" data-action="cancel" data-order-id="${order.id}">Hủy đơn</button>
                         ` : ''}
-                        ${statusText === 'Đã giao' ? (
+                        ${order.order_status === 'Đã giao' ? (
                             '<button class="action-btn btn-reorder" data-action="reorder" data-order-id="' + order.id + '">Đặt lại</button>' +
                             (order.is_rated
                                 ? '<button class="action-btn btn-secondary" disabled>Đã đánh giá</button>'
@@ -176,6 +194,7 @@ class OrdersPage {
                 <div class="item-details">
                     <div class="item-name">${item.food.title}</div>
                     <div class="item-quantity">Số lượng: ${item.quantity}</div>
+                    ${item.food_note ? `<div class="item-note">Ghi chú: ${item.food_note}</div>` : ''}
                 </div>
                 <div class="item-price">
                     ${this.formatCurrency(item.subtotal)}
@@ -224,60 +243,188 @@ class OrdersPage {
         // Lấy chi tiết
         try {
             const order = await API.get(`/orders/${orderId}/`);
+            
             // Hiển thị modal
             const modal = document.getElementById('order-detail-modal');
-            modal.classList.remove('hidden');
-            // Hiển thị hoặc ẩn nút Lưu dựa trên trạng thái
-            const saveBtn = document.getElementById('detail-save');
-            if (order.order_status !== 'Chờ xác nhận') {
-                saveBtn.style.display = 'none';
-            } else {
-                saveBtn.style.display = 'inline-block';
+            if (!modal) {
+                throw new Error('Modal không tìm thấy');
             }
-            document.getElementById('detail-receiver_name').value = order.receiver_name;
-            document.getElementById('detail-phone_number').value = order.phone_number;
-            document.getElementById('detail-ship_address').value = order.ship_address;
-            document.getElementById('detail-note').value = order.note;
-            // Lưu
-            document.getElementById('detail-save').onclick = async () => {
-                try {
-                    await API.put(`/orders/${orderId}/`, {
-                        receiver_name: document.getElementById('detail-receiver_name').value.trim(),
-                        phone_number: document.getElementById('detail-phone_number').value.trim(),
-                        ship_address: document.getElementById('detail-ship_address').value.trim(),
-                        note: document.getElementById('detail-note').value.trim()
-                    });
-                    alert('Cập nhật thành công');
-                    document.getElementById('order-detail-modal').classList.add('hidden');
-                    this.loadOrders();
-                } catch (err) {
-                    alert('Lỗi cập nhật: ' + err.message);
-                }
-            };
-            // Đóng
-            document.getElementById('detail-close').onclick = () => {
-                document.getElementById('order-detail-modal').classList.add('hidden');
-            };
+            modal.classList.remove('hidden');
+            
+            // Hiển thị list món ăn
+            const itemsContainer = document.getElementById('detail-order-items');
+            if (!itemsContainer) {
+                throw new Error('Container món ăn không tìm thấy');
+            }
+            
+            if (order.items && order.items.length > 0) {
+                itemsContainer.innerHTML = order.items.map(item => `
+                    <div class="modal-order-item">
+                        <img src="${getImageUrl(item.food.image)}"
+                             alt="${item.food.title}"
+                             class="modal-item-image"
+                             onerror="this.src='data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 width=%2260%22 height=%2260%22 viewBox=%220 0 60 60%22><rect width=%2260%22 height=%2260%22 fill=%22%23f0f0f0%22/><text x=%2230%22 y=%2235%22 text-anchor=%22middle%22 fill=%22%23999%22 font-size=%2224%22>🍽️</text></svg>'">
+                        <div class="modal-item-details">
+                            <div class="modal-item-name">${item.food.title}</div>
+                            <div class="modal-item-quantity">Số lượng: ${item.quantity}</div>
+                            ${item.food_note ? `<div class="modal-item-note">Ghi chú: ${item.food_note}</div>` : ''}
+                        </div>
+                        <div class="modal-item-price">
+                            ${this.formatCurrency(item.subtotal)}
+                        </div>
+                    </div>
+                `).join('');
+            } else {
+                itemsContainer.innerHTML = '<p>Không có món ăn nào</p>';
+            }
+            
+            // Get form elements with null safety
+            const receiverNameEl = document.getElementById('detail-receiver_name');
+            const phoneNumberEl = document.getElementById('detail-phone_number');
+            const shipAddressEl = document.getElementById('detail-ship_address');
+            const noteEl = document.getElementById('detail-note');
+            const closeBtn = document.getElementById('detail-close');
+            const saveBtn = document.getElementById('detail-save');
+            
+            // Populate form fields
+            if (receiverNameEl) receiverNameEl.value = order.receiver_name || '';
+            if (phoneNumberEl) phoneNumberEl.value = order.phone_number || '';
+            if (shipAddressEl) shipAddressEl.value = order.ship_address || '';
+            if (noteEl) noteEl.value = order.note || '';
+            
+            // Check if order can be edited (status = "Chờ xác nhận")
+            const canEdit = order.order_status === 'Chờ xác nhận';
+            
+            // Set readonly attribute based on order status
+            if (receiverNameEl) receiverNameEl.readOnly = !canEdit;
+            if (phoneNumberEl) phoneNumberEl.readOnly = !canEdit;
+            if (shipAddressEl) shipAddressEl.readOnly = !canEdit;
+            if (noteEl) noteEl.readOnly = !canEdit;
+            
+            // Show/hide save button based on order status
+            if (saveBtn) {
+                saveBtn.style.display = canEdit ? 'inline-block' : 'none';
+                
+                // Setup save button click handler
+                saveBtn.onclick = async () => {
+                    try {
+                        await API.put(`/orders/${orderId}/`, {
+                            receiver_name: receiverNameEl.value.trim(),
+                            phone_number: phoneNumberEl.value.trim(),
+                            ship_address: shipAddressEl.value.trim(),
+                            note: noteEl.value.trim()
+                        });
+                        alert('Cập nhật thành công');
+                        modal.classList.add('hidden');
+                        this.loadOrders();
+                    } catch (err) {
+                        alert('Lỗi cập nhật: ' + err.message);
+                    }
+                };
+            }
+            
+            // Đóng modal
+            if (closeBtn) {
+                closeBtn.onclick = () => {
+                    modal.classList.add('hidden');
+                };
+            }
+            
         } catch (error) {
+            console.error('Lỗi chi tiết:', error);
             alert('Không thể tải chi tiết: ' + error.message);
         }
     }
 
     async cancelOrder(orderId) {
-        if (!confirm('Bạn có chắc chắn muốn hủy đơn hàng này?')) {
-            return;
-        }
-
         try {
-            // Gọi API cập nhật trạng thái hủy đơn
-            const updatedOrder = await API.put(
-                `/orders/${orderId}/status/`,
-                { order_status: 'Đã hủy' }
-            );
+            // First, check if this order is part of a group and get group details
+            const checkResponse = await API.post(`/orders/${orderId}/cancel-group/`, {
+                check_only: true
+            });
+
+            if (checkResponse.requires_confirmation || checkResponse.group_orders) {
+                // Show group cancellation modal
+                this.showCancelGroupModal(orderId, checkResponse.group_orders);
+            } else if (checkResponse.can_cancel) {
+                // Simple single order cancellation
+                if (confirm('Bạn có chắc chắn muốn hủy đơn hàng này?')) {
+                    await this.performCancelOrder(orderId);
+                }
+            }
+        } catch (error) {
+            if (error.message.includes('Không thể hủy nhóm đơn hàng')) {
+                alert('Không thể hủy đơn hàng: ' + error.message);
+            } else {
+                // Fallback to single order cancellation
+                if (confirm('Bạn có chắc chắn muốn hủy đơn hàng này?')) {
+                    await this.performSingleCancelOrder(orderId);
+                }
+            }
+        }
+    }
+
+    showCancelGroupModal(orderId, groupOrders) {
+        const modal = document.getElementById('cancel-group-modal');
+        const ordersList = document.getElementById('group-orders-list');
+        const summary = document.getElementById('cancel-group-summary');
+        
+        // Populate group orders list
+        ordersList.innerHTML = groupOrders.map(order => `
+            <div class="group-order-item">
+                <div class="group-order-info">
+                    <h5>Đơn hàng #${order.id}</h5>
+                    <p>${order.store_name}</p>
+                    <p>Trạng thái: ${order.order_status}</p>
+                </div>
+                <div class="group-order-total">
+                    ${this.formatCurrency(order.total_money)}
+                </div>
+            </div>
+        `).join('');
+
+        // Summary
+        const totalAmount = groupOrders.reduce((sum, order) => sum + order.total_money, 0);
+        summary.innerHTML = `
+            <p><strong>Tổng số đơn hàng:</strong> ${groupOrders.length}</p>
+            <p><strong>Tổng giá trị:</strong> ${this.formatCurrency(totalAmount)}</p>
+        `;
+
+        // Show modal
+        modal.classList.remove('hidden');
+
+        // Setup event listeners
+        document.getElementById('cancel-group-confirm').onclick = async () => {
+            await this.performCancelGroup(orderId);
+            modal.classList.add('hidden');
+        };
+
+        document.getElementById('cancel-group-close').onclick = () => {
+            modal.classList.add('hidden');
+        };
+    }
+
+    async performCancelGroup(orderId) {
+        try {
+            const response = await API.post(`/orders/${orderId}/cancel-group/`, {
+                confirmed: true
+            });
+            
+            alert(response.message || 'Đã hủy nhóm đơn hàng thành công!');
+            this.loadOrders();
+        } catch (error) {
+            alert('Không thể hủy nhóm đơn hàng: ' + error.message);
+        }
+    }
+
+    async performSingleCancelOrder(orderId) {
+        try {
+            await API.put(`/orders/${orderId}/status/`, { 
+                order_status: 'Đã hủy' 
+            });
             alert('Đã hủy đơn hàng thành công!');
             this.loadOrders();
         } catch (error) {
-            // Hiển thị lỗi chi tiết
             alert('Không thể hủy đơn hàng: ' + error.message);
         }
     }

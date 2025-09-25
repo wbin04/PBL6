@@ -13,11 +13,12 @@ import {
 import { useNavigation, CompositeNavigationProp } from '@react-navigation/native';
 import { BottomTabNavigationProp } from '@react-navigation/bottom-tabs';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import { MainTabParamList, RootStackParamList, Category, Food } from '@/types';
+import { MainTabParamList, RootStackParamList, Category, Food, Store } from '@/types';
 import { useDispatch, useSelector } from 'react-redux';
 import { RootState, AppDispatch } from '@/store';
 import { fetchCategories, fetchFoods } from '@/store/slices/menuSlice';
-import { CategoryCard, FoodCard } from '@/components';
+import { fetchStores } from '@/store/slices/storesSlice';
+import { CategoryCard, FoodCard, StoreCard } from '@/components';
 import { Ionicons } from '@expo/vector-icons';
 import { COLORS, SPACING, BORDER_RADIUS } from '@/constants';
 
@@ -32,12 +33,18 @@ export const HomeScreen: React.FC = () => {
   const dispatch = useDispatch<AppDispatch>();
   
   const { categories, foods, loading } = useSelector((state: RootState) => state.menu);
+  const { stores, loading: storesLoading } = useSelector((state: RootState) => state.stores);
   const [refreshing, setRefreshing] = useState(false);
+  const [showNotificationModal, setShowNotificationModal] = useState(false);
   const { user } = useSelector((state: RootState) => state.auth);
+
+  // Debug log để kiểm tra state
+  console.log('showNotificationModal:', showNotificationModal);
 
   useEffect(() => {
     dispatch(fetchCategories());
     dispatch(fetchFoods({ page: 1 }));
+    dispatch(fetchStores());
   }, [dispatch]);
 
   const handleCategoryPress = (categoryId: number) => {
@@ -46,6 +53,10 @@ export const HomeScreen: React.FC = () => {
 
   const handleFoodPress = (foodId: number) => {
     navigation.navigate('FoodDetail', { foodId });
+  };
+
+  const handleStorePress = (storeId: number) => {
+    navigation.navigate('StoreDetail', { storeId });
   };
 
   const handleAddToCart = (foodId: number) => {
@@ -96,11 +107,19 @@ export const HomeScreen: React.FC = () => {
     </View>
   );
 
+  const renderStoreHorizontal = ({ item }: { item: Store }) => (
+    <StoreCard
+      store={item}
+      onPress={() => handleStorePress(item.id)}
+    />
+  );
+
   const onRefresh = async () => {
     setRefreshing(true);
     try {
       await dispatch(fetchCategories());
       await dispatch(fetchFoods({ page: 1 }));
+      await dispatch(fetchStores());
     } finally {
       setRefreshing(false);
     }
@@ -111,6 +130,11 @@ export const HomeScreen: React.FC = () => {
     if (hour < 12) return 'Chào buổi sáng';
     if (hour < 18) return 'Chào buổi chiều';
     return 'Chào buổi tối';
+  };
+
+  const handleNotificationPress = () => {
+    console.log('Notification pressed!'); // Debug log
+    setShowNotificationModal(true);
   };
 
   return (
@@ -127,7 +151,7 @@ export const HomeScreen: React.FC = () => {
           </View>
           
           {/* Notification Bell */}
-          <TouchableOpacity style={styles.notificationButton}>
+          <TouchableOpacity style={styles.notificationButton} onPress={handleNotificationPress}>
             <Ionicons name="notifications-outline" size={24} color={COLORS.white} />
             <View style={styles.notificationBadge}>
               <Text style={styles.notificationCount}>3</Text>
@@ -192,6 +216,32 @@ export const HomeScreen: React.FC = () => {
             scrollEnabled={false}
             contentContainerStyle={styles.categoriesGrid}
             columnWrapperStyle={styles.categoryRow}
+          />
+        </View>
+
+        {/* Stores Section */}
+        <View style={styles.section}>
+          <View style={styles.sectionHeader}>
+            <View style={styles.sectionTitleContainer}>
+              <Ionicons name="storefront" size={20} color={COLORS.primary} />
+              <Text style={styles.sectionTitle}>Cửa hàng nổi bật</Text>
+            </View>
+            <TouchableOpacity 
+              style={styles.seeAllButton}
+              onPress={() => {}} // TODO: Navigate to stores list
+            >
+              <Text style={styles.seeAll}>Xem tất cả</Text>
+              <Ionicons name="arrow-forward" size={16} color={COLORS.primary} />
+            </TouchableOpacity>
+          </View>
+          
+          <FlatList
+            data={stores ?? []}
+            renderItem={renderStoreHorizontal}
+            keyExtractor={(item) => item.id.toString()}
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.horizontalStoreList}
           />
         </View>
 
@@ -263,6 +313,8 @@ export const HomeScreen: React.FC = () => {
           />
         </View>
       </ScrollView>
+      
+      {/* TODO: Add NotificationModal component when created */}
     </View>
   );
 };
@@ -424,6 +476,10 @@ const styles = StyleSheet.create({
   },
   
   horizontalFoodList: {
+    paddingHorizontal: SPACING.sm,
+  },
+
+  horizontalStoreList: {
     paddingHorizontal: SPACING.sm,
   },
   

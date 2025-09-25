@@ -81,7 +81,10 @@ const CartItem: React.FC<CartItemProps> = ({
             <View style={styles.quantityContainer}>
               <TouchableOpacity
                 style={styles.quantityButton}
-                onPress={() => onQuantityChange(item.id, -1)}
+                onPress={() => {
+                  console.log('Decrease button pressed for item:', item.id);
+                  onQuantityChange(item.id, -1);
+                }}
                 disabled={isUpdating}
               >
                 <Ionicons name="remove" size={16} color={COLORS.primary} />
@@ -89,7 +92,10 @@ const CartItem: React.FC<CartItemProps> = ({
               <Text style={styles.quantityText}>{item.quantity}</Text>
               <TouchableOpacity
                 style={styles.quantityButton}
-                onPress={() => onQuantityChange(item.id, 1)}
+                onPress={() => {
+                  console.log('Increase button pressed for item:', item.id);
+                  onQuantityChange(item.id, 1);
+                }}
                 disabled={isUpdating || item.quantity >= 99}
               >
                 <Ionicons name="add" size={16} color={COLORS.primary} />
@@ -210,3 +216,4 @@ const styles = StyleSheet.create({
 });
 
 export default CartItem;
+
