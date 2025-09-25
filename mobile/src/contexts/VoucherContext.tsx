@@ -19,7 +19,7 @@ export interface Voucher {
 interface VoucherContextType {
   vouchers: Voucher[];
   addVoucher: (v: Voucher) => void;
-  updateVoucher: (v: Voucher) => void;
+  editVoucher: (v: Voucher) => void;
   deleteVoucher: (id: string) => void;
 }
 
@@ -42,11 +42,11 @@ export const VoucherProvider: React.FC<{ children: ReactNode }> = ({ children })
   const [vouchers, setVouchers] = useState<Voucher[]>(defaultVouchers);
 
   const addVoucher = (v: Voucher) => setVouchers(prev => [...prev, v]);
-  const updateVoucher = (v: Voucher) => setVouchers(prev => prev.map(vv => vv.id === v.id ? v : vv));
+  const editVoucher = (v: Voucher) => setVouchers(prev => prev.map(vv => vv.id === v.id ? v : vv));
   const deleteVoucher = (id: string) => setVouchers(prev => prev.filter(v => v.id !== id));
 
   return (
-    <VoucherContext.Provider value={{ vouchers, addVoucher, updateVoucher, deleteVoucher }}>
+    <VoucherContext.Provider value={{ vouchers, addVoucher, editVoucher, deleteVoucher }}>
       {children}
     </VoucherContext.Provider>
   );

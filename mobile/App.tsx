@@ -219,7 +219,12 @@ function AppNavigator() {
       <ShipperProvider>
         <NavigationContainer>
           <StatusBar style="auto" />
-          <Stack.Navigator screenOptions={{ headerShown: false }}>
+          <Stack.Navigator screenOptions={{ headerShown: false }} initialRouteName="SellerDashboard">
+            <Stack.Screen name="SellerProfileScreen" component={require('./src/screens/seller/SellerProfileScreen').default} />
+            <Stack.Screen name="SellerDashboard" component={require('./src/screens/seller/DashboardScreen').default} />
+            <Stack.Screen name="AddFoodScreen" component={require('./src/screens/seller/AddFoodScreen').default} />
+            <Stack.Screen name="EditFoodScreen" component={require('./src/screens/seller/EditFoodScreen').default} />
+            <Stack.Screen name="FoodDetailScreen" component={require('./src/screens/seller/FoodDetailScreen').default} />
             {!isAuthenticated ? (
               // Auth screens - show when not authenticated
               <>
@@ -283,10 +288,12 @@ function AppNavigator() {
                 <Stack.Screen name="FoodDetailPopup" component={require('./src/screens/FoodDetailPopup').default} />
                 <Stack.Screen name="VoucherManagementScreen" component={require('./src/screens/VoucherManagementScreen').default} />
                 <Stack.Screen name="VoucherEditScreen" component={require('./src/screens/VoucherEditScreen').default} />
-                <Stack.Screen name="ShipperEditScreen" component={require('./src/screens/ShipperEditScreen').default} />
+                <Stack.Screen name="SellerVoucherEditScreen" component={require('./src/screens/seller/VoucherEditScreen').default} />
+            <Stack.Screen name="ShipperEditScreen" component={require('./src/screens/ShipperEditScreen').default} />
                 <Stack.Screen name="ShipperDetailScreen" component={require('./src/screens/ShipperDetailScreen').default} />
               </>
             )}
+            <Stack.Screen name="SellerProfileEditScreen" component={require('./src/screens/seller/SellerProfileEditScreen').default} />
           </Stack.Navigator>
         </NavigationContainer>
       </ShipperProvider>
