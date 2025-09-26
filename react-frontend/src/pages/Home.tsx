@@ -2,8 +2,8 @@ import React, { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { API, getImageUrl, type Category } from "@/lib/api";
 import { Card } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
 import Footer from "@/components/Footer";
+import FoodDetailModal from "@/components/FoodDetailModal";
 
 // ==== Types ====
 type Store = {
@@ -71,6 +71,8 @@ const Home: React.FC = () => {
   const [categories, setCategories] = useState<Category[]>([]);
   const [stores, setStores] = useState<Store[]>([]);
   const [loading, setLoading] = useState(true);
+  const [selectedFood, setSelectedFood] = useState<Food | null>(null);
+  const [isModalOpen, setIsModalOpen] = useState(false);
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -82,7 +84,8 @@ const Home: React.FC = () => {
   const loadFeaturedCategories = async () => {
     try {
       const response = await API.get("/menu/categories/");
-      setCategories(response.results.slice(0, 6));
+      const data = response as { results: Category[] };
+      setCategories(data.results.slice(0, 6));
     } catch (error) {
       console.error("Error loading featured categories:", error);
     }
@@ -182,21 +185,78 @@ const Home: React.FC = () => {
     navigate(`/menu/items?category=${categoryId}`);
   };
 
+  // Modal handlers
+  const openFoodModal = (food: Food) => {
+    setSelectedFood(food);
+    setIsModalOpen(true);
+  };
+
+  const closeFoodModal = () => {
+    setIsModalOpen(false);
+    setSelectedFood(null);
+  };
+
+  // Add to cart function
+  const addToCart = async (foodId: number, quantity: number, note?: string) => {
+    try {
+      const token = getAccessToken();
+      if (!token) {
+        alert("Vui lòng đăng nhập để thêm vào giỏ hàng");
+        navigate("/auth/login");
+        return;
+      }
+
+      let response = await fetch("http://127.0.0.1:8000/api/cart/add/", {
+        method: "POST",
+        headers: getAuthHeaders(),
+        body: JSON.stringify({
+          food_id: foodId,
+          quantity: quantity,
+          item_note: note,
+        }),
+      });
+
+      if (response.status === 401) {
+        const newAccess = await refreshAccessToken();
+        if (newAccess) {
+          response = await fetch("http://127.0.0.1:8000/api/cart/add/", {
+            method: "POST",
+            headers: {
+              Authorization: `Bearer ${newAccess}`,
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              food_id: foodId,
+              quantity: quantity,
+              item_note: note,
+            }),
+          });
+        }
+      }
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const result = await response.json();
+      alert(`Đã thêm ${result.item.food.title} vào giỏ hàng!`);
+    } catch (error) {
+      console.error("Error adding to cart:", error);
+      alert("Có lỗi xảy ra khi thêm vào giỏ hàng. Vui lòng thử lại!");
+    }
+  };
+
   // ==== Render ====
   if (loading) {
     return (
       <div className="font-sans">
-        <header className="bg-orange-500 text-white px-6 py-3 flex justify-between items-center">
+        <header className="bg-orange-500 text-white px-6 py-3 flex justify-center items-center">
           <div className="flex gap-6">
             <Link to="/" className="font-semibold">
               Trang chủ
             </Link>
             <Link to="/promo">Khuyến mãi</Link>
             <Link to="/contact">Liên hệ</Link>
-          </div>
-          <div className="flex items-center gap-4">
-            <Button variant="secondary">Giỏ hàng</Button>
-            <span className="font-semibold">Người dùng</span>
           </div>
         </header>
         <div className="flex justify-center items-center min-h-screen">
@@ -209,17 +269,13 @@ const Home: React.FC = () => {
   return (
     <div className="font-sans">
       {/* Navbar */}
-      <header className="bg-orange-500 text-white px-6 py-3 flex justify-between items-center">
+      <header className="bg-orange-500 text-white px-6 py-3 flex justify-center items-center">
         <div className="flex gap-6">
           <Link to="/" className="font-semibold">
             Trang chủ
           </Link>
           <Link to="/promo">Khuyến mãi</Link>
           <Link to="/contact">Liên hệ</Link>
-        </div>
-        <div className="flex items-center gap-4">
-          <Button variant="secondary">Giỏ hàng</Button>
-          <span className="font-semibold">Người dùng</span>
         </div>
       </header>
 
@@ -273,7 +329,10 @@ const Home: React.FC = () => {
                     <p className="text-gray-500">Không có món ăn</p>
                   ) : (
                     store.products.map((p) => (
-                      <div key={p.id} className="flex items-center gap-3">
+                      <div
+                        key={p.id}
+                        className="flex items-center gap-3 cursor-pointer hover:bg-gray-100 p-2 rounded-lg transition-colors"
+                        onClick={() => openFoodModal(p)}>
                         <img
                           src={p.image_url}
                           alt={p.title}
@@ -283,8 +342,10 @@ const Home: React.FC = () => {
                           }}
                         />
                         <div>
-                          <p>{p.title}</p>
-                          <p>{Number(p.price).toLocaleString()} đ</p>
+                          <p className="font-medium">{p.title}</p>
+                          <p className="text-orange-600 font-semibold">
+                            {Number(p.price).toLocaleString()} đ
+                          </p>
                         </div>
                       </div>
                     ))
@@ -301,7 +362,10 @@ const Home: React.FC = () => {
           <div className="space-y-4">
             {stores[0]?.products.length > 0 ? (
               stores[0].products.map((p) => (
-                <div key={p.id} className="flex items-center gap-3">
+                <div
+                  key={p.id}
+                  className="flex items-center gap-3 cursor-pointer hover:bg-gray-100 p-2 rounded-lg transition-colors"
+                  onClick={() => openFoodModal(p)}>
                   <img
                     src={p.image_url}
                     alt={p.title}
@@ -311,8 +375,10 @@ const Home: React.FC = () => {
                     }}
                   />
                   <div>
-                    <p>{p.title}</p>
-                    <p>{Number(p.price).toLocaleString()} đ</p>
+                    <p className="font-medium">{p.title}</p>
+                    <p className="text-orange-600 font-semibold">
+                      {Number(p.price).toLocaleString()} đ
+                    </p>
                   </div>
                 </div>
               ))
@@ -324,7 +390,15 @@ const Home: React.FC = () => {
       </section>
 
       {/* Footer */}
-      <Footer/>
+      <Footer />
+
+      {/* Food Detail Modal */}
+      <FoodDetailModal
+        isOpen={isModalOpen}
+        onClose={closeFoodModal}
+        food={selectedFood}
+        onAddToCart={addToCart}
+      />
     </div>
   );
 };

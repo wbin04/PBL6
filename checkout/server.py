@@ -59,8 +59,8 @@ def create_payment():
             orderCode=new_order_code,
             amount=amount,
             description=message,
-            returnUrl=f"{request.host_url.rstrip('/')}/checkout.html?payos=success",
-            cancelUrl=f"{request.host_url.rstrip('/')}/checkout.html?payos=cancel"
+            returnUrl="http://localhost:5173/checkout-result?payos=success",
+            cancelUrl="http://localhost:5173/checkout-result?payos=cancel"
         )
         try:
             created = payOs.create_payment_link(paymentData)
@@ -77,4 +77,4 @@ def create_payment():
         return jsonify(error=str(e)), 500
 
 if __name__ == '__main__':
-    app.run(port=8000, debug=True)
+    app.run(port=8001, debug=True)

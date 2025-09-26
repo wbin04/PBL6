@@ -6,6 +6,8 @@ import Register from "./pages/Register";
 import Categories from "./pages/Categories";
 import Menu from "./pages/Menu";
 import Cart from "./pages/Cart";
+import Checkout from "./pages/Checkout";
+import CheckoutResult from "./pages/CheckoutResult";
 import Orders from "./pages/Orders";
 import Admin from "./pages/Admin";
 
@@ -24,6 +26,8 @@ function App() {
                 <Route path="/menu" element={<Categories />} />
                 <Route path="/menu/items" element={<Menu />} />
                 <Route path="/cart" element={<Cart />} />
+                <Route path="/checkout" element={<Checkout />} />
+                <Route path="/checkout-result" element={<CheckoutResult />} />
                 <Route path="/orders" element={<Orders />} />
                 <Route path="/admin" element={<Admin />} />
                 {/* Add more routes as needed */}

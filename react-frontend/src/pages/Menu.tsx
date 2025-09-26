@@ -1,8 +1,9 @@
 import { useEffect, useState } from "react";
-import { useSearchParams } from "react-router-dom";
+import { useSearchParams, useNavigate } from "react-router-dom";
 import { API, getImageUrl, type Category } from "@/lib/api";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import FoodDetailModal from "@/components/FoodDetailModal";
 
 // ==== Types ====
 type Food = {
@@ -25,6 +26,41 @@ type StoreInfo = {
   manager: string;
 };
 
+// Helper functions từ Home.tsx
+const getAccessToken = () =>
+  localStorage.getItem("access_token") ||
+  sessionStorage.getItem("access_token");
+
+const getAuthHeaders = () => {
+  const token = getAccessToken();
+  return {
+    Authorization: `Bearer ${token}`,
+    "Content-Type": "application/json",
+  };
+};
+
+const refreshAccessToken = async () => {
+  const refresh = localStorage.getItem("refresh_token");
+  if (!refresh) return null;
+
+  try {
+    const response = await fetch("http://127.0.0.1:8000/api/auth/refresh/", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ refresh }),
+    });
+
+    if (response.ok) {
+      const data = await response.json();
+      localStorage.setItem("access_token", data.access);
+      return data.access;
+    }
+  } catch (error) {
+    console.error("Token refresh failed:", error);
+  }
+  return null;
+};
+
 export default function Menu() {
   const [foods, setFoods] = useState<Food[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
@@ -33,7 +69,12 @@ export default function Menu() {
   const [storeInfo, setStoreInfo] = useState<StoreInfo | null>(null);
   const [loading, setLoading] = useState(false);
 
+  // Modal states
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [selectedFood, setSelectedFood] = useState<Food | null>(null);
+
   const [searchParams] = useSearchParams();
+  const navigate = useNavigate();
 
   // tải danh mục + param
   useEffect(() => {
@@ -59,7 +100,7 @@ export default function Menu() {
   const loadCategories = async () => {
     try {
       const res = await API.get("/menu/categories/");
-      setCategories(res);
+      setCategories(res as Category[]);
     } catch (err) {
       console.error("Error loading categories:", err);
     }
@@ -72,7 +113,8 @@ export default function Menu() {
       let url = "/menu/items/";
       if (categoryId) url += `?category=${categoryId}`;
       const res = await API.get(url);
-      setFoods(res.results || res);
+      const data = res as { results?: Food[] } | Food[];
+      setFoods(Array.isArray(data) ? data : data.results || []);
     } catch (err) {
       console.error("Error loading foods:", err);
     } finally {
@@ -88,7 +130,8 @@ export default function Menu() {
       setStoreInfo(storeRes);
 
       const foodsRes = await API.get(`/stores/${id}/foods/`);
-      setFoods(foodsRes.results || foodsRes);
+      const foodsData = foodsRes as { results?: Food[] } | Food[];
+      setFoods(Array.isArray(foodsData) ? foodsData : foodsData.results || []);
     } catch (error) {
       console.error("Error loading store:", error);
     } finally {
@@ -96,19 +139,65 @@ export default function Menu() {
     }
   };
 
-  const addToCart = (foodId: number, title: string, price: string) => {
-    const cartItem = { food_id: foodId, title, price: Number(price), quantity: 1 };
-    const existingCart = JSON.parse(localStorage.getItem('cart') || '[]');
-    const index = existingCart.findIndex((item: { food_id: number }) => item.food_id === foodId);
+  // Modal handlers
+  const openFoodModal = (food: Food) => {
+    setSelectedFood(food);
+    setIsModalOpen(true);
+  };
 
-    if (index > -1) {
-      existingCart[index].quantity += 1;
-    } else {
-      existingCart.push(cartItem);
+  const closeFoodModal = () => {
+    setIsModalOpen(false);
+    setSelectedFood(null);
+  };
+
+  // Enhanced add to cart function
+  const addToCart = async (foodId: number, quantity: number, note?: string) => {
+    try {
+      const token = getAccessToken();
+      if (!token) {
+        alert("Vui lòng đăng nhập để thêm vào giỏ hàng");
+        navigate("/login");
+        return;
+      }
+
+      let response = await fetch("http://127.0.0.1:8000/api/cart/add/", {
+        method: "POST",
+        headers: getAuthHeaders(),
+        body: JSON.stringify({
+          food_id: foodId,
+          quantity: quantity,
+          item_note: note,
+        }),
+      });
+
+      if (response.status === 401) {
+        const newAccess = await refreshAccessToken();
+        if (newAccess) {
+          response = await fetch("http://127.0.0.1:8000/api/cart/add/", {
+            method: "POST",
+            headers: {
+              Authorization: `Bearer ${newAccess}`,
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              food_id: foodId,
+              quantity: quantity,
+              item_note: note,
+            }),
+          });
+        }
+      }
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const result = await response.json();
+      alert(`Đã thêm ${result.item.food.title} vào giỏ hàng!`);
+    } catch (error) {
+      console.error("Error adding to cart:", error);
+      alert("Có lỗi xảy ra khi thêm vào giỏ hàng. Vui lòng thử lại!");
     }
-
-    localStorage.setItem('cart', JSON.stringify(existingCart));
-    alert('Đã thêm vào giỏ hàng!');
   };
 
   return (
@@ -153,10 +242,15 @@ export default function Menu() {
               <img
                 src={food.image_url}
                 alt={food.title}
-                className="w-full h-48 object-cover rounded-md mb-4"
+                className="w-full h-48 object-cover rounded-md mb-4 cursor-pointer"
+                onClick={() => openFoodModal(food)}
               />
               <div className="space-y-2">
-                <h3 className="text-lg font-semibold">{food.title}</h3>
+                <h3
+                  className="text-lg font-semibold cursor-pointer hover:text-orange-500"
+                  onClick={() => openFoodModal(food)}>
+                  {food.title}
+                </h3>
                 {food.description && (
                   <p className="text-sm text-muted-foreground line-clamp-2">
                     {food.description}
@@ -165,14 +259,19 @@ export default function Menu() {
                 <div className="text-lg font-bold text-primary">
                   {Number(food.price).toLocaleString()} đ
                 </div>
-                <Button className="w-full" onClick={() => addToCart(food.id, food.title, food.price)}>
-                  Thêm vào giỏ
-                </Button>
               </div>
             </CardContent>
           </Card>
         ))}
       </div>
+
+      {/* Food Detail Modal */}
+      <FoodDetailModal
+        isOpen={isModalOpen}
+        onClose={closeFoodModal}
+        food={selectedFood}
+        onAddToCart={addToCart}
+      />
     </div>
   );
 }

@@ -373,8 +373,6 @@ def update_cart_item(request, food_id):
 
 
 @api_view(['DELETE'])
-# @permission_classes([IsAuthenticated])  # Temporarily disabled for testing
-@api_view(['DELETE'])
 @permission_classes([IsAuthenticated])
 def remove_from_cart(request, food_id):
     """Remove item from cart"""
@@ -417,8 +415,6 @@ def remove_from_cart(request, food_id):
         )
 
 
-@api_view(['DELETE'])
-# @permission_classes([IsAuthenticated])  # Temporarily disabled for testing
 @api_view(['DELETE'])
 @permission_classes([IsAuthenticated])
 def clear_cart(request):

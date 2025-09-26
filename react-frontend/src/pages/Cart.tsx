@@ -1,21 +1,91 @@
-import React, { useEffect, useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
-import { getImageUrl, formatPrice } from '@/lib/api';
-import { Button } from '@/components/ui/button';
+import React, { useEffect, useState, useMemo } from "react";
+import { Link, useNavigate } from "react-router-dom";
+import { API, getImageUrl } from "@/lib/api";
+import { Button } from "@/components/ui/button";
 
-// Định nghĩa type CartItem và Cart
 type CartItem = {
-  food_id: number;
-  title: string;
-  price: number;
+  id: number;
+  food: {
+    id: number;
+    title: string;
+    price: string;
+    image_url: string;
+    store_name: string;
+  };
+  food_option?: {
+    id: number;
+    size_name: string;
+    price: string;
+  };
   quantity: number;
-  image?: string; // Thêm image để hiển thị
+  item_note?: string;
+  subtotal: string;
 };
 
 type Cart = {
+  id: number;
+  total_money: string;
+  items_count: number;
   items: CartItem[];
-  total_price: number;
 };
+
+// Component riêng cho hình ảnh món ăn để tránh re-render không cần thiết
+const FoodImage: React.FC<{ item: CartItem }> = React.memo(({ item }) => {
+  const [imageLoaded, setImageLoaded] = useState(false);
+  const [imageError, setImageError] = useState(false);
+
+  // Tính toán imageSrc với fallback tốt hơn
+  const imageSrc = item.food.image_url
+    ? getImageUrl(item.food.image_url)
+    : null;
+
+  // Reset states khi item.food.image_url thay đổi
+  useEffect(() => {
+    setImageLoaded(false);
+    setImageError(false);
+  }, [item.food.image_url]);
+
+  const handleImageLoad = () => {
+    setImageLoaded(true);
+    setImageError(false);
+  };
+
+  const handleImageError = () => {
+    setImageError(true);
+    setImageLoaded(true); // Đặt thành true để ẩn loading spinner
+  };
+
+  return (
+    <div className="relative w-20 h-20 rounded-lg overflow-hidden bg-gray-200 flex items-center justify-center">
+      {imageSrc && !imageError ? (
+        <img
+          src={imageSrc}
+          alt={item.food.title}
+          className={`w-full h-full object-cover transition-opacity duration-200 ${
+            imageLoaded ? "opacity-100" : "opacity-0"
+          }`}
+          onLoad={handleImageLoad}
+          onError={handleImageError}
+          loading="lazy"
+        />
+      ) : (
+        // Hiển thị placeholder text/icon thay vì ảnh placeholder
+        <div className="flex flex-col items-center justify-center text-gray-400 text-xs">
+          <div className="text-2xl mb-1">🍽️</div>
+          <span>Món ăn</span>
+        </div>
+      )}
+
+      {imageSrc && !imageLoaded && !imageError && (
+        <div className="absolute inset-0 flex items-center justify-center bg-gray-200">
+          <div className="w-6 h-6 border-2 border-orange-500 border-t-transparent rounded-full animate-spin"></div>
+        </div>
+      )}
+    </div>
+  );
+});
+
+FoodImage.displayName = "FoodImage";
 
 const Cart: React.FC = () => {
   const [cart, setCart] = useState<Cart | null>(null);
@@ -23,183 +93,165 @@ const Cart: React.FC = () => {
   const navigate = useNavigate();
 
   useEffect(() => {
-    checkAuthentication();
-    loadCart();
+    if (checkAuthentication()) {
+      loadCart();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Kiểm tra đăng nhập (giả lập, vì không có API)
   const checkAuthentication = () => {
-    // Giả sử luôn đăng nhập cho dữ liệu cứng
-    // Nếu cần kiểm tra thực tế, bạn có thể thêm logic kiểm tra token trong localStorage
+    const token = localStorage.getItem("access_token");
+    if (!token) {
+      navigate("/auth/login");
+      return false;
+    }
     return true;
   };
 
-  const loadCart = () => {
+  const loadCart = async () => {
     try {
       setLoading(true);
-      // Lấy dữ liệu từ localStorage (được lưu từ Items.tsx)
-      const cartData = JSON.parse(localStorage.getItem('cart') || '[]');
-      
-      // Tạo dữ liệu minh họa cứng để bổ sung thông tin hình ảnh
-      const mockFoods = [
-        {
-          id: 1,
-          title: "Cơm gà xối mỡ",
-          price: 35000,
-          image: "/images/com-ga.jpg",
-        },
-        {
-          id: 2,
-          title: "Canh chua cá",
-          price: 45000,
-          image: "/images/canh-chua.jpg",
-        },
-        {
-          id: 3,
-          title: "Pizza Hải Sản",
-          price: 120000,
-          image: "/images/pizza-seafood.jpg",
-        },
-        {
-          id: 4,
-          title: "Pizza Phô Mai",
-          price: 99000,
-          image: "/images/pizza-cheese.jpg",
-        },
-        {
-          id: 5,
-          title: "Mỳ Ý Bò Bằm",
-          price: 85000,
-          image: "/images/spaghetti.jpg",
-        },
-        {
-          id: 6,
-          title: "Gà Rán Giòn",
-          price: 45000,
-          image: "/images/fried-chicken.jpg",
-        },
-        {
-          id: 7,
-          title: "Burger Bò",
-          price: 55000,
-          image: "/images/burger-beef.jpg",
-        },
-      ];
-
-      // Bổ sung thông tin hình ảnh cho cart items
-      const enrichedCartItems = cartData.map((item: CartItem) => {
-        const food = mockFoods.find((f) => f.id === item.food_id);
-        return {
-          ...item,
-          image: food ? food.image : '/images/placeholder.jpg',
-        };
-      });
-
-      const total_price = enrichedCartItems.reduce(
-        (sum: number, item: CartItem) => sum + item.price * item.quantity,
-        0
-      );
-
-      setCart({ items: enrichedCartItems, total_price });
-    } catch (error) {
-      console.error('Error loading cart:', error);
-      alert('Lỗi khi tải giỏ hàng: ' + (error instanceof Error ? error.message : String(error)));
-      showEmptyCart();
+      const response = await API.get("/cart/");
+      setCart(response as Cart);
+    } catch (error: unknown) {
+      console.error("Error loading cart:", error);
+      if (
+        error &&
+        typeof error === "object" &&
+        "response" in error &&
+        (error as { response: { status: number } }).response?.status === 401
+      ) {
+        navigate("/auth/login");
+      } else {
+        alert(
+          "Lỗi khi tải giỏ hàng: " +
+            (error instanceof Error ? error.message : "Vui lòng thử lại")
+        );
+        showEmptyCart();
+      }
     } finally {
       setLoading(false);
     }
   };
 
   const showEmptyCart = () => {
-    setCart({ items: [], total_price: 0 });
+    setCart({ id: 0, total_money: "0.00", items_count: 0, items: [] });
   };
 
-  const updateQuantity = (foodId: number, newQuantity: number) => {
-    try {
-      const cartData = JSON.parse(localStorage.getItem('cart') || '[]');
-      if (newQuantity < 1) {
-        removeFromCart(foodId);
-        return;
-      }
+  /** Tính lại subtotal sau khi thay đổi items */
+  const recalcCart = (items: CartItem[]) => {
+    const newSubtotal = items.reduce(
+      (acc, i) => acc + parseFloat(i.subtotal),
+      0
+    );
+    return {
+      ...cart!,
+      items,
+      items_count: items.length,
+      total_money: newSubtotal.toString(),
+    };
+  };
 
-      const updatedCart = cartData.map((item: CartItem) =>
-        item.food_id === foodId ? { ...item, quantity: newQuantity } : item
+  const updateQuantity = async (foodId: number, newQuantity: number) => {
+    if (!cart) return;
+    if (newQuantity < 1) {
+      removeFromCart(foodId);
+      return;
+    }
+    try {
+      // Gửi API trước => lưu DB
+      await API.put(`/cart/items/${foodId}/`, { quantity: newQuantity });
+
+      // Cập nhật state cục bộ
+      const newItems = cart.items.map((i) =>
+        i.food.id === foodId
+          ? {
+              ...i,
+              quantity: newQuantity,
+              subtotal: (
+                newQuantity *
+                  (parseFloat(i.food.price) +
+                    (i.food_option ? parseFloat(i.food_option.price) : 0)) || 0
+              ).toString(),
+            }
+          : i
       );
-
-      localStorage.setItem('cart', JSON.stringify(updatedCart));
-      loadCart(); // Tải lại giỏ hàng
+      setCart(recalcCart(newItems));
     } catch (error) {
-      console.error('Error updating quantity:', error);
-      alert('Lỗi khi cập nhật số lượng: ' + (error instanceof Error ? error.message : String(error)));
+      console.error("Error updating quantity:", error);
+      alert(
+        "Lỗi khi cập nhật số lượng: " +
+          (error instanceof Error ? error.message : String(error))
+      );
     }
   };
 
-  const removeFromCart = (foodId: number) => {
-    if (!confirm('Bạn có chắc muốn xóa món này khỏi giỏ hàng?')) {
-      return;
-    }
+  const removeFromCart = async (foodId: number) => {
+    if (!confirm("Bạn có chắc muốn xóa món này khỏi giỏ hàng?")) return;
+    if (!cart) return;
 
     try {
-      const cartData = JSON.parse(localStorage.getItem('cart') || '[]');
-      const updatedCart = cartData.filter((item: CartItem) => item.food_id !== foodId);
+      await API.delete(`/cart/items/${foodId}/remove/`, {
+        headers: {
+          "Content-Type": "application/json",
+        },
+      });
 
-      localStorage.setItem('cart', JSON.stringify(updatedCart));
-      loadCart(); // Tải lại giỏ hàng
-      alert('Đã xóa món ăn khỏi giỏ hàng');
+      const newItems = cart.items.filter((i) => i.food.id !== foodId);
+      setCart(recalcCart(newItems));
+      alert("Đã xóa món ăn khỏi giỏ hàng");
     } catch (error) {
-      console.error('Error removing item:', error);
-      alert('Lỗi khi xóa món ăn: ' + (error instanceof Error ? error.message : String(error)));
+      console.error("Error removing item:", error);
+      alert(
+        "Lỗi khi xóa món ăn: " +
+          (error instanceof Error ? error.message : "Vui lòng thử lại")
+      );
     }
   };
 
-  const clearCart = () => {
-    if (!confirm('Bạn có chắc muốn xóa tất cả món ăn trong giỏ hàng?')) {
-      return;
-    }
+  const clearCart = async () => {
+    if (!confirm("Bạn có chắc muốn xóa tất cả món ăn trong giỏ hàng?")) return;
 
     try {
-      localStorage.setItem('cart', JSON.stringify([]));
+      await API.delete("/cart/clear/", {
+        headers: {
+          "Content-Type": "application/json",
+        },
+      });
       showEmptyCart();
-      alert('Đã xóa tất cả món ăn trong giỏ hàng');
+      alert("Đã xóa tất cả món ăn trong giỏ hàng");
     } catch (error) {
-      console.error('Error clearing cart:', error);
-      alert('Lỗi khi xóa giỏ hàng: ' + (error instanceof Error ? error.message : String(error)));
+      console.error("Error clearing cart:", error);
+      alert(
+        "Lỗi khi xóa giỏ hàng: " +
+          (error instanceof Error ? error.message : "Vui lòng thử lại")
+      );
     }
   };
 
   const proceedToCheckout = () => {
     if (!cart || !cart.items || cart.items.length === 0) {
-      alert('Giỏ hàng trống! Vui lòng thêm món ăn trước khi thanh toán.');
+      alert("Giỏ hàng trống! Vui lòng thêm món ăn trước khi thanh toán.");
       return;
     }
-
-    navigate('/checkout');
+    navigate("/checkout");
   };
 
-  const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat('vi-VN', {
-      style: 'currency',
-      currency: 'VND',
+  const formatCurrency = (amount: number) =>
+    new Intl.NumberFormat("vi-VN", {
+      style: "currency",
+      currency: "VND",
       minimumFractionDigits: 0,
     }).format(amount);
-  };
 
-  const getTotalItems = () => {
-    if (!cart?.items) return 0;
-    return cart.items.reduce((sum, item) => sum + item.quantity, 0);
-  };
+  // Memoize các calculations để tránh re-render không cần thiết
+  const calculations = useMemo(() => {
+    const subtotal = cart ? parseFloat(cart.total_money) : 0;
+    const deliveryFee = subtotal > 0 ? 15000 : 0;
+    const total = subtotal + deliveryFee;
 
-  const getSubtotal = () => {
-    return cart?.total_price || 0;
-  };
-
-  const getDeliveryFee = () => {
-    return getSubtotal() > 0 ? 15000 : 0;
-  };
-
-  const getTotal = () => {
-    return getSubtotal() + getDeliveryFee();
-  };
+    return { subtotal, deliveryFee, total };
+  }, [cart]);
 
   if (loading) {
     return (
@@ -215,16 +267,24 @@ const Cart: React.FC = () => {
     return (
       <div className="max-w-6xl mx-auto p-5">
         <div className="text-center mb-8">
-          <h1 className="text-orange-500 text-4xl font-bold mb-2">🛒 Giỏ hàng của bạn</h1>
+          <h1 className="text-orange-500 text-4xl font-bold mb-2">
+            🛒 Giỏ hàng của bạn
+          </h1>
           <p>Xem lại và chỉnh sửa đơn hàng trước khi thanh toán</p>
         </div>
 
         <div className="bg-white rounded-2xl shadow-lg overflow-hidden">
           <div className="text-center py-16">
             <div className="text-8xl opacity-30 mb-5">🛒</div>
-            <h3 className="text-gray-600 text-xl mb-4">Giỏ hàng của bạn đang trống</h3>
-            <p className="text-gray-400 mb-6">Hãy thêm một số món ăn ngon vào giỏ hàng!</p>
-            <Button asChild className="bg-orange-500 hover:bg-orange-600 text-white px-8 py-3 rounded-full text-lg font-bold">
+            <h3 className="text-gray-600 text-xl mb-4">
+              Giỏ hàng của bạn đang trống
+            </h3>
+            <p className="text-gray-400 mb-6">
+              Hãy thêm một số món ăn ngon vào giỏ hàng!
+            </p>
+            <Button
+              asChild
+              className="bg-orange-500 hover:bg-orange-600 text-white px-8 py-3 rounded-full text-lg font-bold">
               <Link to="/menu">Khám phá thực đơn</Link>
             </Button>
           </div>
@@ -236,34 +296,51 @@ const Cart: React.FC = () => {
   return (
     <div className="max-w-6xl mx-auto p-5">
       <div className="text-center mb-8">
-        <h1 className="text-orange-500 text-4xl font-bold mb-2">🛒 Giỏ hàng của bạn</h1>
+        <h1 className="text-orange-500 text-4xl font-bold mb-2">
+          🛒 Giỏ hàng của bạn
+        </h1>
         <p>Xem lại và chỉnh sửa đơn hàng trước khi thanh toán</p>
       </div>
 
       <div className="bg-white rounded-2xl shadow-lg overflow-hidden">
         <div className="p-5">
-          {cart.items.map((item) => (
+          {cart.items.map((item, index) => (
             <div
-              key={item.food_id}
-              className="flex items-center p-5 border-b border-gray-100 last:border-b-0 hover:bg-gray-50 transition-colors"
-            >
-              <img
-                src={getImageUrl(item.image || '/images/placeholder.jpg')}
-                alt={item.title}
-                className="w-20 h-20 rounded-lg object-cover mr-5"
-                onError={(e) => {
-                  (e.target as HTMLImageElement).src = '/images/placeholder.jpg';
-                }}
-              />
+              key={`cart-item-${item.id}-${item.food.id}-${
+                item.food_option?.id || "no-option"
+              }-${index}`}
+              className="flex items-center p-5 border-b border-gray-100 last:border-b-0 hover:bg-gray-50 transition-colors">
+              <div className="mr-5">
+                <FoodImage item={item} />
+              </div>
               <div className="flex-1">
-                <div className="text-lg font-bold text-gray-800 mb-1">{item.title}</div>
-                <div className="text-orange-500 font-bold text-lg">{formatCurrency(item.price)}</div>
+                <div className="text-lg font-bold text-gray-800 mb-1">
+                  {item.food.title}
+                </div>
+                <div className="text-sm text-gray-500 mb-1">
+                  {item.food.store_name}
+                </div>
+                <div className="text-orange-500 font-bold text-lg">
+                  {formatCurrency(parseFloat(item.food.price))}
+                  {item.food_option && (
+                    <span className="text-sm text-gray-500 ml-2">
+                      ({item.food_option.size_name}: +
+                      {formatCurrency(parseFloat(item.food_option.price))})
+                    </span>
+                  )}
+                </div>
+                {item.item_note && (
+                  <div className="text-sm text-gray-500 italic">
+                    Ghi chú: {item.item_note}
+                  </div>
+                )}
               </div>
               <div className="flex items-center mx-5">
                 <button
                   className="bg-orange-500 text-white border-0 w-9 h-9 rounded-full cursor-pointer text-lg flex items-center justify-center hover:bg-orange-600 transition-colors"
-                  onClick={() => updateQuantity(item.food_id, item.quantity - 1)}
-                >
+                  onClick={() =>
+                    updateQuantity(item.food.id, item.quantity - 1)
+                  }>
                   −
                 </button>
                 <span className="mx-4 text-lg font-bold min-w-8 text-center">
@@ -271,18 +348,18 @@ const Cart: React.FC = () => {
                 </span>
                 <button
                   className="bg-orange-500 text-white border-0 w-9 h-9 rounded-full cursor-pointer text-lg flex items-center justify-center hover:bg-orange-600 transition-colors"
-                  onClick={() => updateQuantity(item.food_id, item.quantity + 1)}
-                >
+                  onClick={() =>
+                    updateQuantity(item.food.id, item.quantity + 1)
+                  }>
                   +
                 </button>
               </div>
               <div className="text-xl font-bold text-orange-500 ml-5 min-w-24 text-right">
-                {formatCurrency(item.price * item.quantity)}
+                {formatCurrency(parseFloat(item.subtotal))}
               </div>
               <button
                 className="bg-red-500 text-white border-0 px-4 py-2 rounded-full cursor-pointer ml-4 hover:bg-red-600 transition-colors"
-                onClick={() => removeFromCart(item.food_id)}
-              >
+                onClick={() => removeFromCart(item.food.id)}>
                 Xóa
               </button>
             </div>
@@ -291,31 +368,33 @@ const Cart: React.FC = () => {
         <div className="bg-gray-50 p-6 border-t-2 border-orange-500">
           <div className="flex justify-between mb-4 text-lg">
             <span>Tổng số món:</span>
-            <span>{getTotalItems()}</span>
+            <span>{cart.items_count}</span>
           </div>
           <div className="flex justify-between mb-4 text-lg">
             <span>Tạm tính:</span>
-            <span className="text-orange-500 font-bold">{formatCurrency(getSubtotal())}</span>
+            <span className="text-orange-500 font-bold">
+              {formatCurrency(calculations.subtotal)}
+            </span>
           </div>
           <div className="flex justify-between mb-4 text-lg">
             <span>Phí giao hàng:</span>
-            <span className="text-orange-500 font-bold">{formatCurrency(getDeliveryFee())}</span>
+            <span className="text-orange-500 font-bold">
+              {formatCurrency(calculations.deliveryFee)}
+            </span>
           </div>
           <div className="flex justify-between text-xl font-bold text-orange-500 border-t-2 border-gray-300 pt-4">
             <span>Tổng cộng:</span>
-            <span>{formatCurrency(getTotal())}</span>
+            <span>{formatCurrency(calculations.total)}</span>
           </div>
           <div className="flex gap-4 mt-6">
             <button
               className="flex-1 py-4 px-8 border-0 rounded-full text-lg font-bold cursor-pointer transition-all bg-gray-500 text-white hover:bg-gray-600"
-              onClick={clearCart}
-            >
+              onClick={clearCart}>
               Xóa tất cả
             </button>
             <button
               className="flex-1 py-4 px-8 border-0 rounded-full text-lg font-bold cursor-pointer transition-all bg-orange-500 text-white hover:bg-orange-600 hover:-translate-y-1"
-              onClick={proceedToCheckout}
-            >
+              onClick={proceedToCheckout}>
               Tiến hành thanh toán
             </button>
           </div>
