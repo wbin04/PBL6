@@ -122,6 +122,11 @@ const SellerDashboardScreen: React.FC<SellerDashboardScreenProps> = ({ navigatio
                     onPress={() => {
                       setSidebarVisible(false);
                       setActiveSection(item.section);
+                      if (item.section === 'foods') {
+                        navigation.navigate('SellerManageMenuScreen');
+                      } else if (item.section === 'promotions') {
+                        navigation.navigate('SellerVoucherManagementScreen');
+                      }
                     }}
                   >
                     <IconComponent width={16} height={16} stroke={activeSection === item.section ? '#fff' : '#fff7ed'} />
