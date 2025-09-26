@@ -23,7 +23,7 @@ import { Fonts } from "@/constants/Fonts";
 import { VALIDATION } from '@/constants';
 
 // ====== Types ======
-type Role = "customer" | "seller" | "shipper" | "admin";
+type Role = "customer" | "store" | "shipper" | "admin";
 
 type RolePolicy = {
   implicitRoles: Record<Role, Role[]>;
@@ -57,10 +57,10 @@ const DEFAULT_POLICY: RolePolicy = {
   implicitRoles: {
     customer: [],
     shipper: ["customer"],
-    seller: ["customer"],
+    store: ["customer"],
     admin: ["customer"],
   },
-  switchableRoles: ["customer", "shipper", "seller"],
+  switchableRoles: ["customer", "shipper", "store"],
 };
 
 const rolePolicy: RolePolicy = db.auth?.rolePolicy ?? DEFAULT_POLICY;
