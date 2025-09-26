@@ -1,13 +1,13 @@
-import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
-import Layout from './components/Layout';
-import Home from './pages/Home';
-import Login from './pages/Login';
-import Register from './pages/Register';
-import Categories from './pages/Categories';
-import Items from './pages/Items';
-import Cart from './pages/Cart';
-import Orders from './pages/Orders';
-import Admin from './pages/Admin';
+import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
+import Layout from "./components/Layout";
+import Home from "./pages/Home";
+import Login from "./pages/Login";
+import Register from "./pages/Register";
+import Categories from "./pages/Categories";
+import Menu from "./pages/Menu";
+import Cart from "./pages/Cart";
+import Orders from "./pages/Orders";
+import Admin from "./pages/Admin";
 
 function App() {
   return (
@@ -22,7 +22,7 @@ function App() {
               <Routes>
                 <Route path="/" element={<Home />} />
                 <Route path="/menu" element={<Categories />} />
-                <Route path="/menu/items" element={<Items />} />
+                <Route path="/menu/items" element={<Menu />} />
                 <Route path="/cart" element={<Cart />} />
                 <Route path="/orders" element={<Orders />} />
                 <Route path="/admin" element={<Admin />} />
@@ -36,4 +36,4 @@ function App() {
   );
 }
 
-export default App
+export default App;
