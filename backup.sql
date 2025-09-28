@@ -1242,7 +1242,6 @@ COPY public.food (id, title, description, price, image, cate_id, availability, s
 2	Tôm burger	1 burger	40000.00	assets/burger.png	2	Còn hàng	1
 4	Khoai tây chiên	1 khoai nhỏ	25000.00	assets/french-fries.png	4	Còn hàng	1
 5	Súp bí đỏ	1 chén súp	20000.00	assets/soup.png	5	Còn hàng	1
-6	Kem chocolate	1 kem ly	10000.00	assets/chocolate-cream.png	6	Còn hàng	1
 7	Bánh xoài đào	1 bánh	10000.00	assets/peach-mango-pie.png	6	Còn hàng	1
 8	Pepsi	1 ly (vừa)	10000.00	assets/pepsi.png	7	Còn hàng	1
 9	Bánh xoài cam	1 cái	10000.00	assets/peach-mango-pie.png	6	Còn hàng	1
@@ -1271,10 +1270,10 @@ COPY public.food (id, title, description, price, image, cate_id, availability, s
 32	Coke	Coca Cola 330ml	15000.00	assets/coke.jpg	7	Còn hàng	5
 1	Gà vui vẻ	Happy chicken	35000.00	assets/chicken.png	1	Còn hàng	1
 3	Mỳ ý	1 mỳ ý	45000.00	assets/spaghetti.png	3	Còn hàng	1
+6	Kem chocolate	1 kem ly	10000.00	assets/chocolate-cream.png	6	Còn hàng	1
 33	5Cá viên thêm	Thêm cá viên chiên giòn	18000.00	assets/fish-balls.png	8	Còn hàng	5
 34	1Khoai tây thêm	Thêm khoai tây chiên giòn tan	15000.00	assets/french-fries.png	8	Còn hàng	1
-35	1Xúc xích thêm	Thêm xúc xích nóng hổi	20000.00	assets/hot-dog.png	8	Còn hàng	1
-36	1Cá viên thêm	Thêm cá viên chiên giòn	18000.00	assets/fish-balls.png	8	Còn hàng	1
+36	1Cá viên thêm	Thêm cá viên chiên giòn	18000.00	assets/14aca98c7299427e89987cf541951de4.png	8	Còn hàng	1
 37	2Khoai tây thêm	Thêm khoai tây chiên giòn tan	15000.00	assets/french-fries.png	8	Còn hàng	2
 38	2Xúc xích thêm	Thêm xúc xích nóng hổi	20000.00	assets/hot-dog.png	8	Còn hàng	2
 39	2Cá viên thêm	Thêm cá viên chiên giòn	18000.00	assets/fish-balls.png	8	Còn hàng	2
@@ -1286,6 +1285,7 @@ COPY public.food (id, title, description, price, image, cate_id, availability, s
 45	4Cá viên thêm	Thêm cá viên chiên giòn	18000.00	assets/fish-balls.png	8	Còn hàng	4
 46	5Khoai tây thêm	Thêm khoai tây chiên giòn tan	15000.00	assets/french-fries.png	8	Còn hàng	5
 47	5Xúc xích thêm	Thêm xúc xích nóng hổi	20000.00	assets/hot-dog.png	8	Còn hàng	5
+35	1Xúc xích thêm	Thêm xúc xích nóng hổi	20000.00	assets/hot-dog.png	8	Còn hàng	1
 \.
 
 
