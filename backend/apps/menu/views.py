@@ -177,6 +177,70 @@ def category_foods(request, category_id):
         return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def store_foods_list(request):
+    """Get foods for the authenticated store manager"""
+    if not is_store_manager(request.user):
+        return Response({'error': 'Store Manager access required'}, status=status.HTTP_403_FORBIDDEN)
+    
+    try:
+        # Get the store managed by the user
+        user_store = Store.objects.get(manager=request.user)
+    except Store.DoesNotExist:
+        return Response({'error': 'Store not found for user'}, status=status.HTTP_404_NOT_FOUND)
+    
+    # Get all foods for this store
+    foods = Food.objects.filter(store=user_store)\
+        .select_related('category', 'store')\
+        .annotate(
+            avg_rating=Coalesce(Avg('ratings__rating'), Value(0.0)),
+            rating_count_annotated=Count('ratings')
+        )\
+        .order_by('-id')
+    
+    # Search filter
+    search = request.GET.get('search')
+    if search:
+        foods = foods.filter(
+            Q(title__icontains=search) | Q(description__icontains=search)
+        )
+    
+    # Category filter
+    category_id = request.GET.get('category')
+    if category_id:
+        foods = foods.filter(category_id=category_id)
+    
+    # Pagination with configurable page size
+    try:
+        page = int(request.GET.get('page', 1))
+    except ValueError:
+        page = 1
+    try:
+        page_size = int(request.GET.get('page_size', 12))
+    except ValueError:
+        page_size = 12
+        
+    paginator = Paginator(foods, page_size)
+    page_obj = paginator.get_page(page)
+    
+    serializer = FoodListSerializer(page_obj, many=True, context={'request': request})
+    return Response({
+        'count': paginator.count,
+        'num_pages': paginator.num_pages,
+        'current_page': page_obj.number,
+        'has_next': page_obj.has_next(),
+        'has_previous': page_obj.has_previous(),
+        'next': f"?page={page_obj.next_page_number()}&page_size={page_size}" if page_obj.has_next() else None,
+        'previous': f"?page={page_obj.previous_page_number()}&page_size={page_size}" if page_obj.has_previous() else None,
+        'results': serializer.data,
+        'store': {
+            'id': user_store.id,
+            'name': user_store.store_name
+        }
+    })
+
+
 # Admin-only views for food management
 def is_admin(user):
     return user.is_authenticated and user.role and user.role.id == 2
@@ -225,16 +289,32 @@ def admin_foods_list(request):
             if store_id:
                 foods = foods.filter(store_id=store_id)
         
-        # Pagination
-        page = request.GET.get('page', 1)
-        paginator = Paginator(foods, 10)
+        # Pagination with configurable page size
+        try:
+            page = int(request.GET.get('page', 1))
+        except ValueError:
+            page = 1
+        try:
+            page_size = int(request.GET.get('page_size', 10))
+        except ValueError:
+            page_size = 10
+            
+        paginator = Paginator(foods, page_size)
         page_obj = paginator.get_page(page)
         
         serializer = FoodSerializer(page_obj, many=True)
         return Response({
+            'count': paginator.count,
+            'num_pages': paginator.num_pages,
+            'current_page': page_obj.number,
+            'has_next': page_obj.has_next(),
+            'has_previous': page_obj.has_previous(),
+            'next': f"?page={page_obj.next_page_number()}" if page_obj.has_next() else None,
+            'previous': f"?page={page_obj.previous_page_number()}" if page_obj.has_previous() else None,
+            'results': serializer.data,
+            # Legacy fields for backward compatibility
             'foods': serializer.data,
             'total_pages': paginator.num_pages,
-            'current_page': int(page),
             'total_foods': paginator.count
         })
     
@@ -308,9 +388,10 @@ def admin_food_detail(request, food_id):
             import os
             import uuid
             
-            # Store old image path for later deletion
+            # Store old image path for later deletion (image field is TextField, not FileField)
+            old_image_path = None
             if food.image:
-                old_image_path = food.image.name
+                old_image_path = str(food.image)  # image is a TextField containing the path
             
             file = request.FILES['image_file']
             # Generate unique filename to avoid collisions

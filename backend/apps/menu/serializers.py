@@ -5,12 +5,13 @@ from django.conf import settings
 
 
 class CategorySerializer(serializers.ModelSerializer):
+    name = serializers.CharField(source='cate_name')  # Map cate_name to name for frontend
     foods_count = serializers.SerializerMethodField()
     image_url = serializers.SerializerMethodField()
     
     class Meta:
         model = Category
-        fields = ['id', 'cate_name', 'image', 'image_url', 'foods_count']
+        fields = ['id', 'name', 'cate_name', 'image', 'image_url', 'foods_count']
     
     def get_foods_count(self, obj):
         return obj.foods.count()  # Count all foods regardless of availability
@@ -38,7 +39,7 @@ class FoodSizeSerializer(serializers.ModelSerializer):
 
 class FoodSerializer(serializers.ModelSerializer):
     category = CategorySerializer(read_only=True)
-    category_id = serializers.IntegerField(write_only=True)
+    category_id = serializers.IntegerField(write_only=True, required=False)
     store = StoreSerializer(read_only=True)
     store_id = serializers.IntegerField(write_only=True, required=False, allow_null=True)
     sizes = FoodSizeSerializer(many=True, read_only=True)
@@ -54,6 +55,17 @@ class FoodSerializer(serializers.ModelSerializer):
             'sizes', 'average_rating', 'rating_count'
         ]
         read_only_fields = ['id']
+        extra_kwargs = {
+            'category': {'write_only': True, 'required': False},  # Allow frontend to send 'category' field
+        }
+    
+    def to_internal_value(self, data):
+        # Handle 'category' field from frontend before normal validation
+        if 'category' in data and isinstance(data['category'], int):
+            # Make a copy to avoid modifying original data
+            data = data.copy()
+            data['category_id'] = data.pop('category')
+        return super().to_internal_value(data)
     
     from django.conf import settings  # ensure settings import for MEDIA_URL
     def get_image_url(self, obj):
@@ -73,6 +85,7 @@ class FoodSerializer(serializers.ModelSerializer):
 
 class FoodListSerializer(serializers.ModelSerializer):
     """Lighter serializer for food list views"""
+    category = CategorySerializer(read_only=True)
     category_name = serializers.CharField(source='category.cate_name', read_only=True)
     store = StoreSerializer(read_only=True)
     store_name = serializers.CharField(source='store.store_name', read_only=True)
@@ -85,7 +98,7 @@ class FoodListSerializer(serializers.ModelSerializer):
         model = Food
         fields = [
             'id', 'title', 'description', 'price', 'image', 'image_url',
-            'category_name', 'store', 'store_name', 'availability',
+            'category', 'category_name', 'store', 'store_name', 'availability',
             'sizes', 'average_rating', 'rating_count'
         ]
     

@@ -2,21 +2,91 @@ import React from 'react';
 import { View, Text, StyleSheet, Image, TouchableOpacity, FlatList } from 'react-native';
 import { useRoute, useNavigation } from '@react-navigation/native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { IMAGE_MAP } from '../../assets/imageMap';
+
+import { API_CONFIG } from '@/constants';
+import { IMAGE_MAP, type ImageName } from "@/assets/imageMap";
+
+function getImageSource(imageValue?: ImageName | string) {
+  if (!imageValue) {
+    return require('@/assets/images/gourmet-burger.png');
+  }
+  // If image is already a full URL
+  if (typeof imageValue === 'string' && imageValue.startsWith('http')) {
+    return { uri: imageValue };
+  }
+  // If it's a string path from API
+  if (typeof imageValue === 'string') {
+    if (IMAGE_MAP[imageValue]) {
+      return IMAGE_MAP[imageValue];
+    }
+    const baseUrl = API_CONFIG.BASE_URL.replace('/api', '');
+    const fullUrl = `${baseUrl}/media/${imageValue}`;
+    return { uri: fullUrl };
+  }
+  return imageValue;
+}
+
+const formatPrice = (price: any) => {
+  if (typeof price === 'number') {
+    return `${price.toLocaleString('vi-VN')}₫`;
+  }
+  if (!price) return '0₫';
+  // Try to parse string to number
+  const num = parseInt(price);
+  if (!isNaN(num)) return `${num.toLocaleString('vi-VN')}₫`;
+  return price;
+};
 
 const FoodDetailScreen = () => {
   const route = useRoute();
   const navigation = useNavigation();
   const {
+    foodId,
     image,
-    name,
+    title,
     price,
     description,
-    desc,
-    sizes = ['Nhỏ', 'Vừa', 'Lớn'],
-    reviews = [],
+    sizes = null,
+    reviews: routeReviews = [],
+    rating: routeRating,
   } = route.params as any || {};
-  const [selectedSize, setSelectedSize] = React.useState(sizes[0]);
+
+  const [selectedSize, setSelectedSize] = React.useState(sizes && Array.isArray(sizes) && sizes.length > 0 ? sizes[0] : null);
+  const [reviews, setReviews] = React.useState<any[]>(routeReviews);
+  const [averageRating, setAverageRating] = React.useState(routeRating || 0);
+
+  // Calculate total price including selected size
+  const getTotalPrice = () => {
+    const basePrice = typeof price === 'number' ? price : parseInt(price) || 0;
+    const sizePrice = selectedSize?.price ? selectedSize.price : 0;
+    return basePrice + sizePrice;
+  };
+
+  // Render review item
+  const renderReviewItem = ({ item }: { item: any }) => (
+    <View style={styles.reviewItem}>
+      <View style={styles.reviewHeader}>
+        <View style={styles.avatar}>
+          <Text style={styles.avatarText}>{item.user?.[0]?.toUpperCase() || 'A'}</Text>
+        </View>
+        <View style={{ flex: 1 }}>
+          <Text style={styles.reviewUser}>{item.user ?? 'Ẩn danh'}</Text>
+          <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 2 }}>
+            {[...Array(Math.floor(item.rating || 0))].map((_, i) => (
+              <Text key={i} style={{ color: '#f59e0b', fontWeight: 'bold', fontSize: 15 }}>★</Text>
+            ))}
+            <Text style={styles.reviewTime}>{item.time || 'gần đây'}</Text>
+          </View>
+        </View>
+        <Text style={styles.reviewMore}>...</Text>
+      </View>
+      <Text style={styles.reviewText}>{item.text ?? 'Không có nội dung'}</Text>
+      <View style={styles.reviewActions}>
+        <Text style={styles.reviewAction}>👍 Hữu ích ({item.likes ?? 0})</Text>
+        <Text style={styles.reviewAction}>Báo cáo</Text>
+      </View>
+    </View>
+  );
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -26,19 +96,18 @@ const FoodDetailScreen = () => {
       <View style={styles.container}>
         <View style={styles.card}>
           <Image
-            source={
-              typeof image === 'number'
-                ? image
-                : IMAGE_MAP[image] || require('../../assets/images/placeholder.png')
-            }
+            source={getImageSource(image)}
             style={styles.foodImage}
           />
-          <Text style={styles.foodName}>{name}</Text>
-          <Text style={styles.foodPrice}>{price}</Text>
-          {desc && (
-            <Text style={styles.foodDescDetail}>Mô tả chi tiết: {desc}</Text>
+          <Text style={styles.foodName}>{title}</Text>
+          <Text style={styles.foodPrice}>{formatPrice(getTotalPrice())}</Text>
+          {description && (
+            <Text style={styles.foodDescDetail}>{description}</Text>
           )}
-          <Text style={styles.sizeTitle}>Các size: <Text style={styles.sizeText}>{sizes.join(', ')}</Text></Text>
+          {/* Only show sizes if they exist */}
+          {sizes && Array.isArray(sizes) && sizes.length > 0 && (
+            <Text style={styles.sizeTitle}>Các size: <Text style={styles.sizeText}>{sizes.map((s: any) => s.displayName || s.name || s).join(', ')}</Text></Text>
+          )}
         </View>
         <View style={styles.reviewSection}>
           {/* Tổng quan đánh giá */}
@@ -49,13 +118,13 @@ const FoodDetailScreen = () => {
             </View>
             <Text style={styles.ratingCount}>{reviews.length} đánh giá</Text>
             {[5,4,3,2,1].map(star => {
-              const count = reviews.filter((r: any) => r.rating === star).length;
+              const count = reviews.filter((r: any) => Math.floor(r.rating) === star).length;
               return (
                 <View key={star} style={styles.ratingBarRow}>
                   <Text style={styles.ratingBarStar}>{star}</Text>
                   <Text style={{ color: '#f59e0b', fontWeight: 'bold', marginRight: 4 }}>★</Text>
                   <View style={styles.ratingBarBg}>
-                    <View style={[styles.ratingBarFill, { width: `${(count / (reviews.length || 1)) * 100}%` }]} />
+                    <View style={[styles.ratingBarFill, { width: `${(reviews.length > 0 ? (count / reviews.length) * 100 : 0)}%` }]} />
                   </View>
                   <Text style={styles.ratingBarCount}>{count}</Text>
                 </View>
@@ -70,28 +139,7 @@ const FoodDetailScreen = () => {
           <FlatList
             data={reviews}
             keyExtractor={(_, idx) => idx.toString()}
-            renderItem={({ item }) => (
-              <View style={styles.reviewItem}>
-                <View style={styles.reviewHeader}>
-                  <View style={styles.avatar}><Text style={styles.avatarText}>{item.user?.[0]?.toUpperCase() || 'A'}</Text></View>
-                  <View style={{ flex: 1 }}>
-                    <Text style={styles.reviewUser}>{item.user ?? 'Ẩn danh'}</Text>
-                    <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 2 }}>
-                      {[...Array(item.rating || 0)].map((_, i) => (
-                        <Text key={i} style={{ color: '#f59e0b', fontWeight: 'bold', fontSize: 15 }}>★</Text>
-                      ))}
-                      <Text style={styles.reviewTime}>gần đây</Text>
-                    </View>
-                  </View>
-                  <Text style={styles.reviewMore}>...</Text>
-                </View>
-                <Text style={styles.reviewText}>{item.text ?? 'Không có nội dung'}</Text>
-                <View style={styles.reviewActions}>
-                  <Text style={styles.reviewAction}>👍 Hữu ích ({item.likes ?? 0})</Text>
-                  <Text style={styles.reviewAction}>Báo cáo</Text>
-                </View>
-              </View>
-            )}
+            renderItem={renderReviewItem}
             ListEmptyComponent={<Text style={styles.noReview}>Chưa có đánh giá nào</Text>}
             style={{ marginTop: 8 }}
           />
