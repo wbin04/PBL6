@@ -28,7 +28,12 @@ export interface User {
   id: number;
   username: string;
   email: string;
+  fullname: string;
+  phone_number: string;
+  address: string;
   role: string;
+  role_id: number;
+  created_date: string;
 }
 
 export interface Category {

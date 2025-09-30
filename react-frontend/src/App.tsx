@@ -10,6 +10,7 @@ import Checkout from "./pages/Checkout";
 import CheckoutResult from "./pages/CheckoutResult";
 import Orders from "./pages/Orders";
 import Admin from "./pages/Admin";
+import Account from "./pages/Account";
 
 function App() {
   return (
@@ -29,6 +30,7 @@ function App() {
                 <Route path="/checkout" element={<Checkout />} />
                 <Route path="/checkout-result" element={<CheckoutResult />} />
                 <Route path="/orders" element={<Orders />} />
+                <Route path="/account" element={<Account />} />
                 <Route path="/admin" element={<Admin />} />
                 {/* Add more routes as needed */}
               </Routes>

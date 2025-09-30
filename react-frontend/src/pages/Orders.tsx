@@ -402,6 +402,11 @@ const Orders: React.FC = () => {
                     <p className="text-sm text-gray-600">
                       {formatDate(order.created_date)}
                     </p>
+                    {order.store_name && (
+                      <p className="text-sm text-orange-600 font-medium">
+                        🏪 {order.store_name}
+                      </p>
+                    )}
                   </div>
                   <span
                     className={`px-3 py-1 rounded-full text-xs font-bold uppercase ${getStatusClass(

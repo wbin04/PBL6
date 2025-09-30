@@ -16,6 +16,10 @@ type Food = {
   average_rating?: number;
   rating_count?: number;
   availability_status?: boolean;
+  store?: {
+    id: number;
+    store_name: string;
+  };
 };
 
 type StoreInfo = {
@@ -151,7 +155,12 @@ export default function Menu() {
   };
 
   // Enhanced add to cart function
-  const addToCart = async (foodId: number, quantity: number, note?: string) => {
+  const addToCart = async (
+    foodId: number,
+    quantity: number,
+    note?: string,
+    foodOptionId?: number
+  ) => {
     try {
       const token = getAccessToken();
       if (!token) {
@@ -160,14 +169,25 @@ export default function Menu() {
         return;
       }
 
+      const requestBody: {
+        food_id: number;
+        quantity: number;
+        item_note?: string;
+        food_option_id?: number;
+      } = {
+        food_id: foodId,
+        quantity: quantity,
+        item_note: note,
+      };
+
+      if (foodOptionId) {
+        requestBody.food_option_id = foodOptionId;
+      }
+
       let response = await fetch("http://127.0.0.1:8000/api/cart/add/", {
         method: "POST",
         headers: getAuthHeaders(),
-        body: JSON.stringify({
-          food_id: foodId,
-          quantity: quantity,
-          item_note: note,
-        }),
+        body: JSON.stringify(requestBody),
       });
 
       if (response.status === 401) {
@@ -179,11 +199,7 @@ export default function Menu() {
               Authorization: `Bearer ${newAccess}`,
               "Content-Type": "application/json",
             },
-            body: JSON.stringify({
-              food_id: foodId,
-              quantity: quantity,
-              item_note: note,
-            }),
+            body: JSON.stringify(requestBody),
           });
         }
       }
@@ -251,6 +267,12 @@ export default function Menu() {
                   onClick={() => openFoodModal(food)}>
                   {food.title}
                 </h3>
+                {/* Store name */}
+                {(food.store?.store_name || storeInfo?.store_name) && (
+                  <p className="text-xs text-gray-500 font-medium">
+                    Cửa hàng: {food.store?.store_name || storeInfo?.store_name}
+                  </p>
+                )}
                 {food.description && (
                   <p className="text-sm text-muted-foreground line-clamp-2">
                     {food.description}

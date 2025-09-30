@@ -26,9 +26,10 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
 
       if (token) {
         try {
-          const userProfile = await API.get<User>("/auth/profile/");
-          setUser(userProfile);
-          localStorage.setItem("user", JSON.stringify(userProfile));
+          const userProfile = await API.get("/auth/profile/");
+          const userData = userProfile as User;
+          setUser(userData);
+          localStorage.setItem("user", JSON.stringify(userData));
         } catch (error) {
           console.error("Error fetching user profile:", error);
           logout();
@@ -104,7 +105,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
                 <Link
                   to="/account"
                   className="font-medium transition-colors hover:text-primary">
-                  Xin chào, {user.username}
+                  Xin chào, {user.fullname || user.username}
                 </Link>
                 <button
                   onClick={logout}
