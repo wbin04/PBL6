@@ -532,6 +532,104 @@ FastFood API cung cấp các endpoints để quản lý hệ thống đặt đ�
 ```
 - **Response:** Tương tự chi tiết món ăn
 
+### 2.8 Admin - Quản lý Food Size
+#### 2.8.1 Danh sách sizes của món ăn
+- **GET** `/api/menu/admin/foods/{food_id}/sizes/`
+- **Headers:** `Authorization: Bearer {admin_or_store_manager_token}`
+- **Mô tả:** Lấy danh sách tất cả sizes của một món ăn
+- **Response:**
+```json
+[
+  {
+    "id": 1,
+    "size_name": "Size L",
+    "price": "10000.00",
+    "food": 1
+  },
+  {
+    "id": 2,
+    "size_name": "Size M",
+    "price": "5000.00",
+    "food": 1
+  }
+]
+```
+
+#### 2.8.2 Thêm size mới cho món ăn
+- **POST** `/api/menu/admin/foods/{food_id}/sizes/`
+- **Headers:** `Authorization: Bearer {admin_or_store_manager_token}`
+- **Request Body:**
+```json
+{
+  "size_name": "Size XL",
+  "price": "15000.00"
+}
+```
+- **Response:**
+```json
+{
+  "id": 3,
+  "size_name": "Size XL",
+  "price": "15000.00",
+  "food": 1
+}
+```
+- **Error Response (400):**
+```json
+{
+  "error": "Size with this name already exists for this food"
+}
+```
+
+#### 2.8.3 Chi tiết một size
+- **GET** `/api/menu/admin/foods/{food_id}/sizes/{size_id}/`
+- **Headers:** `Authorization: Bearer {admin_or_store_manager_token}`
+- **Response:**
+```json
+{
+  "id": 1,
+  "size_name": "Size L",
+  "price": "10000.00",
+  "food": 1
+}
+```
+
+#### 2.8.4 Cập nhật size
+- **PUT** `/api/menu/admin/foods/{food_id}/sizes/{size_id}/`
+- **Headers:** `Authorization: Bearer {admin_or_store_manager_token}`
+- **Request Body:**
+```json
+{
+  "size_name": "Size Large",
+  "price": "12000.00"
+}
+```
+- **Response:**
+```json
+{
+  "id": 1,
+  "size_name": "Size Large",
+  "price": "12000.00",
+  "food": 1
+}
+```
+- **Error Response (400):**
+```json
+{
+  "error": "Size with this name already exists for this food"
+}
+```
+
+#### 2.8.5 Xóa size
+- **DELETE** `/api/menu/admin/foods/{food_id}/sizes/{size_id}/`
+- **Headers:** `Authorization: Bearer {admin_or_store_manager_token}`
+- **Response:**
+```json
+{
+  "message": "Food size deleted successfully"
+}
+```
+
 ---
 
 ## 3. Cart API (`/api/cart/`)

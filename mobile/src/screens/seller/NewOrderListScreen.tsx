@@ -1,120 +1,202 @@
-import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Linking, Modal } from 'react-native';
+import React, { useState, useEffect } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Linking, Modal, Alert, RefreshControl } from 'react-native';
 import { Search, Bell } from 'lucide-react-native';
+import { ordersApi, apiClient } from '@/services/api';
+import { Order, PaginatedResponse, ApiError } from '@/types';
+import { ORDER_STATUS } from '@/constants';
 
-type Order = {
-  id: string;
+type DisplayOrderItem = {
+  name: string;
+  qty: number;
+  price: number;
+  food_note?: string;
+  size_display?: string;
+  food_option_price?: number;
+};
+
+type OrderWithDisplayData = {
+  id: number;
   customer: string;
   phone: string;
   time: string;
-  items: { name: string; qty: number; price: number }[];
+  address: string;
+  items: DisplayOrderItem[];
   total: number;
   status: string;
   payment: string;
-  address?: string;
-  timeline?: { status: string; time: string }[];
   totalDisplay?: string;
   notes?: string;
+  order_status: string;
+  receiver_name: string;
+  phone_number: string;
+  ship_address: string;
+  created_date: string;
+  user?: any;
 };
-
-const orders: Order[] = [
-  {
-    id: 'ORD-001',
-    customer: 'Nguyễn Văn A',
-    phone: '0901234567',
-    time: '10:30',
-    address: '123 Đường ABC, Quận 1',
-    items: [
-      { name: 'Phở Bò Tái', qty: 2, price: 65000 },
-      { name: 'Trà Sữa', qty: 1, price: 30000 },
-    ],
-    total: 160000,
-    status: 'pending',
-    payment: 'COD',
-  },
-  {
-    id: 'ORD-002',
-    customer: 'Trần Thị B',
-    phone: '0912345678',
-    time: '10:15',
-    address: '456 Đường XYZ, Quận 2',
-    items: [
-      { name: 'Bún Bò Huế', qty: 1, price: 55000 },
-      { name: 'Chả Cá', qty: 1, price: 45000 },
-    ],
-    total: 100000,
-    status: 'preparing',
-    payment: 'Online',
-  },
-  {
-    id: 'ORD-003',
-    customer: 'Lê Minh C',
-    phone: '0923456789',
-    time: '09:45',
-    address: '789 Đường DEF, Quận 3',
-    items: [
-        { name: 'Cơm Gà Xối Mỡ', qty: 1, price: 60000 },
-        { name: 'Nước Cam', qty: 1, price: 25000 },
-
-    ],
-    total: 85000,
-    status: 'pending',
-    payment: 'COD',
-  },
-  {
-    id: 'ORD-004',
-    customer: 'Phạm Văn D',
-    phone: '0934567890',
-    time: '09:30',
-    address: '321 Đường LMN, Quận 4',
-    items: [
-        { name: 'Mì Quảng', qty: 2, price: 70000 },
-        { name: 'Trà Đá', qty: 1, price: 5000 },
-    ],
-    total: 145000,
-    status: 'preparing',
-    payment: 'Online',
-  }
-];
 
 const NewOrderListScreen = () => {
   const [activeTab, setActiveTab] = React.useState('all');
-  const [orderList, setOrderList] = React.useState(orders);
-  const [selectedOrder, setSelectedOrder] = React.useState<null | typeof orders[0]>(null);
+  const [orderList, setOrderList] = React.useState<OrderWithDisplayData[]>([]);
+  const [selectedOrder, setSelectedOrder] = React.useState<null | OrderWithDisplayData>(null);
   const [modalVisible, setModalVisible] = React.useState(false);
+  const [loading, setLoading] = React.useState(true);
+  const [refreshing, setRefreshing] = React.useState(false);
+  const [error, setError] = React.useState<string | null>(null);
+  const [storeId, setStoreId] = React.useState<number | null>(null);
 
-  // Helper: màu trạng thái
-const getStatusColor = (status: string) => {
-  switch (status) {
-    case 'Chờ xác nhận': return '#f59e0b';
-    case 'Đang chuẩn bị': return '#3b82f6';
-    case 'Đang giao': return '#10b981';
-    case 'Đã giao': return '#ea580c';
-    case 'Đã hủy': return '#ef4444';
-    default: return '#6b7280';
-  }
-};
-// Helper: cập nhật trạng thái
-const updateOrderStatus = (orderId: string, newStatus: string) => {
-  setOrderList(prev =>
-    prev.map(order =>
-      order.id === orderId
-        ? {
-            ...order,
-            status: newStatus,
-            timeline: [
-              ...(order.timeline || []),
-              { status: newStatus, time: new Date().toLocaleTimeString() },
-            ],
-          }
-        : order
-    )
-  );
-  setSelectedOrder(selectedOrder && selectedOrder.id === orderId
-    ? { ...selectedOrder, status: newStatus, timeline: [...(selectedOrder.timeline || []), { status: newStatus, time: new Date().toLocaleTimeString() }] }
-    : selectedOrder
-  );
-};
+  // Helper function to convert API order to display format
+  const convertOrderToDisplay = (order: Order): OrderWithDisplayData => {
+    const items: DisplayOrderItem[] = order.items?.map(item => ({
+      name: item.food.title,
+      qty: item.quantity,
+      price: parseFloat(item.food.price),
+      food_note: item.food_note, // Include food_note from OrderItem
+      size_display: item.size_display, // Include size display
+      food_option_price: item.food_option_price // Include option price
+    })) || [];
+
+    const total = parseFloat(order.total_money || '0');
+    
+    return {
+      ...order,
+      customer: order.user?.fullname || order.receiver_name,
+      phone: order.user?.phone_number || order.phone_number,
+      time: new Date(order.created_date).toLocaleTimeString('vi-VN', { 
+        hour: '2-digit', 
+        minute: '2-digit' 
+      }),
+      address: order.ship_address,
+      items,
+      total,
+      status: mapOrderStatus(order.order_status),
+      payment: order.payment_method === 'cash' ? 'COD' : 'Online',
+      notes: order.note
+    };
+  };
+
+  // Map API order status to component status
+  const mapOrderStatus = (apiStatus: string): string => {
+    const statusMap: Record<string, string> = {
+      'Chờ xác nhận': 'pending',
+      'Đã xác nhận': 'confirmed', 
+      'Đang chuẩn bị': 'preparing',
+      'Sẵn sàng': 'ready',
+      'Đã lấy hàng': 'delivering',
+      'Đã giao': 'completed',
+      'Đã huỷ': 'rejected'
+    };
+    return statusMap[apiStatus] || 'pending';
+  };
+
+  // Map component status back to API status
+  const mapToApiStatus = (componentStatus: string): string => {
+    const statusMap: Record<string, string> = {
+      'pending': 'Chờ xác nhận',
+      'confirmed': 'Đã xác nhận',
+      'preparing': 'Đang chuẩn bị', 
+      'ready': 'Sẵn sàng',
+      'delivering': 'Đã lấy hàng',
+      'completed': 'Đã giao',
+      'rejected': 'Đã huỷ'
+    };
+    return statusMap[componentStatus] || 'Chờ xác nhận';
+  };
+
+  // Get store ID for current user
+  const getStoreId = async () => {
+    try {
+      const response: any = await apiClient.get('/stores/my_store/');
+      return response.id;
+    } catch (err: any) {
+      console.error('Error getting store ID:', err);
+      throw err;
+    }
+  };
+
+  // Fetch orders from API
+  const fetchOrders = async (showRefresh = false) => {
+    try {
+      if (showRefresh) {
+        setRefreshing(true);
+      } else {
+        setLoading(true);
+      }
+      setError(null);
+
+      // Get store ID if not already cached
+      let currentStoreId = storeId;
+      if (!currentStoreId) {
+        currentStoreId = await getStoreId();
+        setStoreId(currentStoreId);
+      }
+
+      // Use store-specific endpoint: /stores/{id}/orders/
+      const response: any = await apiClient.get(`/stores/${currentStoreId}/orders/`);
+
+      const convertedOrders = response?.map(convertOrderToDisplay) || [];
+      
+      // Filter by status if needed (since backend doesn't support status filtering on this endpoint)
+      const filteredOrders = activeTab === 'all' 
+        ? convertedOrders 
+        : convertedOrders.filter((order: OrderWithDisplayData) => order.status === activeTab);
+      
+      setOrderList(filteredOrders);
+    } catch (err: any) {
+      console.error('Error fetching orders:', err);
+      const errorMessage = err.message || 'Không thể tải danh sách đơn hàng';
+      setError(errorMessage);
+      Alert.alert('Lỗi', errorMessage);
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  };
+
+  // Update order status using store-specific endpoint
+  const updateOrderStatusAsync = async (orderId: string | number, newStatus: string) => {
+    try {
+      // Get store ID if not already cached
+      let currentStoreId = storeId;
+      if (!currentStoreId) {
+        currentStoreId = await getStoreId();
+        setStoreId(currentStoreId);
+      }
+
+      const apiStatus = mapToApiStatus(newStatus);
+      
+      // Use store-specific endpoint: /stores/{store_id}/orders/{order_id}/status/
+      await apiClient.patch(`/stores/${currentStoreId}/orders/${orderId}/status/`, {
+        order_status: apiStatus
+      });
+
+      // Update local state
+      setOrderList(prev =>
+        prev.map(order =>
+          order.id.toString() === orderId.toString()
+            ? { ...order, status: newStatus }
+            : order
+        )
+      );
+
+      // Update selected order if it's the same
+      if (selectedOrder && selectedOrder.id.toString() === orderId.toString()) {
+        setSelectedOrder({ ...selectedOrder, status: newStatus });
+      }
+    } catch (err: any) {
+      console.error('Error updating order status:', err);
+      Alert.alert('Lỗi', err.message || 'Không thể cập nhật trạng thái đơn hàng');
+    }
+  };
+
+  // Load orders when component mounts or tab changes
+  useEffect(() => {
+    fetchOrders();
+  }, [activeTab]);
+
+  // Refresh function
+  const onRefresh = () => {
+    fetchOrders(true);
+  };
 
   return (
     <View style={styles.container}>
@@ -125,7 +207,7 @@ const updateOrderStatus = (orderId: string, newStatus: string) => {
       {/* Quản lý đơn hàng title + số lượng */}
       <View style={styles.sectionTitleRow}>
         <Text style={styles.sectionTitle}>Quản lý đơn hàng</Text>
-        <Text style={styles.sectionCount}>{orders.length} đơn hàng</Text>
+        <Text style={styles.sectionCount}>{orderList.length} đơn hàng</Text>
       </View>
       {/* Tab bar */}
       <View style={{ height: 60 }}>
@@ -153,7 +235,29 @@ const updateOrderStatus = (orderId: string, newStatus: string) => {
           </TouchableOpacity>
         </ScrollView>
       </View>
-      <ScrollView contentContainerStyle={{ padding: 16 }}>
+      <ScrollView 
+        contentContainerStyle={{ padding: 16 }}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+        }
+      >
+        {loading && !refreshing && (
+          <View style={{ padding: 20, alignItems: 'center' }}>
+            <Text style={{ color: '#6b7280' }}>Đang tải...</Text>
+          </View>
+        )}
+        
+        {error && (
+          <View style={{ padding: 20, alignItems: 'center' }}>
+            <Text style={{ color: '#ef4444', textAlign: 'center' }}>{error}</Text>
+            <TouchableOpacity 
+              style={{ marginTop: 10, padding: 10, backgroundColor: '#ea580c', borderRadius: 8 }}
+              onPress={() => fetchOrders()}
+            >
+              <Text style={{ color: '#fff', fontWeight: 'bold' }}>Thử lại</Text>
+            </TouchableOpacity>
+          </View>
+        )}
         {/* Hiển thị đơn hàng theo tab */}
         {orderList.filter(order => {
           if (activeTab === 'all') return true;
@@ -185,10 +289,33 @@ const updateOrderStatus = (orderId: string, newStatus: string) => {
               </View>
               <Text style={styles.orderLabel}>Món đã order:</Text>
               {order.items.map((item, i) => (
-                <View key={i} style={styles.itemRow}>
-                  <Text style={styles.itemName}>{item.name}</Text>
-                  <Text style={styles.itemQty}>x{item.qty}</Text>
-                  <Text style={styles.itemPrice}>{item.price.toLocaleString()} đ</Text>
+                <View key={i}>
+                  <View style={styles.itemRow}>
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.itemName}>{item.name}</Text>
+                      {item.size_display && (
+                        <Text style={{ color: '#6b7280', fontSize: 11, marginTop: 1 }}>
+                          Size: {item.size_display}
+                        </Text>
+                      )}
+                    </View>
+                    <Text style={styles.itemQty}>x{item.qty}</Text>
+                    <View style={{ alignItems: 'flex-end' }}>
+                      <Text style={styles.itemPrice}>{item.price.toLocaleString()} đ</Text>
+                      {item.food_option_price && item.food_option_price > 0 && (
+                        <Text style={{ color: '#6b7280', fontSize: 10, marginTop: 1 }}>
+                          +{item.food_option_price.toLocaleString()} đ
+                        </Text>
+                      )}
+                    </View>
+                  </View>
+                  {item.food_note && item.food_note.trim() !== '' && (
+                    <View style={{ marginLeft: 8, marginBottom: 2 }}>
+                      <Text style={{ color: '#6b7280', fontSize: 11, fontStyle: 'italic' }}>
+                        • {item.food_note}
+                      </Text>
+                    </View>
+                  )}
                 </View>
               ))}
               <View style={styles.totalRow}>
@@ -208,31 +335,31 @@ const updateOrderStatus = (orderId: string, newStatus: string) => {
                 {order.status === 'pending' ? (
                   <>
                     <TouchableOpacity style={[styles.actionBtn, styles.rejectBtn]} onPress={() => {
-                      setOrderList(prev => prev.map(o => o.id === order.id ? { ...o, status: 'rejected' } : o));
+                      updateOrderStatusAsync(order.id, 'rejected');
                     }}>
                       <Text style={styles.rejectText}>Hủy</Text>
                     </TouchableOpacity>
                     <TouchableOpacity style={[styles.actionBtn, styles.confirmBtn]} onPress={() => {
-                      setOrderList(prev => prev.map(o => o.id === order.id ? { ...o, status: 'preparing' } : o));
+                      updateOrderStatusAsync(order.id, 'preparing');
                     }}>
                       <Text style={styles.confirmText}>Xác nhận</Text>
                     </TouchableOpacity>
                   </>
                 ) : order.status === 'preparing' ? (
                   <TouchableOpacity style={[styles.actionBtn, styles.readyBtn]} onPress={() => {
-                    setOrderList(prev => prev.map(o => o.id === order.id ? { ...o, status: 'ready' } : o));
+                    updateOrderStatusAsync(order.id, 'ready');
                   }}>
                     <Text style={styles.readyText}>Sẵn sàng</Text>
                   </TouchableOpacity>
                 ) : order.status === 'ready' ? (
                   <TouchableOpacity style={[styles.actionBtn, styles.deliveringBtn]} onPress={() => {
-                    setOrderList(prev => prev.map(o => o.id === order.id ? { ...o, status: 'delivering' } : o));
+                    updateOrderStatusAsync(order.id, 'delivering');
                   }}>
                     <Text style={styles.deliveringText}>Đang giao</Text>
                   </TouchableOpacity>
                 ) : order.status === 'delivering' ? (
                   <TouchableOpacity style={[styles.actionBtn, styles.completedBtn]} onPress={() => {
-                    setOrderList(prev => prev.map(o => o.id === order.id ? { ...o, status: 'completed' } : o));
+                    updateOrderStatusAsync(order.id, 'completed');
                   }}>
                     <Text style={styles.completedText}>Hoàn thành</Text>
                   </TouchableOpacity>
@@ -311,10 +438,27 @@ const updateOrderStatus = (orderId: string, newStatus: string) => {
                   <View key={idx} style={{ backgroundColor: '#f9fafb', borderRadius: 12, flexDirection: 'row', alignItems: 'center', padding: 12, marginBottom: 8 }}>
                     <View style={{ flex: 1 }}>
                       <Text style={{ fontWeight: 'bold', fontSize: 15, color: '#1e293b' }}>{item.name}</Text>
+                      {item.size_display && (
+                        <Text style={{ color: '#6b7280', fontSize: 12, marginTop: 1 }}>
+                          Size: {item.size_display}
+                        </Text>
+                      )}
                       <Text style={{ color: '#6b7280', fontSize: 13 }}>{item.price.toLocaleString() + ' đ'}</Text>
+                      {item.food_option_price && item.food_option_price > 0 && (
+                        <Text style={{ color: '#6b7280', fontSize: 12 }}>
+                          +{item.food_option_price.toLocaleString()} đ (size)
+                        </Text>
+                      )}
+                      {item.food_note && item.food_note.trim() !== '' && (
+                        <View style={{ backgroundColor: '#fff3cd', borderRadius: 6, padding: 6, marginTop: 4 }}>
+                          <Text style={{ color: '#856404', fontSize: 12, fontStyle: 'italic' }}>
+                            Ghi chú: {item.food_note}
+                          </Text>
+                        </View>
+                      )}
                     </View>
                     <Text style={{ fontWeight: 'bold', fontSize: 15, color: '#6b7280', marginHorizontal: 8 }}>{'x' + item.qty}</Text>
-                    <Text style={{ fontWeight: 'bold', fontSize: 15, color: '#ea580c' }}>{(item.price * item.qty).toLocaleString() + ' đ'}</Text>
+                    <Text style={{ fontWeight: 'bold', fontSize: 15, color: '#ea580c' }}>{((item.price + (item.food_option_price || 0)) * item.qty).toLocaleString() + ' đ'}</Text>
                   </View>
                 ))}
                 <View style={{ flexDirection: 'row', justifyContent: 'flex-end', alignItems: 'center', marginTop: 8 }}>
@@ -332,20 +476,20 @@ const updateOrderStatus = (orderId: string, newStatus: string) => {
               {/* Nút hành động */}
               <View style={{ flexDirection: 'row', justifyContent: 'space-between', padding: 20, backgroundColor: '#fff' }}>
                 <TouchableOpacity style={{ flex: 1, backgroundColor: '#fff', borderRadius: 10, borderWidth: 1, borderColor: '#ef4444', paddingVertical: 14, alignItems: 'center', marginRight: 12 }} onPress={() => {
-                  setOrderList(prev => prev.map(o => o.id === selectedOrder.id ? { ...o, status: 'rejected' } : o));
+                  updateOrderStatusAsync(selectedOrder.id, 'rejected');
                   setModalVisible(false);
                 }}>
                   <Text style={{ color: '#ef4444', fontWeight: 'bold', fontSize: 16 }}>Từ chối đơn</Text>
                 </TouchableOpacity>
                 <TouchableOpacity style={{ flex: 1, backgroundColor: '#ea580c', borderRadius: 10, paddingVertical: 14, alignItems: 'center' }} onPress={() => {
                   if (selectedOrder.status === 'pending') {
-                    setOrderList(prev => prev.map(o => o.id === selectedOrder.id ? { ...o, status: 'preparing' } : o));
+                    updateOrderStatusAsync(selectedOrder.id, 'preparing');
                   } else if (selectedOrder.status === 'preparing') {
-                    setOrderList(prev => prev.map(o => o.id === selectedOrder.id ? { ...o, status: 'ready' } : o));
+                    updateOrderStatusAsync(selectedOrder.id, 'ready');
                   } else if (selectedOrder.status === 'ready') {
-                    setOrderList(prev => prev.map(o => o.id === selectedOrder.id ? { ...o, status: 'delivering' } : o));
+                    updateOrderStatusAsync(selectedOrder.id, 'delivering');
                   } else if (selectedOrder.status === 'delivering') {
-                    setOrderList(prev => prev.map(o => o.id === selectedOrder.id ? { ...o, status: 'completed' } : o));
+                    updateOrderStatusAsync(selectedOrder.id, 'completed');
                   }
                   setModalVisible(false);
                 }}>
@@ -364,8 +508,16 @@ const updateOrderStatus = (orderId: string, newStatus: string) => {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#fff7ed' },
-  headerRow: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 18, paddingTop: 18, paddingBottom: 8, backgroundColor: '#fff7ed', borderBottomWidth: 0 },
-  headerTitle: { fontSize: 20, color: '#1e293b', fontWeight: 'bold' },
+
+  headerRow: { 
+    flexDirection: 'row', 
+    alignItems: 'center', 
+    paddingHorizontal: 18, 
+    paddingTop: 50, 
+    paddingBottom: 8, 
+    backgroundColor: '#fff7ed',
+    borderBottomWidth: 0 
+  },  headerTitle: { fontSize: 20, color: '#1e293b', fontWeight: 'bold' },
   headerSubtitle: { fontSize: 13, color: '#64748b', marginTop: 2 },
   headerIcons: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   headerIconBtn: { width: 32, height: 32, borderRadius: 16, backgroundColor: '#fff', alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: '#f3f4f6', marginLeft: 6 },

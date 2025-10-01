@@ -1,7 +1,8 @@
-import React from 'react';
-import { View, Text, StyleSheet, Image, TouchableOpacity, FlatList } from 'react-native';
+import React, { useEffect, useState } from 'react';
+import { View, Text, StyleSheet, Image, TouchableOpacity, FlatList, ActivityIndicator } from 'react-native';
 import { useRoute, useNavigation } from '@react-navigation/native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import axios from 'axios';
 
 import { API_CONFIG } from '@/constants';
 import { IMAGE_MAP, type ImageName } from "@/assets/imageMap";
@@ -42,6 +43,7 @@ const FoodDetailScreen = () => {
   const navigation = useNavigation();
   const {
     foodId,
+    id,
     image,
     title,
     price,
@@ -51,15 +53,80 @@ const FoodDetailScreen = () => {
     rating: routeRating,
   } = route.params as any || {};
 
-  const [selectedSize, setSelectedSize] = React.useState(sizes && Array.isArray(sizes) && sizes.length > 0 ? sizes[0] : null);
-  const [reviews, setReviews] = React.useState<any[]>(routeReviews);
-  const [averageRating, setAverageRating] = React.useState(routeRating || 0);
+  // Use foodId if available, otherwise use id
+  const actualFoodId = foodId || id;
+
+  const [selectedSize, setSelectedSize] = useState(sizes && Array.isArray(sizes) && sizes.length > 0 ? sizes[0] : null);
+  const [reviews, setReviews] = useState<any[]>(routeReviews);
+  const [averageRating, setAverageRating] = useState(routeRating || 0);
+  const [loadingReviews, setLoadingReviews] = useState(false);
+
+  // Fetch ratings from API
+  useEffect(() => {
+    const fetchRatings = async () => {
+      if (!actualFoodId) {
+        console.log('No foodId available, skipping ratings fetch');
+        return;
+      }
+      
+      try {
+        setLoadingReviews(true);
+        console.log('Fetching ratings for food:', actualFoodId);
+        const response = await axios.get(`${API_CONFIG.BASE_URL}/ratings/?food=${actualFoodId}`);
+        console.log('Ratings response:', response.data);
+        
+        let ratingsData = [];
+        if (Array.isArray(response.data)) {
+          ratingsData = response.data;
+        } else if (response.data.results && Array.isArray(response.data.results)) {
+          ratingsData = response.data.results;
+        }
+
+        // Transform ratings data to match UI format
+        const transformedReviews = ratingsData.map((rating: any) => ({
+          user: rating.username || rating.user?.fullname || rating.user?.username || 'Ẩn danh',
+          rating: rating.rating || rating.stars || 0,
+          text: rating.content || rating.comment || 'Không có nội dung',
+          time: rating.created_date ? new Date(rating.created_date).toLocaleDateString('vi-VN') : 'gần đây',
+          likes: 0, // API doesn't provide likes, default to 0
+        }));
+
+        setReviews(transformedReviews);
+
+        // Calculate average rating
+        if (transformedReviews.length > 0) {
+          const avg = transformedReviews.reduce((sum: number, r: any) => sum + r.rating, 0) / transformedReviews.length;
+          setAverageRating(avg);
+        }
+
+        console.log('Loaded', transformedReviews.length, 'reviews');
+      } catch (error) {
+        console.error('Error fetching ratings:', error);
+      } finally {
+        setLoadingReviews(false);
+      }
+    };
+
+    fetchRatings();
+  }, [actualFoodId]);
 
   // Calculate total price including selected size
   const getTotalPrice = () => {
-    const basePrice = typeof price === 'number' ? price : parseInt(price) || 0;
-    const sizePrice = selectedSize?.price ? selectedSize.price : 0;
-    return basePrice + sizePrice;
+    // Base price from food
+    const basePrice = typeof price === 'number' ? price : parseFloat(price) || 0;
+    
+    // Additional price from selected size
+    let sizePrice = 0;
+    if (selectedSize?.price) {
+      sizePrice = typeof selectedSize.price === 'number' 
+        ? selectedSize.price 
+        : parseFloat(selectedSize.price) || 0;
+    }
+    
+    // Total = base + size additional price
+    const total = basePrice + sizePrice;
+    console.log('Price calculation:', { basePrice, sizePrice, total, selectedSize: selectedSize?.displayName || selectedSize?.name });
+    return total;
   };
 
   // Render review item
@@ -106,7 +173,41 @@ const FoodDetailScreen = () => {
           )}
           {/* Only show sizes if they exist */}
           {sizes && Array.isArray(sizes) && sizes.length > 0 && (
-            <Text style={styles.sizeTitle}>Các size: <Text style={styles.sizeText}>{sizes.map((s: any) => s.displayName || s.name || s).join(', ')}</Text></Text>
+            <View style={styles.sizeSelectorContainer}>
+              <Text style={styles.sizeSelectorTitle}>Chọn size:</Text>
+              <View style={styles.sizeSelectorRow}>
+                {sizes.map((size: any, index: number) => {
+                  // Format display name with price if not already included
+                  let displayText = size.displayName || size.name || size.size_name;
+                  
+                  // If displayName doesn't include price info and price exists, add it
+                  if (displayText && size.price && size.price > 0 && !displayText.includes('+')) {
+                    const sizePrice = typeof size.price === 'number' ? size.price : parseFloat(size.price || 0);
+                    if (sizePrice > 0) {
+                      displayText = `${displayText} (+${sizePrice.toLocaleString('vi-VN')}₫)`;
+                    }
+                  }
+                  
+                  return (
+                    <TouchableOpacity
+                      key={size.id || index}
+                      style={[
+                        styles.sizeOption,
+                        selectedSize?.id === size.id && styles.sizeOptionSelected
+                      ]}
+                      onPress={() => setSelectedSize(size)}
+                    >
+                      <Text style={[
+                        styles.sizeOptionText,
+                        selectedSize?.id === size.id && styles.sizeOptionTextSelected
+                      ]}>
+                        {displayText}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+            </View>
           )}
         </View>
         <View style={styles.reviewSection}>
@@ -136,13 +237,20 @@ const FoodDetailScreen = () => {
             <Text style={styles.reviewTitle}>Đánh giá món ăn</Text>
             <View style={styles.sortBtn}><Text style={styles.sortBtnText}>Mới nhất</Text></View>
           </View>
-          <FlatList
-            data={reviews}
-            keyExtractor={(_, idx) => idx.toString()}
-            renderItem={renderReviewItem}
-            ListEmptyComponent={<Text style={styles.noReview}>Chưa có đánh giá nào</Text>}
-            style={{ marginTop: 8 }}
-          />
+          {loadingReviews ? (
+            <View style={{ padding: 20, alignItems: 'center' }}>
+              <ActivityIndicator size="large" color="#ea580c" />
+              <Text style={{ color: '#6b7280', marginTop: 8 }}>Đang tải đánh giá...</Text>
+            </View>
+          ) : (
+            <FlatList
+              data={reviews}
+              keyExtractor={(_, idx) => idx.toString()}
+              renderItem={renderReviewItem}
+              ListEmptyComponent={<Text style={styles.noReview}>Chưa có đánh giá nào</Text>}
+              style={{ marginTop: 8 }}
+            />
+          )}
         </View>
       </View>
     </SafeAreaView>
@@ -188,23 +296,42 @@ const styles = StyleSheet.create({
   foodPrice: { fontSize: 18, color: '#ef4444', fontWeight: 'bold', marginBottom: 4 },
   foodDesc: { fontSize: 15, color: '#6b7280', marginBottom: 10, textAlign: 'center' },
   foodDescDetail: { fontSize: 14, color: '#374151', marginBottom: 8, textAlign: 'center', fontStyle: 'italic' },
-  sizeTitle: { fontSize: 16, fontWeight: 'bold', marginBottom: 4, alignSelf: 'flex-start' },
-  sizeList: { flexDirection: 'row', marginBottom: 10 },
-  sizeItem: {
-    backgroundColor: '#fde68a',
-    borderRadius: 8,
-    paddingHorizontal: 14,
-    paddingVertical: 7,
-    marginRight: 8,
-    borderWidth: 2,
-    borderColor: 'transparent',
+  sizeSelectorContainer: {
+    marginTop: 16,
+    alignSelf: 'stretch',
   },
-  sizeItemActive: {
-    backgroundColor: '#fbbf24',
+  sizeSelectorTitle: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#374151',
+    marginBottom: 8,
+  },
+  sizeSelectorRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  sizeOption: {
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 8,
+    backgroundColor: '#f3f4f6',
+    borderWidth: 1,
+    borderColor: '#e5e7eb',
+  },
+  sizeOptionSelected: {
+    backgroundColor: '#ea580c',
     borderColor: '#ea580c',
   },
-  sizeText: { color: '#b45309', fontWeight: 'bold', fontSize: 15 },
-  sizeTextActive: { color: '#ea580c' },
+  sizeOptionText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#6b7280',
+    textAlign: 'center',
+  },
+  sizeOptionTextSelected: {
+    color: '#fff',
+  },
   reviewSection: {
     backgroundColor: '#fff',
     borderRadius: 16,

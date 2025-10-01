@@ -10,8 +10,15 @@ urlpatterns = [
     
     # Store manager endpoints
     path('store/foods/', views.store_foods_list, name='store_foods_list'),
+    path('store/foods/<int:food_id>/', views.store_food_detail, name='store_food_detail'),
+    path('store/foods/<int:food_id>/sizes/', views.food_sizes_list, name='store_food_sizes_list'),
+    path('store/foods/<int:food_id>/sizes/<int:size_id>/', views.food_size_detail, name='store_food_size_detail'),
     
     # Admin endpoints
     path('admin/foods/', views.admin_foods_list, name='admin_foods_list'),
     path('admin/foods/<int:food_id>/', views.admin_food_detail, name='admin_food_detail'),
+    
+    # FoodSize management endpoints (admin can also use these)
+    path('admin/foods/<int:food_id>/sizes/', views.food_sizes_list, name='food_sizes_list'),
+    path('admin/foods/<int:food_id>/sizes/<int:size_id>/', views.food_size_detail, name='food_size_detail'),
 ]

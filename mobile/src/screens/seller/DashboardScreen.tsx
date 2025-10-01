@@ -49,6 +49,7 @@ const screenWidth = Dimensions.get('window').width;
 
 const menuItems = [
   { title: 'Trang chủ', icon: Menu, section: 'dashboard' },
+  { title: 'Mua hàng', icon: ShoppingBag, section: 'buy' },
   { title: 'Quản lí món ăn', icon: ShoppingBag, section: 'foods' },
   { title: 'Quản lí đơn hàng', icon: ShoppingBag, section: 'orders' },
   { title: 'Quản lí khuyến mãi', icon: ShoppingBag, section: 'promotions' },
@@ -126,6 +127,12 @@ const SellerDashboardScreen: React.FC<SellerDashboardScreenProps> = ({ navigatio
                         navigation.navigate('SellerManageMenuScreen');
                       } else if (item.section === 'promotions') {
                         navigation.navigate('SellerVoucherManagementScreen');
+                      } else if (item.section === 'buy') {
+                        // Navigate to main home screen like a customer
+                        navigation.reset({
+                          index: 0,
+                          routes: [{ name: 'MainTabs', params: { screen: 'Home' } }],
+                        });
                       }
                     }}
                   >

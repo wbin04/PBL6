@@ -6,8 +6,8 @@ from rest_framework import status
 from django.core.paginator import Paginator
 from django.db.models import Q, Avg, Count, Value
 from django.db.models.functions import Coalesce
-from .models import Category, Food
-from .serializers import CategorySerializer, FoodSerializer, FoodListSerializer
+from .models import Category, Food, FoodSize
+from .serializers import CategorySerializer, FoodSerializer, FoodListSerializer, FoodSizeSerializer
 from apps.stores.models import Store
 from apps.stores.serializers import StoreSerializer
 
@@ -241,6 +241,79 @@ def store_foods_list(request):
     })
 
 
+@api_view(['GET', 'PUT', 'DELETE'])
+@parser_classes([MultiPartParser, FormParser, JSONParser])
+@permission_classes([IsAuthenticated])
+def store_food_detail(request, food_id):
+    """Get, update, or delete a specific food item for store manager"""
+    if not is_store_manager(request.user):
+        return Response({'error': 'Store Manager access required'}, status=status.HTTP_403_FORBIDDEN)
+    
+    try:
+        # Get the store managed by the user
+        user_store = Store.objects.get(manager=request.user)
+    except Store.DoesNotExist:
+        return Response({'error': 'Store not found for user'}, status=status.HTTP_404_NOT_FOUND)
+    
+    try:
+        food = Food.objects.get(id=food_id, store=user_store)
+    except Food.DoesNotExist:
+        return Response({'error': 'Food not found or access denied'}, status=status.HTTP_404_NOT_FOUND)
+    
+    if request.method == 'GET':
+        serializer = FoodSerializer(food)
+        return Response(serializer.data)
+    
+    elif request.method == 'PUT':
+        # Handle file upload for image
+        data = request.data.copy()
+        old_image_path = None
+        
+        if 'image_file' in request.FILES:
+            from django.core.files.storage import default_storage
+            import os
+            import uuid
+            
+            # Store old image path for later deletion
+            old_image_path = None
+            if food.image:
+                old_image_path = str(food.image)
+            
+            file = request.FILES['image_file']
+            # Generate unique filename to avoid collisions
+            file_extension = os.path.splitext(file.name)[1]
+            unique_filename = f"{uuid.uuid4().hex}{file_extension}"
+            filename = f"assets/{unique_filename}"
+            path = default_storage.save(filename, file)
+            data['image'] = path
+            
+        # Remove file key to prevent validation errors
+        data.pop('image_file', None)
+        
+        # Ensure store_id is set to user's store
+        data['store_id'] = user_store.id
+        
+        serializer = FoodSerializer(food, data=data, partial=True)
+        if serializer.is_valid():
+            serializer.save()
+            
+            # Try to delete old image file after successful save
+            if old_image_path and 'image_file' in request.FILES:
+                try:
+                    from django.core.files.storage import default_storage
+                    if default_storage.exists(old_image_path):
+                        default_storage.delete(old_image_path)
+                except Exception as e:
+                    print(f"Warning: Could not delete old image file {old_image_path}: {e}")
+            
+            return Response(serializer.data)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+    
+    elif request.method == 'DELETE':
+        food.delete()
+        return Response({'message': 'Food deleted successfully'}, status=status.HTTP_204_NO_CONTENT)
+
+
 # Admin-only views for food management
 def is_admin(user):
     return user.is_authenticated and user.role and user.role.id == 2
@@ -423,3 +496,107 @@ def admin_food_detail(request, food_id):
     elif request.method == 'DELETE':
         food.delete()
         return Response({'message': 'Food deleted successfully'}, status=status.HTTP_204_NO_CONTENT)
+
+
+# FoodSize management endpoints
+@api_view(['GET', 'POST'])
+@permission_classes([IsAuthenticated])
+def food_sizes_list(request, food_id):
+    """Get or create food sizes for a specific food"""
+    if not is_admin_or_store_manager(request.user):
+        return Response({'error': 'Admin or Store Manager access required'}, status=status.HTTP_403_FORBIDDEN)
+    
+    try:
+        food = Food.objects.get(id=food_id)
+        
+        # If user is store manager, check if food belongs to their store
+        if is_store_manager(request.user):
+            try:
+                user_store = Store.objects.get(manager=request.user)
+                if food.store != user_store:
+                    return Response({'error': 'Access denied to this food item'}, status=status.HTTP_403_FORBIDDEN)
+            except Store.DoesNotExist:
+                return Response({'error': 'Store not found for user'}, status=status.HTTP_404_NOT_FOUND)
+                
+    except Food.DoesNotExist:
+        return Response({'error': 'Food not found'}, status=status.HTTP_404_NOT_FOUND)
+    
+    if request.method == 'GET':
+        sizes = FoodSize.objects.filter(food=food).order_by('id')
+        serializer = FoodSizeSerializer(sizes, many=True)
+        return Response(serializer.data)
+    
+    elif request.method == 'POST':
+        data = request.data.copy()
+        
+        # Validate required fields
+        if not data.get('size_name'):
+            return Response({'error': 'size_name is required'}, status=status.HTTP_400_BAD_REQUEST)
+        if 'price' not in data:
+            return Response({'error': 'price is required'}, status=status.HTTP_400_BAD_REQUEST)
+        
+        # Check if size with same name already exists for this food
+        if FoodSize.objects.filter(food=food, size_name=data.get('size_name')).exists():
+            return Response({'error': 'Size with this name already exists for this food'}, status=status.HTTP_400_BAD_REQUEST)
+        
+        # Create the size
+        try:
+            food_size = FoodSize.objects.create(
+                food=food,
+                size_name=data['size_name'],
+                price=data['price']
+            )
+            serializer = FoodSizeSerializer(food_size)
+            return Response(serializer.data, status=status.HTTP_201_CREATED)
+        except Exception as e:
+            return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+
+@api_view(['GET', 'PUT', 'DELETE'])
+@permission_classes([IsAuthenticated])
+def food_size_detail(request, food_id, size_id):
+    """Get, update, or delete a specific food size"""
+    if not is_admin_or_store_manager(request.user):
+        return Response({'error': 'Admin or Store Manager access required'}, status=status.HTTP_403_FORBIDDEN)
+    
+    try:
+        food = Food.objects.get(id=food_id)
+        
+        # If user is store manager, check if food belongs to their store
+        if is_store_manager(request.user):
+            try:
+                user_store = Store.objects.get(manager=request.user)
+                if food.store != user_store:
+                    return Response({'error': 'Access denied to this food item'}, status=status.HTTP_403_FORBIDDEN)
+            except Store.DoesNotExist:
+                return Response({'error': 'Store not found for user'}, status=status.HTTP_404_NOT_FOUND)
+                
+    except Food.DoesNotExist:
+        return Response({'error': 'Food not found'}, status=status.HTTP_404_NOT_FOUND)
+    
+    try:
+        food_size = FoodSize.objects.get(id=size_id, food=food)
+    except FoodSize.DoesNotExist:
+        return Response({'error': 'Food size not found'}, status=status.HTTP_404_NOT_FOUND)
+    
+    if request.method == 'GET':
+        serializer = FoodSizeSerializer(food_size)
+        return Response(serializer.data)
+    
+    elif request.method == 'PUT':
+        data = request.data.copy()
+        
+        # Check if updating size_name would create duplicate
+        if 'size_name' in data and data['size_name'] != food_size.size_name:
+            if FoodSize.objects.filter(food=food, size_name=data['size_name']).exists():
+                return Response({'error': 'Size with this name already exists for this food'}, status=status.HTTP_400_BAD_REQUEST)
+        
+        serializer = FoodSizeSerializer(food_size, data=data, partial=True)
+        if serializer.is_valid():
+            serializer.save()
+            return Response(serializer.data)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+    
+    elif request.method == 'DELETE':
+        food_size.delete()
+        return Response({'message': 'Food size deleted successfully'}, status=status.HTTP_204_NO_CONTENT)

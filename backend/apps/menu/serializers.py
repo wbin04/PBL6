@@ -34,7 +34,10 @@ class CategorySerializer(serializers.ModelSerializer):
 class FoodSizeSerializer(serializers.ModelSerializer):
     class Meta:
         model = FoodSize
-        fields = ['id', 'size_name', 'price']
+        fields = ['id', 'size_name', 'price', 'food']
+        extra_kwargs = {
+            'food': {'required': False}  # Will be set from URL parameter
+        }
 
 
 class FoodSerializer(serializers.ModelSerializer):

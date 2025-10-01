@@ -1,8 +1,8 @@
 import React, { useEffect, useState, useCallback } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Image, Switch, TouchableWithoutFeedback, ActivityIndicator, Alert, Dimensions } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Image, Switch, TouchableWithoutFeedback, ActivityIndicator, Alert, Dimensions, Modal } from 'react-native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { Swipeable } from 'react-native-gesture-handler';
-import { Trash2 } from 'lucide-react-native';
+import { Trash2, Menu, X, ShoppingBag } from 'lucide-react-native';
 import { useSelector } from 'react-redux';
 import { RootState } from '../../store/index';
 import axios from 'axios';
@@ -27,7 +27,6 @@ interface MenuItem {
   average_rating?: number;
   rating_count?: number;
   store_name?: string;
-  // category_name?: string;
   category?: {
     id: number;
     name: string;
@@ -35,19 +34,15 @@ interface MenuItem {
 }
 
 function getImageSource(img?: ImageName | string) {
-  // If it's a path starting with "assets/", prepend with /media/
   if (typeof img === "string" && img.startsWith("assets/")) {
-    const baseUrl = API_CONFIG.BASE_URL.replace("/api", ""); // Remove /api from base URL
+    const baseUrl = API_CONFIG.BASE_URL.replace("/api", "");
     const fullUrl = `${baseUrl}/media/${img}`;
-    // console.log('getImageSource - Assets path detected, constructed URL:', fullUrl);
     return { uri: fullUrl };
   }
   
-  // If it's a relative path without leading slash, add it with /media/ prefix
   if (typeof img === "string" && !img.startsWith("/") && !img.includes("://")) {
-    const baseUrl = API_CONFIG.BASE_URL.replace("/api", ""); // Remove /api from base URL
+    const baseUrl = API_CONFIG.BASE_URL.replace("/api", "");
     const fullUrl = `${baseUrl}/media/${img}`;
-    // console.log('getImageSource - Relative path without slash, constructed URL:', fullUrl);
     return { uri: fullUrl };
   }
   
@@ -59,21 +54,20 @@ const ManageMenuScreen: React.FC<ManageMenuScreenProps> = ({ navigation }) => {
   const [loading, setLoading] = useState(true);
   const [categories, setCategories] = useState<any[]>([]);
   const [selectedTab, setSelectedTab] = useState('all');
+  const [sidebarVisible, setSidebarVisible] = useState(false);
   const { user, tokens } = useSelector((state: RootState) => state.auth);
 
-  // Helper function to generate hash from string
   const hashString = (str: string): number => {
     let hash = 0;
     if (str.length === 0) return hash;
     for (let i = 0; i < str.length; i++) {
       const char = str.charCodeAt(i);
       hash = ((hash << 5) - hash) + char;
-      hash = hash & hash; // Convert to 32-bit integer
+      hash = hash & hash;
     }
     return Math.abs(hash);
   };
 
-  // Fetch categories from API (updated to match StoreDetailScreenV2)
   const fetchCategories = useCallback(async () => {
     try {
       console.log('Fetching categories...');
@@ -103,12 +97,9 @@ const ManageMenuScreen: React.FC<ManageMenuScreenProps> = ({ navigation }) => {
         status: error.response?.status,
         statusText: error.response?.statusText
       });
-      // Don't show error alert for categories as it's not critical
-      // Just log the error and continue with empty categories
     }
   }, []);
 
-  // Fetch menu data from API (with page_size=100)
   const fetchMenu = useCallback(async () => {
     if (!user || !tokens?.access) {
       console.warn('No user or access token found');
@@ -122,7 +113,6 @@ const ManageMenuScreen: React.FC<ManageMenuScreenProps> = ({ navigation }) => {
 
       let allFoods: any[] = [];
       
-      // Try the new store-specific endpoint first, then fallback to admin endpoint
       const endpoints = [
         `${API_CONFIG.BASE_URL}/menu/store/foods/`,
         `${API_CONFIG.BASE_URL}/menu/admin/foods/`,
@@ -148,7 +138,6 @@ const ManageMenuScreen: React.FC<ManageMenuScreenProps> = ({ navigation }) => {
             
             if (data.results && Array.isArray(data.results)) {
               endpointFoods = endpointFoods.concat(data.results);
-              // Use the next URL from API response if available, otherwise construct manually
               if (data.next) {
                 nextUrl = data.next.startsWith('http') ? data.next : `${API_CONFIG.BASE_URL.replace('/api', '')}${data.next}`;
               } else if (data.has_next) {
@@ -173,18 +162,14 @@ const ManageMenuScreen: React.FC<ManageMenuScreenProps> = ({ navigation }) => {
           }
           
           if (endpointFoods.length > 0) {
-            // Map foods to ensure category object is properly structured
             const mappedFoods = endpointFoods.map((food: any) => {
-              // Use the category object from API if it's properly structured
               let categoryObj = food.category;
               if (!categoryObj || typeof categoryObj !== 'object') {
-                // Fallback: create category object from category_name with hash ID
                 categoryObj = {
                   id: hashString(food.category_name || 'Chưa phân loại'),
                   name: food.category_name || 'Chưa phân loại'
                 };
               } else if (!categoryObj.name) {
-                // If category object exists but missing name, add it from cate_name
                 categoryObj = {
                   ...categoryObj,
                   name: categoryObj.cate_name || food.category_name || 'Chưa phân loại'
@@ -199,7 +184,6 @@ const ManageMenuScreen: React.FC<ManageMenuScreenProps> = ({ navigation }) => {
             allFoods = mappedFoods;
             console.log(`Successfully loaded ${allFoods.length} foods from ${baseEndpoint}`);
             
-            // Extract unique categories from mapped foods using their category objects
             const storeFoodCategories = mappedFoods.reduce((acc: any[], food: any) => {
               if (food.category) {
                 const existingCategory = acc.find(cat => cat.id === food.category.id);
@@ -213,10 +197,8 @@ const ManageMenuScreen: React.FC<ManageMenuScreenProps> = ({ navigation }) => {
               return acc;
             }, []);
             
-            // If we have store-specific categories from foods, use them; otherwise keep existing global categories
             if (storeFoodCategories.length > 0) {
               setCategories(prev => {
-                // Only update if categories are actually different
                 const prevIds = prev.map(c => c.id).sort();
                 const newIds = storeFoodCategories.map(c => c.id).sort();
                 if (JSON.stringify(prevIds) !== JSON.stringify(newIds)) {
@@ -253,7 +235,6 @@ const ManageMenuScreen: React.FC<ManageMenuScreenProps> = ({ navigation }) => {
     }
   }, [user, tokens]);
 
-  // Reload data when screen is focused
   useFocusEffect(
     useCallback(() => {
       fetchMenu();
@@ -261,25 +242,20 @@ const ManageMenuScreen: React.FC<ManageMenuScreenProps> = ({ navigation }) => {
   );
 
   useEffect(() => {
-    // Always fetch categories
     fetchCategories();
   }, [fetchCategories]);
 
-  // Filter foods by selected tab/category
   const filteredMenu = menu.filter(item => {
     if (selectedTab === 'all') return true;
     if (selectedTab === 'main') {
-      // Filter by category name containing "chính" or "main"
       return item.category?.name?.toLowerCase().includes('chính') || 
              item.category?.name?.toLowerCase().includes('main');
     }
-    // Filter by specific category ID
     const categoryMatch = item.category?.id.toString() === selectedTab;
     console.log(`Food: ${item.title}, Category: ${item.category?.name} (ID: ${item.category?.id}), Selected tab: ${selectedTab}, Match: ${categoryMatch}`);
     return categoryMatch;
   });
 
-  // Debug logging (reduced to prevent excessive logging)
   useEffect(() => {
     if (menu.length > 0 || categories.length > 0) {
       console.log('State update:');
@@ -294,18 +270,15 @@ const ManageMenuScreen: React.FC<ManageMenuScreenProps> = ({ navigation }) => {
     if (!user || !tokens?.access) return;
     
     try {
-      // Find the current item
       const item = menu.find(item => item.id === id);
       if (!item) return;
 
       const newAvailability = item.availability === 'Còn hàng' ? 'Hết hàng' : 'Còn hàng';
       
-      // Update locally first for immediate UI feedback
       setMenu(prev => prev.map(item =>
         item.id === id ? { ...item, availability: newAvailability } : item
       ));
 
-      // Update on server
       await axios.put(`${API_CONFIG.BASE_URL}/menu/admin/foods/${id}/`, {
         availability: newAvailability,
       }, {
@@ -317,7 +290,6 @@ const ManageMenuScreen: React.FC<ManageMenuScreenProps> = ({ navigation }) => {
       console.log(`Updated food ${id} availability to ${newAvailability}`);
     } catch (error) {
       console.error('Error updating availability:', error);
-      // Revert the change on error
       fetchMenu();
       Alert.alert('Lỗi', 'Không thể cập nhật trạng thái món ăn');
     }
@@ -336,10 +308,8 @@ const ManageMenuScreen: React.FC<ManageMenuScreenProps> = ({ navigation }) => {
           style: 'destructive',
           onPress: async () => {
             try {
-              // Remove from UI first for immediate feedback
               setMenu(prev => prev.filter(item => item.id !== id));
 
-              // Delete from server
               await axios.delete(`${API_CONFIG.BASE_URL}/menu/admin/foods/${id}/`, {
                 headers: {
                   'Authorization': `Bearer ${tokens.access}`,
@@ -349,7 +319,6 @@ const ManageMenuScreen: React.FC<ManageMenuScreenProps> = ({ navigation }) => {
               console.log(`Deleted food ${id}`);
             } catch (error) {
               console.error('Error deleting food:', error);
-              // Reload data on error
               fetchMenu();
               Alert.alert('Lỗi', 'Không thể xóa món ăn');
             }
@@ -372,16 +341,37 @@ const ManageMenuScreen: React.FC<ManageMenuScreenProps> = ({ navigation }) => {
     <View style={styles.container}>
       {/* Header */}
       <View style={styles.headerRow}>
+        <TouchableOpacity 
+          style={styles.menuButton}
+          onPress={() => setSidebarVisible(true)}
+        >
+          <Menu color="#ea580c" size={24} />
+        </TouchableOpacity>
+        <View style={styles.headerCenter}>
+          <Text style={styles.headerTitle}>Quản lý thực đơn</Text>
+          <Text style={styles.headerSubtitle}>Cửa hàng của tôi</Text>
+        </View>
+        <View style={styles.headerRight}>
+          <TouchableOpacity style={styles.iconBtn}>
+            <Text style={styles.icon}>🔔</Text>
+            <View style={styles.badge}>
+              <Text style={styles.badgeText}>3</Text>
+            </View>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.avatar}>
+            <Text style={styles.avatarText}>A</Text>
+          </TouchableOpacity>
+        </View>
       </View>
       
       {/* Section title + button */}
-      <View style={styles.sectionRow}>
-        <Text style={styles.sectionTitle}>Thực đơn của tôi</Text>
+      <View style={styles.sectionTitleRow}>
+        <Text style={styles.menuSectionTitle}>Thực đơn của tôi</Text>
         <TouchableOpacity 
           style={styles.addBtn} 
           onPress={() => navigation.navigate('AddFoodScreen', { 
             onRefresh: fetchMenu,
-            categories: categories // Truyền categories cho AddFoodScreen
+            categories: categories
           })}
         >
           <Text style={styles.addBtnText}>+ Thêm món</Text>
@@ -499,6 +489,95 @@ const ManageMenuScreen: React.FC<ManageMenuScreenProps> = ({ navigation }) => {
           )}
         </ScrollView>
       </View>
+
+      {/* Sidebar */}
+      {sidebarVisible && (
+        <>
+          <TouchableOpacity style={styles.overlay} activeOpacity={1} onPress={() => setSidebarVisible(false)} />
+          <View style={styles.sidebar}>
+            <View style={styles.logoContainer}>
+              <View style={styles.logoHeader}>
+                <TouchableOpacity onPress={() => setSidebarVisible(false)} style={styles.closeButton}>
+                  <X width={24} height={24} stroke="#fff" />
+                </TouchableOpacity>
+              </View>
+              <View style={styles.logoBox}>
+                <View style={styles.logoCircle}>
+                  <Text style={styles.logoEmoji}>🍔</Text>
+                </View>
+                <Text style={styles.logoText}>BÁN HÀNG</Text>
+              </View>
+            </View>
+            <View style={styles.menuContainer}>
+              <TouchableOpacity
+                style={[styles.menuItem, { backgroundColor: '#ea580c' }]}
+                onPress={() => {
+                  setSidebarVisible(false);
+                  navigation.navigate('DashboardScreen');
+                }}
+              >
+                <Menu width={16} height={16} stroke="#fff7ed" />
+                <Text style={styles.menuText}>Trang chủ</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[styles.menuItem, { backgroundColor: '#ea580c' }]}
+                onPress={() => {
+                  setSidebarVisible(false);
+                  navigation.reset({
+                    index: 0,
+                    routes: [{ name: 'MainTabs', params: { screen: 'Home' } }],
+                  });
+                }}
+              >
+                <ShoppingBag width={16} height={16} stroke="#fff7ed" />
+                <Text style={styles.menuText}>Mua hàng</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[styles.menuItem, styles.menuItemActive]}
+                onPress={() => setSidebarVisible(false)}
+              >
+                <ShoppingBag width={16} height={16} stroke="#fff" />
+                <Text style={[styles.menuText, styles.menuTextActive]}>Quản lí món ăn</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[styles.menuItem, { backgroundColor: '#ea580c' }]}
+                onPress={() => {
+                  setSidebarVisible(false);
+                  navigation.navigate('NewOrderListScreen');
+                }}
+              >
+                <ShoppingBag width={16} height={16} stroke="#fff7ed" />
+                <Text style={styles.menuText}>Quản lí đơn hàng</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[styles.menuItem, { backgroundColor: '#ea580c' }]}
+                onPress={() => {
+                  setSidebarVisible(false);
+                  // navigation.navigate('SellerVoucherManagementScreen');
+                }}
+              >
+                <ShoppingBag width={16} height={16} stroke="#fff7ed" />
+                <Text style={styles.menuText}>Quản lí khuyến mãi</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[styles.menuItem, { backgroundColor: '#ea580c' }]}
+                onPress={() => {
+                  setSidebarVisible(false);
+                  // Analytics section - could navigate to analytics screen
+                }}
+              >
+                <Menu width={16} height={16} stroke="#fff7ed" />
+                <Text style={styles.menuText}>Thống kê</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </>
+      )}
     </View>
   );
 };
@@ -520,13 +599,33 @@ const styles = StyleSheet.create({
   headerRow: { 
     flexDirection: 'row', 
     alignItems: 'center', 
-    justifyContent: 'space-between', 
     paddingHorizontal: 18, 
-    paddingTop: 18, 
+    paddingTop: 50, 
     paddingBottom: 8, 
-    backgroundColor: '#fff7ed' 
+    backgroundColor: '#fff7ed',
+    borderBottomWidth: 0 
   },
-  headerTitle: { fontSize: 22, color: '#1e293b', fontWeight: 'bold' },
+  menuButton: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: '#fff',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: '#f3f4f6',
+    shadowColor: '#000',
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+    elevation: 2
+  },
+  headerCenter: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center'
+  },
+  headerTitle: { fontSize: 20, color: '#1e293b', fontWeight: 'bold' },
+  headerSubtitle: { fontSize: 13, color: '#64748b', marginTop: 2 },
   headerRight: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   iconBtn: { 
     width: 32, 
@@ -564,16 +663,19 @@ const styles = StyleSheet.create({
     marginLeft: 8 
   },
   avatarText: { color: '#fff', fontSize: 14, fontWeight: 'bold' },
-  subtitle: { fontSize: 13, color: '#64748b', marginLeft: 18, marginBottom: 2 },
-  sectionRow: { 
+  sectionTitleRow: { 
     flexDirection: 'row', 
     alignItems: 'center', 
     justifyContent: 'space-between', 
     marginHorizontal: 18, 
-    marginTop: -10, 
-    marginBottom: 20
+    marginTop: 0, 
+    marginBottom: 16
   },
-  sectionTitle: { fontSize: 22, fontWeight: 'bold', color: '#ea580c' },
+  menuSectionTitle: { 
+    fontSize: 20, 
+    fontWeight: 'bold', 
+    color: '#ea580c' 
+  },
   addBtn: { 
     backgroundColor: '#ea580c', 
     borderRadius: 20, 
@@ -581,10 +683,10 @@ const styles = StyleSheet.create({
     paddingVertical: 6 
   },
   addBtnText: { color: '#fff', fontWeight: 'bold', fontSize: 15 },
-  // Tab styles (added from StoreDetailScreenV2)
   tabScrollView: {
     marginHorizontal: 18,
-    marginBottom: 16,
+    marginBottom: 12,
+    marginTop: 0,
     maxHeight: 50,
   },
   tabBox: {
@@ -593,28 +695,28 @@ const styles = StyleSheet.create({
     alignItems: 'center'
   },
   tabBtn: {
-    paddingVertical: 8,
+    paddingVertical: 6,
     paddingHorizontal: 16,
-    borderRadius: 12,
-    backgroundColor: '#f3f4f6',
+    borderRadius: 20,
+    backgroundColor: '#fff',
     minWidth: 80,
     maxWidth: screenWidth * 0.35,
+    marginRight: 8,
   },
   tabActive: {
-    backgroundColor: '#fff',
-    borderWidth: 1,
-    borderColor: '#ea580c',
+    backgroundColor: '#fee2e2',
   },
   tabText: { 
     textAlign: 'center', 
-    color: '#6b7280', 
-    fontWeight: 'bold', 
+    color: '#ea580c', 
+    fontWeight: 'normal', 
     fontSize: 14
   },
   tabTextActive: { 
-    color: '#ea580c' 
+    color: '#ea580c',
+    fontWeight: 'bold',
+    fontSize: 15
   },
-  // Menu list container
   menuListContainer: {
     flex: 1,
   },
@@ -693,7 +795,103 @@ const styles = StyleSheet.create({
     borderRadius: 16, 
     marginRight: 10 
   },
-  deleteIcon: { fontSize: 24, color: '#fff', fontWeight: 'bold' },
+  overlay: { 
+    position: 'absolute', 
+    top: 0, 
+    left: 0, 
+    right: 0, 
+    bottom: 0, 
+    backgroundColor: 'rgba(0,0,0,0.5)', 
+    zIndex: 1 
+  },
+  sidebar: { 
+    position: 'absolute', 
+    left: 0, 
+    top: 0, 
+    bottom: 0, 
+    width: 260, 
+    backgroundColor: '#f5f2f0ff', 
+    borderRightWidth: 0, 
+    zIndex: 2, 
+    shadowColor: '#000', 
+    shadowOffset: { width: 2, height: 0 }, 
+    shadowOpacity: 0.18, 
+    shadowRadius: 10, 
+    elevation: 10 
+  },
+  logoContainer: { 
+    paddingTop: 24, 
+    paddingBottom: 16, 
+    borderBottomWidth: 0, 
+    alignItems: 'center', 
+    backgroundColor: '#ea580c', 
+    height: 160
+  },
+  logoHeader: { 
+    flexDirection: 'row', 
+    justifyContent: 'flex-end', 
+    width: '100%', 
+    paddingRight: 16 
+  },
+  closeButton: { 
+    padding: 6, 
+    backgroundColor: '#ea580c', 
+    borderRadius: 16, 
+    marginTop: 20
+  },
+  logoBox: { 
+    alignItems: 'center', 
+    marginTop: -30 
+  },
+  logoCircle: { 
+    width: 56, 
+    height: 56, 
+    borderRadius: 28, 
+    backgroundColor: '#fff', 
+    alignItems: 'center', 
+    justifyContent: 'center', 
+    marginBottom: 8, 
+    shadowColor: '#ea580c', 
+    shadowOpacity: 0.15, 
+    shadowRadius: 8, 
+    elevation: 4 
+  },
+  logoEmoji: { 
+    fontSize: 32 
+  },
+  logoText: { 
+    fontSize: 18, 
+    color: '#fff', 
+    fontWeight: 'bold', 
+    letterSpacing: 1 
+  },
+  menuContainer: { 
+    flex: 1, 
+    paddingVertical: 16 
+  },
+  menuItem: { 
+    flexDirection: 'row', 
+    alignItems: 'center', 
+    paddingHorizontal: 20, 
+    paddingVertical: 14, 
+    marginHorizontal: 12, 
+    borderRadius: 10, 
+    marginBottom: 8 
+  },
+  menuItemActive: { 
+    backgroundColor: '#fff', 
+    borderWidth: 0 
+  },
+  menuText: { 
+    marginLeft: 14, 
+    fontSize: 15, 
+    color: '#fff', 
+    fontWeight: '500' 
+  },
+  menuTextActive: { 
+    color: '#ea580c', 
+    fontWeight: 'bold' 
+  },
 });
 
 export default ManageMenuScreen;
