@@ -464,6 +464,52 @@ FastFood API cung cấp các endpoints để quản lý hệ thống đặt đ�
 }
 ```
 
+### 2.5 Món ăn theo danh mục
+- **GET** `/api/menu/categories/{category_id}/foods/`
+- **Query Parameters:**
+  - `page`: Trang hiện tại (mặc định: 1)
+  - `page_size`: Số items/trang (mặc định: 12)
+- **Response:**
+```json
+{
+  "category": {
+    "id": 1,
+    "name": "Burger",
+    "cate_name": "Burger",
+    "image": "burger.png",
+    "image_url": "http://localhost:8000/media/assets/burger.png",
+    "foods_count": 15
+  },
+  "count": 15,
+  "num_pages": 2,
+  "current_page": 1,
+  "has_next": true,
+  "has_previous": false,
+  "results": [
+    {
+      "id": 1,
+      "title": "Big Mac",
+      "description": "Bánh burger với 2 lớp thịt bò",
+      "price": "89000.00",
+      "image": "bigmac.jpg",
+      "image_url": "http://localhost:8000/media/assets/bigmac.jpg",
+      "category": {
+        "id": 1,
+        "cate_name": "Burger"
+      },
+      "store": {
+        "id": 1,
+        "store_name": "McDonald's Nguyễn Huệ"
+      },
+      "availability": "Còn hàng",
+      "sizes": [],
+      "average_rating": 4.5,
+      "rating_count": 120
+    }
+  ]
+}
+```
+
 ### 2.6 Admin - Quản lý món ăn
 - **GET** `/api/menu/admin/foods/`
 - **POST** `/api/menu/admin/foods/`
@@ -531,6 +577,244 @@ FastFood API cung cấp các endpoints để quản lý hệ thống đặt đ�
 }
 ```
 - **Response:** Tương tự chi tiết món ăn
+
+### 2.8 Admin - Quản lý Food Size
+#### 2.8.1 Danh sách sizes của món ăn
+- **GET** `/api/menu/admin/foods/{food_id}/sizes/`
+- **Headers:** `Authorization: Bearer {admin_or_store_manager_token}`
+- **Mô tả:** Lấy danh sách tất cả sizes của một món ăn
+- **Response:**
+```json
+[
+  {
+    "id": 1,
+    "size_name": "Size L",
+    "price": "10000.00",
+    "food": 1
+  },
+  {
+    "id": 2,
+    "size_name": "Size M",
+    "price": "5000.00",
+    "food": 1
+  }
+]
+```
+
+#### 2.8.2 Thêm size mới cho món ăn
+- **POST** `/api/menu/admin/foods/{food_id}/sizes/`
+- **Headers:** `Authorization: Bearer {admin_or_store_manager_token}`
+- **Request Body:**
+```json
+{
+  "size_name": "Size XL",
+  "price": "15000.00"
+}
+```
+- **Response:**
+```json
+{
+  "id": 3,
+  "size_name": "Size XL",
+  "price": "15000.00",
+  "food": 1
+}
+```
+- **Error Response (400):**
+```json
+{
+  "error": "Size with this name already exists for this food"
+}
+```
+
+#### 2.8.3 Chi tiết một size
+- **GET** `/api/menu/admin/foods/{food_id}/sizes/{size_id}/`
+- **Headers:** `Authorization: Bearer {admin_or_store_manager_token}`
+- **Response:**
+```json
+{
+  "id": 1,
+  "size_name": "Size L",
+  "price": "10000.00",
+  "food": 1
+}
+```
+
+#### 2.8.4 Cập nhật size
+- **PUT** `/api/menu/admin/foods/{food_id}/sizes/{size_id}/`
+- **Headers:** `Authorization: Bearer {admin_or_store_manager_token}`
+- **Request Body:**
+```json
+{
+  "size_name": "Size Large",
+  "price": "12000.00"
+}
+```
+- **Response:**
+```json
+{
+  "id": 1,
+  "size_name": "Size Large",
+  "price": "12000.00",
+  "food": 1
+}
+```
+- **Error Response (400):**
+```json
+{
+  "error": "Size with this name already exists for this food"
+}
+```
+
+#### 2.8.5 Xóa size
+- **DELETE** `/api/menu/admin/foods/{food_id}/sizes/{size_id}/`
+- **Headers:** `Authorization: Bearer {admin_or_store_manager_token}`
+- **Response:**
+```json
+{
+  "message": "Food size deleted successfully"
+}
+```
+
+### 2.9 Store Manager - Quản lý món ăn
+**Lưu ý:** Store Manager sử dụng endpoint `/api/menu/store/foods/` thay vì `/api/menu/admin/foods/`
+
+#### 2.9.1 Danh sách món ăn của cửa hàng
+- **GET** `/api/menu/store/foods/`
+- **Headers:** `Authorization: Bearer {store_manager_token}`
+- **Query Parameters:**
+  - `search`: Tìm kiếm theo tên hoặc mô tả
+  - `category`: Lọc theo danh mục
+  - `page`: Trang hiện tại (mặc định: 1)
+  - `page_size`: Số lượng items/trang (mặc định: 12)
+- **Response:**
+```json
+{
+  "count": 25,
+  "num_pages": 3,
+  "current_page": 1,
+  "has_next": true,
+  "has_previous": false,
+  "next": "?page=2&page_size=12",
+  "previous": null,
+  "results": [
+    {
+      "id": 1,
+      "title": "Big Mac",
+      "description": "Bánh burger với 2 lớp thịt bò",
+      "price": "89000.00",
+      "image": "bigmac.jpg",
+      "image_url": "http://localhost:8000/media/assets/bigmac.jpg",
+      "category": {
+        "id": 1,
+        "cate_name": "Burger"
+      },
+      "store": {
+        "id": 1,
+        "store_name": "McDonald's Nguyễn Huệ"
+      },
+      "availability": "Còn hàng",
+      "sizes": [
+        {
+          "id": 1,
+          "size_name": "Size L",
+          "price": "10000.00"
+        }
+      ],
+      "average_rating": 4.5,
+      "rating_count": 120
+    }
+  ],
+  "store": {
+    "id": 1,
+    "name": "McDonald's Nguyễn Huệ"
+  }
+}
+```
+
+#### 2.9.2 Chi tiết món ăn (Store Manager)
+- **GET** `/api/menu/store/foods/{food_id}/`
+- **Headers:** `Authorization: Bearer {store_manager_token}`
+- **Response:** Tương tự chi tiết món ăn công khai
+
+#### 2.9.3 Cập nhật món ăn (Store Manager)
+- **PUT** `/api/menu/store/foods/{food_id}/`
+- **Headers:** `Authorization: Bearer {store_manager_token}`
+- **Content-Type:** `multipart/form-data`
+- **Request Body (FormData):**
+```
+title: "Big Mac Updated"
+description: "Mô tả cập nhật"
+price: "95000.00"
+category_id: 1
+availability: "Còn hàng"
+image_file: [File] (optional - chỉ gửi khi thay đổi ảnh)
+```
+- **Response:**
+```json
+{
+  "id": 1,
+  "title": "Big Mac Updated",
+  "description": "Mô tả cập nhật",
+  "price": "95000.00",
+  "image": "assets/new_image_123.jpg",
+  "image_url": "http://localhost:8000/media/assets/new_image_123.jpg",
+  "category": {
+    "id": 1,
+    "cate_name": "Burger"
+  },
+  "store": {
+    "id": 1,
+    "store_name": "McDonald's Nguyễn Huệ"
+  },
+  "availability": "Còn hàng",
+  "sizes": []
+}
+```
+
+#### 2.9.4 Xóa món ăn (Store Manager)
+- **DELETE** `/api/menu/store/foods/{food_id}/`
+- **Headers:** `Authorization: Bearer {store_manager_token}`
+- **Response:**
+```json
+{
+  "message": "Food deleted successfully"
+}
+```
+
+#### 2.9.5 Quản lý sizes của món ăn (Store Manager)
+**Danh sách sizes:**
+- **GET** `/api/menu/store/foods/{food_id}/sizes/`
+- **Headers:** `Authorization: Bearer {store_manager_token}`
+- **Response:** Tương tự 2.8.1
+
+**Thêm size mới:**
+- **POST** `/api/menu/store/foods/{food_id}/sizes/`
+- **Headers:** `Authorization: Bearer {store_manager_token}`
+- **Request Body:**
+```json
+{
+  "size_name": "Size XL",
+  "price": "15000.00"
+}
+```
+- **Response:** Tương tự 2.8.2
+
+**Chi tiết size:**
+- **GET** `/api/menu/store/foods/{food_id}/sizes/{size_id}/`
+- **Headers:** `Authorization: Bearer {store_manager_token}`
+- **Response:** Tương tự 2.8.3
+
+**Cập nhật size:**
+- **PUT** `/api/menu/store/foods/{food_id}/sizes/{size_id}/`
+- **Headers:** `Authorization: Bearer {store_manager_token}`
+- **Request Body:** Tương tự 2.8.4
+- **Response:** Tương tự 2.8.4
+
+**Xóa size:**
+- **DELETE** `/api/menu/store/foods/{food_id}/sizes/{size_id}/`
+- **Headers:** `Authorization: Bearer {store_manager_token}`
+- **Response:** Tương tự 2.8.5
 
 ---
 
@@ -1126,6 +1410,47 @@ FastFood API cung cấp các endpoints để quản lý hệ thống đặt đ�
 ### 7.3 Chi tiết đánh giá
 - **GET** `/api/ratings/{id}/`
 - **Response:** Tương tự item trong danh sách đánh giá
+
+### 7.4 Cập nhật đánh giá
+- **PUT** `/api/ratings/{id}/`
+- **Headers:** `Authorization: Bearer {access_token}`
+- **Mô tả:** Người dùng chỉ có thể cập nhật đánh giá của chính mình
+- **Request Body:**
+```json
+{
+  "rating": 4,
+  "comment": "Cập nhật đánh giá: Ngon nhưng hơi mặn"
+}
+```
+- **Response:**
+```json
+{
+  "id": 1,
+  "user": {
+    "id": 1,
+    "fullname": "John Doe"
+  },
+  "food": {
+    "id": 1,
+    "title": "Big Mac"
+  },
+  "order_id": 1,
+  "rating": 4,
+  "comment": "Cập nhật đánh giá: Ngon nhưng hơi mặn",
+  "created_date": "2025-01-01T12:00:00Z"
+}
+```
+
+### 7.5 Xóa đánh giá
+- **DELETE** `/api/ratings/{id}/`
+- **Headers:** `Authorization: Bearer {access_token}`
+- **Mô tả:** Người dùng chỉ có thể xóa đánh giá của chính mình
+- **Response:**
+```json
+{
+  "message": "Rating deleted successfully"
+}
+```
 
 ---
 

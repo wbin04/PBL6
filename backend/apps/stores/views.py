@@ -72,7 +72,44 @@ class StoreViewSet(viewsets.ModelViewSet):
         orders = Order.objects.filter(
             details__food__store=store
         ).distinct().order_by('-created_date')
-        serializer = OrderSerializer(orders, many=True)
+        serializer = OrderSerializer(orders, many=True, context={'request': request})
+        return Response(serializer.data)
+    
+    @action(detail=True, methods=['patch'], url_path='orders/(?P<order_id>[^/.]+)/status')
+    def update_order_status(self, request, pk=None, order_id=None):
+        """Update order status for a specific order in this store"""
+        store = self.get_object()
+        
+        # Check if order belongs to this store
+        try:
+            order = Order.objects.get(
+                id=order_id,
+                details__food__store=store
+            )
+        except Order.DoesNotExist:
+            return Response({'error': 'Order not found or does not belong to this store'}, 
+                          status=status.HTTP_404_NOT_FOUND)
+        
+        # Validate status
+        new_status = request.data.get('order_status')
+        valid_statuses = [choice[0] for choice in Order.ORDER_STATUS_CHOICES]
+        
+        if new_status not in valid_statuses:
+            return Response({'error': 'Invalid status'}, status=status.HTTP_400_BAD_REQUEST)
+        
+        # Update order status
+        order.order_status = new_status
+        
+        # Add cancel reason if rejecting
+        if new_status == 'Đã huỷ':
+            order.cancel_reason = request.data.get('cancel_reason', 'Bị từ chối bởi cửa hàng')
+            order.cancelled_by_role = 'Cửa hàng'
+            from django.utils import timezone
+            order.cancelled_date = timezone.now()
+        
+        order.save()
+        
+        serializer = OrderSerializer(order, context={'request': request})
         return Response(serializer.data)
     
     @action(detail=True, methods=['get'])

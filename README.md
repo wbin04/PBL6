@@ -28,6 +28,9 @@ pg_dump -U postgres -h localhost -p 5432 -E UTF8 -f "backup.sql" fastfood_db
 # Import database schema từ file SQL
 cd docs
 psql -U postgres -f fastfood_db.sql
+
+# Hoặc
+psql -U postgres -f backup.sql
 ```
 
 ### 2. Cài đặt Backend

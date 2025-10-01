@@ -12,15 +12,15 @@ export const getApiHost = (): string => {
   // 2) Dev (Metro): lấy từ URL của bundle JS (chứa IP máy tính)
   const scriptURL: string | undefined = (NativeModules as any)?.SourceCode?.scriptURL;
   console.log('Script URL:', scriptURL);
-  if (scriptURL) {
-    try {
-      const hostname = new URL(scriptURL).hostname;
-      console.log('Hostname from script URL:', hostname);
-      return hostname; 
-    } catch (error) {
-      console.log('Error parsing script URL:', error);
-    }
-  }
+  // if (scriptURL) {
+  //   try {
+  //     const hostname = new URL(scriptURL).hostname;
+  //     console.log('Hostname from script URL:', hostname);
+  //     return hostname; 
+  //   } catch (error) {
+  //     console.log('Error parsing script URL:', error);
+  //   }
+  // }
 
   // 3) Expo (SDK mới/cũ): lấy từ expoConfig/manifest
   const hostLike =

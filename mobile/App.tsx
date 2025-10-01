@@ -70,7 +70,7 @@ import ShipperProfileScreen from "@/screens/profile";
 import WalletTransactionsScreen from "@/screens/wallet/transactions";
 import NotificationSettingsScreen from "@/screens/notification";
 import ShipperStatsScreen from "@/screens/statistics";
-import TwoFactorAuthScreen from "@/screens/TwoFactorAuth";
+import TwoFactorAuthScreen from "@/screens/withdrawalMethod";
 import WithdrawalMethodsScreen from "@/screens/withdrawalMethod";
 import Sidebar from "@/components/sidebar";
 
@@ -214,12 +214,34 @@ function AppNavigator() {
     return null; // You can add a loading screen component here
   }
 
+  // Determine initial route based on auth state and user role
+  let initialRouteName = "Login";
+  // Ensure role is loaded before determining initial route
+  if (!isAuthenticated || !user?.role) {
+    initialRouteName = "Login";
+  } else {
+    switch (user.role) {
+      case 'Chủ cửa hàng':
+        initialRouteName = "SellerDashboard";
+        break;
+      case 'Quản lý':
+        initialRouteName = "AdminDashboard";
+        break;
+      default:
+        initialRouteName = "MainTabs";
+        break;
+    }
+  }
+
   return (
     <VoucherProvider>
       <ShipperProvider>
         <NavigationContainer>
           <StatusBar style="auto" />
-          <Stack.Navigator screenOptions={{ headerShown: false }}>
+          <Stack.Navigator 
+            screenOptions={{ headerShown: false }} 
+            initialRouteName={initialRouteName}
+          >
             {!isAuthenticated ? (
               // Auth screens - show when not authenticated
               <>
@@ -233,32 +255,42 @@ function AppNavigator() {
             ) : (
               // Main app screens - show when authenticated
               <>
-                {user?.role === 'Quản lý' ? (
-                  // Admin gets admin dashboard as initial screen
+                {/* Admin Dashboard */}
+                {user?.role === 'Quản lý' && (
                   <Stack.Screen 
                     name="AdminDashboard" 
                     component={require('./src/screens/AdminDashboardScreen').default}
                     options={{ gestureEnabled: false }}
                   />
-                ) : (
-                  // Customer and Shipper get MainTabs as initial screen
+                )}
+                
+                {/* Seller Dashboard */}
+                {user?.role === 'Chủ cửa hàng' && (
                   <Stack.Screen 
-                    name="MainTabs" 
-                    component={MainTabs}
+                    name="SellerDashboard" 
+                    component={require('./src/screens/seller/DashboardScreen').default}
                     options={{ gestureEnabled: false }}
                   />
                 )}
                 
-                {/* MainTabs available to all authenticated users (including admin for shopping) */}
-                {user?.role === 'Quản lý' && (
-                  <Stack.Screen 
-                    name="MainTabs" 
-                    component={MainTabs}
-                    options={{ gestureEnabled: false }}
-                  />
-                )}
+                {/* MainTabs - Always available for all authenticated users */}
+                <Stack.Screen 
+                  name="MainTabs" 
+                  component={MainTabs}
+                  options={{ gestureEnabled: false }}
+                />
                 
-                {/* Additional screens available to authenticated users */}
+                {/* Seller screens */}
+                <Stack.Screen name="SellerProfileScreen" component={require('./src/screens/seller/SellerProfileScreen').default} />
+                <Stack.Screen name="SellerManageMenuScreen" component={require('./src/screens/seller/ManageMenuScreen').default} />
+                <Stack.Screen name="AddFoodScreen" component={require('./src/screens/seller/AddFoodScreen').default} />
+                <Stack.Screen name="EditFoodScreen" component={require('./src/screens/seller/EditFoodScreen').default} />
+                <Stack.Screen name="FoodDetailScreen" component={require('./src/screens/seller/FoodDetailScreen').default} />
+                <Stack.Screen name="SellerProfileEditScreen" component={require('./src/screens/seller/SellerProfileEditScreen').default} />
+                <Stack.Screen name="SellerVoucherEditScreen" component={require('./src/screens/seller/VoucherEditScreen').default} />
+                <Stack.Screen name="SellerVoucherManagementScreen" component={require('./src/screens/seller/VoucherManagementScreen').default} />
+                
+                {/* Common screens available to all authenticated users */}
                 <Stack.Screen name="UpdateCustomerScreen" component={require('./src/screens/UpdateCustomerScreen').default} />
                 <Stack.Screen name="StoreDetailScreen" component={require('./src/screens/StoreDetailScreen').StoreDetailScreen} />
                 <Stack.Screen name="StoreDetailScreenV2" component={require('./src/screens/StoreDetailScreenV2').StoreDetailScreenV2} />

@@ -10,8 +10,7 @@ import {
 } from 'react-native';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { useNavigation, useRoute } from '@react-navigation/native';
-import { useVoucher } from '../contexts/VoucherContext';
-// eslint-disable-next-line @typescript-eslint/no-var-requires
+import { useVoucher } from '../../contexts/VoucherContext';
 const { v4: uuidv4 } = require('uuid');
 
 interface Voucher {
@@ -57,7 +56,7 @@ const VoucherEditScreen: React.FC = () => {
   const navigation = useNavigation();
   const route = useRoute();
   const voucher: Voucher | null = (route.params as any)?.voucher || null;
-  const { addVoucher } = useVoucher();
+  const { addVoucher, editVoucher } = useVoucher();
 
   const [form, setForm] = useState<Omit<Voucher, 'id' | 'daSuDung' | 'phanTram'>>({
     ten: voucher?.ten || '',
@@ -77,17 +76,25 @@ const VoucherEditScreen: React.FC = () => {
   const [tempDate, setTempDate] = useState<Date | null>(null);
 
   const handleSave = () => {
+    let newId = voucher ? voucher.id : uuidv4();
+    // Nếu đang thêm mới, đảm bảo id chưa tồn tại
     const updatedVoucher: Voucher = {
       ...form,
-      id: voucher?.id || uuidv4(),
+      id: newId,
       daSuDung: voucher?.daSuDung || 0,
       phanTram: voucher?.phanTram || 0,
     };
-    addVoucher(updatedVoucher);
+    if (voucher) {
+      editVoucher(updatedVoucher);
+    } else {
+      addVoucher(updatedVoucher);
+    }
     navigation.goBack();
   };
 
-  const handleCancel = () => navigation.goBack();
+  const handleCancel = () => {
+    navigation.goBack();
+  };
 
   const openDatePicker = (field: 'batDau' | 'ketThuc') => {
     setTempDate(form[field] ? parseDate(form[field]) || new Date() : new Date());
@@ -97,7 +104,7 @@ const VoucherEditScreen: React.FC = () => {
   return (
     <View style={styles.container}>
       <ScrollView showsVerticalScrollIndicator={false}>
-        <Text style={styles.title}>{voucher ? 'Sửa khuyến mãi' : 'Thêm khuyến mãi'}</Text>
+        <Text style={styles.title}>{voucher ? 'Sửa khuyến mãi test' : 'Thêm khuyến mãi'}</Text>
 
         {/* Form fields */}
         {[
@@ -216,7 +223,7 @@ const VoucherEditScreen: React.FC = () => {
             <Text style={{ color: '#fff', fontWeight: 'bold', fontSize: 16 }}>Lưu</Text>
           </TouchableOpacity>
           <TouchableOpacity style={styles.cancelBtn} onPress={handleCancel}>
-            <Text style={{ color: '#fff', fontSize: 16, fontWeight: 'bold' }}>Hủy</Text>
+            <Text style={{ color: '#fff', fontSize: 16, fontWeight: 'bold' }}>Hủy test</Text>
           </TouchableOpacity>
         </View>
       </ScrollView>

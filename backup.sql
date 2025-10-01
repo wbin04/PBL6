@@ -1098,9 +1098,9 @@ COPY public.auth_permission (id, name, content_type_id, codename) FROM stdin;
 
 COPY public.cart (id, total_money, user_id) FROM stdin;
 1	0.000	5
-3	0.000	3
 2	0.000	2
 4	0.000	8
+3	0.000	3
 \.
 
 
@@ -1242,9 +1242,7 @@ COPY public.food (id, title, description, price, image, cate_id, availability, s
 2	Tôm burger	1 burger	40000.00	assets/burger.png	2	Còn hàng	1
 4	Khoai tây chiên	1 khoai nhỏ	25000.00	assets/french-fries.png	4	Còn hàng	1
 5	Súp bí đỏ	1 chén súp	20000.00	assets/soup.png	5	Còn hàng	1
-6	Kem chocolate	1 kem ly	10000.00	assets/chocolate-cream.png	6	Còn hàng	1
 7	Bánh xoài đào	1 bánh	10000.00	assets/peach-mango-pie.png	6	Còn hàng	1
-8	Pepsi	1 ly (vừa)	10000.00	assets/pepsi.png	7	Còn hàng	1
 9	Bánh xoài cam	1 cái	10000.00	assets/peach-mango-pie.png	6	Còn hàng	1
 10	Bánh xoài dâu	1 cái	10000.00	assets/mango-peach-cake.png	6	Còn hàng	1
 11	Bánh khoai môn	1 bánh	13000.00	assets/banh-khoai-mon.jpg	6	Còn hàng	1
@@ -1271,10 +1269,12 @@ COPY public.food (id, title, description, price, image, cate_id, availability, s
 32	Coke	Coca Cola 330ml	15000.00	assets/coke.jpg	7	Còn hàng	5
 1	Gà vui vẻ	Happy chicken	35000.00	assets/chicken.png	1	Còn hàng	1
 3	Mỳ ý	1 mỳ ý	45000.00	assets/spaghetti.png	3	Còn hàng	1
+6	Kem chocolate	1 kem ly	10000.00	assets/chocolate-cream.png	6	Còn hàng	1
+8	Pepsi	1 ly (vừa)	10000.00	assets/pepsi.png	7	Còn hàng	1
+48	Cá viên	Cá ciên	20000.00	assets/ef6064cd613844c8a172e7e3192e7d22.png	1	Còn hàng	1
 33	5Cá viên thêm	Thêm cá viên chiên giòn	18000.00	assets/fish-balls.png	8	Còn hàng	5
 34	1Khoai tây thêm	Thêm khoai tây chiên giòn tan	15000.00	assets/french-fries.png	8	Còn hàng	1
-35	1Xúc xích thêm	Thêm xúc xích nóng hổi	20000.00	assets/hot-dog.png	8	Còn hàng	1
-36	1Cá viên thêm	Thêm cá viên chiên giòn	18000.00	assets/fish-balls.png	8	Còn hàng	1
+36	1Cá viên thêm	Thêm cá viên chiên giòn	18000.00	assets/14aca98c7299427e89987cf541951de4.png	8	Còn hàng	1
 37	2Khoai tây thêm	Thêm khoai tây chiên giòn tan	15000.00	assets/french-fries.png	8	Còn hàng	2
 38	2Xúc xích thêm	Thêm xúc xích nóng hổi	20000.00	assets/hot-dog.png	8	Còn hàng	2
 39	2Cá viên thêm	Thêm cá viên chiên giòn	18000.00	assets/fish-balls.png	8	Còn hàng	2
@@ -1286,6 +1286,7 @@ COPY public.food (id, title, description, price, image, cate_id, availability, s
 45	4Cá viên thêm	Thêm cá viên chiên giòn	18000.00	assets/fish-balls.png	8	Còn hàng	4
 46	5Khoai tây thêm	Thêm khoai tây chiên giòn tan	15000.00	assets/french-fries.png	8	Còn hàng	5
 47	5Xúc xích thêm	Thêm xúc xích nóng hổi	20000.00	assets/hot-dog.png	8	Còn hàng	5
+35	1Xúc xích thêm	Thêm xúc xích nóng hổi	20000.00	assets/hot-dog.png	8	Còn hàng	1
 \.
 
 
@@ -1300,6 +1301,9 @@ COPY public.food_size (id, size_name, price, food_id) FROM stdin;
 14	L	5000.00	8
 15	XL	10000.00	32
 16	M	0.00	32
+17	Xxl	15000.00	8
+18	M	0.00	48
+19	L	15000.00	48
 \.
 
 
@@ -1367,6 +1371,9 @@ COPY public.order_detail (order_id, food_id, quantity, food_note, id, food_optio
 56	45	1	Topping for 4Xúc xích thêm	49	\N	18000.00	\N
 57	31	1	\N	50	\N	45000.00	\N
 58	19	1	\N	51	\N	55000.00	\N
+59	8	1	\N	52	14	10000.00	5000.00
+59	8	1	\N	53	11	10000.00	0.00
+59	36	1	Topping for Pepsi	54	\N	18000.00	\N
 \.
 
 
@@ -1389,10 +1396,10 @@ COPY public.order_promo (id, order_id, promo_id, applied_amount, note, created_a
 --
 
 COPY public.orders (id, created_date, total_money, user_id, order_status, note, payment_method, receiver_name, ship_address, phone_number, promo_id, shipper_id, cancel_reason, shipping_fee, group_id, store_id, delivery_status, total_before_discount, total_discount, total_after_discount, cancelled_by_role, cancelled_date) FROM stdin;
+31	2025-09-18 18:23:11.845837+07	41000.000	2	Đã lấy hàng		cash	Bin	Liên Chiểu, Đà Nẵng	1231231233	\N	\N	\N	15000	31	1	Chờ xác nhận	41000.00	0.00	41000.00	\N	\N
 28	2025-08-31 18:46:35.051031+07	95314.000	2	Chờ xác nhận	xin hộp giấy	COD	Bin	Liên Chiểu, Đà Nẵng	1231231233	\N	\N	\N	15000	27	1	Chờ xác nhận	95314.00	0.00	95314.00	\N	\N
 29	2025-08-31 19:16:42.917914+07	124200.000	2	Chờ xác nhận	xin hộp giấy	COD	Bin	Liên Chiểu, Đà Nẵng	1231231233	11	\N	\N	15000	29	2	Chờ xác nhận	187200.00	51660.00	135540.00	\N	\N
 30	2025-08-31 19:16:42.938241+07	129800.000	2	Chờ xác nhận	xin hộp giấy	COD	Bin	Liên Chiểu, Đà Nẵng	1231231233	\N	\N	\N	15000	29	1	Chờ xác nhận	129800.00	0.00	129800.00	\N	\N
-31	2025-09-18 18:23:11.845837+07	41000.000	2	Chờ xác nhận		cash	Bin	Liên Chiểu, Đà Nẵng	1231231233	\N	\N	\N	15000	31	1	Chờ xác nhận	41000.00	0.00	41000.00	\N	\N
 32	2025-09-18 18:23:11.86439+07	410000.000	2	Chờ xác nhận		cash	Bin	Liên Chiểu, Đà Nẵng	1231231233	\N	\N	\N	15000	31	2	Chờ xác nhận	410000.00	0.00	410000.00	\N	\N
 33	2025-09-18 18:23:11.869255+07	116000.000	2	Chờ xác nhận		cash	Bin	Liên Chiểu, Đà Nẵng	1231231233	\N	\N	\N	15000	31	5	Chờ xác nhận	116000.00	0.00	116000.00	\N	\N
 34	2025-09-18 18:44:12.533634+07	123000.000	2	Chờ xác nhận		cash	Bin	Liên Chiểu, Đà Nẵng	1231231233	\N	\N	\N	15000	34	5	Chờ xác nhận	123000.00	0.00	123000.00	\N	\N
@@ -1421,6 +1428,7 @@ COPY public.orders (id, created_date, total_money, user_id, order_status, note, 
 56	2025-09-21 20:30:15.986044+07	88000.000	8	Đã huỷ		cash	Shipper1	Quận Tân Bình, TP.HCM	0906789012	\N	\N	Không muốn nhận hàng nữa	15000	56	4	Chờ xác nhận	88000.00	0.00	88000.00	Khách hàng	2025-09-21 20:58:47.275771+07
 27	2025-08-31 18:46:35.032024+07	59186.000	2	Đã huỷ	xin hộp giấy	COD	Bin	Liên Chiểu, Đà Nẵng	1231231233	12	\N	Test cancellation by store	15000	27	2	Chờ xác nhận	114436.00	34915.40	79520.60	Cửa hàng	2025-09-19 16:41:17.74935+07
 53	2025-09-21 14:21:24.308769+07	30000.000	2	Đã huỷ		cash	Bin	Liên Chiểu, Đà Nẵng	1231231233	\N	1	\N	15000	53	5	Đã xác nhận	30000.00	0.00	30000.00	\N	\N
+59	2025-09-29 18:00:09.113486+07	58000.000	3	Chờ xác nhận		cash	KFC Vietnam	Quận 1, TP.HCM	0901234567	\N	\N	\N	15000	59	1	Chờ xác nhận	58000.00	0.00	58000.00	\N	\N
 \.
 
 
@@ -1591,28 +1599,28 @@ SELECT pg_catalog.setval('public.django_migrations_id_seq', 134, true);
 -- Name: food_id_seq; Type: SEQUENCE SET; Schema: public; Owner: postgres
 --
 
-SELECT pg_catalog.setval('public.food_id_seq', 47, true);
+SELECT pg_catalog.setval('public.food_id_seq', 48, true);
 
 
 --
 -- Name: food_size_id_seq; Type: SEQUENCE SET; Schema: public; Owner: postgres
 --
 
-SELECT pg_catalog.setval('public.food_size_id_seq', 16, true);
+SELECT pg_catalog.setval('public.food_size_id_seq', 19, true);
 
 
 --
 -- Name: item_id_seq; Type: SEQUENCE SET; Schema: public; Owner: postgres
 --
 
-SELECT pg_catalog.setval('public.item_id_seq', 51, true);
+SELECT pg_catalog.setval('public.item_id_seq', 54, true);
 
 
 --
 -- Name: order_detail_id_seq; Type: SEQUENCE SET; Schema: public; Owner: postgres
 --
 
-SELECT pg_catalog.setval('public.order_detail_id_seq', 51, true);
+SELECT pg_catalog.setval('public.order_detail_id_seq', 54, true);
 
 
 --
@@ -1626,7 +1634,7 @@ SELECT pg_catalog.setval('public.order_promo_id_seq', 6, true);
 -- Name: orders_id_seq; Type: SEQUENCE SET; Schema: public; Owner: postgres
 --
 
-SELECT pg_catalog.setval('public.orders_id_seq', 58, true);
+SELECT pg_catalog.setval('public.orders_id_seq', 59, true);
 
 
 --

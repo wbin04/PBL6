@@ -259,6 +259,31 @@ export default function Sidebar({ isOpen, onClose, currentRole, onSwitchRole }: 
               </TouchableOpacity>
             )}
 
+            {/* Store Management Dashboard - Only show if user is store manager */}
+            {user?.role === 'Chủ cửa hàng' && (
+              <TouchableOpacity
+                style={[styles.card, styles.cardInactive]}
+                activeOpacity={0.9}
+                onPress={() => {
+                  onClose();
+                  setTimeout(() => {
+                    navigation.reset({ 
+                      index: 0, 
+                      routes: [{ name: "SellerDashboard" }] 
+                    });
+                  }, 100);
+                }}
+              >
+                <View style={styles.cardIconWrap}>
+                  <Store size={20} color={APP_ORANGE} />
+                </View>
+                <View style={styles.cardTextWrap}>
+                  <Text style={styles.cardTitle}>Quản lý cửa hàng</Text>
+                  <Text style={styles.cardDesc}>Chuyển về trang quản lý cửa hàng</Text>
+                </View>
+              </TouchableOpacity>
+            )}
+
             {/* Registration Options - Only show if user is customer */}
             {user?.role === 'Khách hàng' && (
               <>
