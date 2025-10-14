@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Quản lý tài khoản - FastFood App</title>
+    <link rel="stylesheet" href="../assets/css/style.css">
+</head>
+<body>
+    <div class="auth-container">
+        <div class="auth-card">
+            <h2 class="text-center" style="margin-bottom: 2rem;">Quản lý tài khoản</h2>
+            <form id="account-form">
+                <div class="form-group">
+                    <label for="fullname">Họ tên</label>
+                    <input type="text" id="fullname" name="fullname" required>
+                </div>
+                <div class="form-group">
+                    <label for="email">Email</label>
+                    <input type="email" id="email" name="email" disabled>
+                </div>
+                <div class="form-group">
+                    <label for="phone_number">Số điện thoại</label>
+                    <input type="text" id="phone_number" name="phone_number">
+                </div>
+                <div class="form-group">
+                    <label for="address">Địa chỉ</label>
+                    <textarea id="address" name="address"></textarea>
+                </div>
+                <button type="submit" class="btn btn-primary" style="width: 100%; margin-bottom: 1rem;">Lưu thay đổi</button>
+            </form>
+            <p class="text-center">
+                <a href="../index.html">← Về trang chủ</a>
+            </p>
+        </div>
+    </div>
+
+    <script src="../assets/js/api.js"></script>
+    <script src="../assets/js/auth.js"></script>
+    <script>
+        // Ensure user is logged in
+        if (!isAuthenticated()) window.location.href = 'login.html';
+        document.addEventListener('DOMContentLoaded', async () => {
+            try {
+                const user = await API.get('/auth/profile/');
+                document.getElementById('fullname').value = user.fullname || '';
+                document.getElementById('email').value = user.email;
+                document.getElementById('phone_number').value = user.phone_number || '';
+                document.getElementById('address').value = user.address || '';
+            } catch (err) {
+                alert('Không thể tải thông tin người dùng: ' + err.message);
+                window.location.href = 'login.html';
+            }
+        });
+
+        document.getElementById('account-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const data = {
+                fullname: document.getElementById('fullname').value,
+                phone_number: document.getElementById('phone_number').value,
+                address: document.getElementById('address').value
+            };
+            try {
+                const updated = await API.put('/auth/profile/update/', data);
+                // Update stored user info
+                const user = getCurrentUser();
+                user.fullname = updated.fullname;
+                user.phone_number = updated.phone_number;
+                user.address = updated.address;
+                localStorage.setItem('user', JSON.stringify(user));
+                alert('Cập nhật thông tin thành công');
+                // After updating, go back to homepage
+                window.location.href = '../index.html';
+            } catch (err) {
+                alert('Lỗi khi cập nhật: ' + err.message);
+            }
+        });
+    </script>
+</body>
+</html>

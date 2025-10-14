@@ -1,0 +1,363 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Món ăn - FastFood App</title>
+    <link rel="stylesheet" href="../assets/css/style.css">
+</head>
+<body>
+    <header class="header">
+        <div class="container">
+            <a href="../index.html" class="logo">🍔 FastFood</a>
+            
+            <nav class="nav">
+                <a href="../index.html">Trang chủ</a>
+                <a href="categories.html">Thực đơn</a>
+                <a href="../promotions/promotions.html">Khuyến mãi</a>
+                
+                <div id="guest-menu" class="hidden">
+                    <a href="../auth/login.html">Đăng nhập</a>
+                    <a href="../auth/register.html">Đăng ký</a>
+                </div>
+                
+                <div id="user-menu" class="hidden">
+                    <a href="../cart/cart.html" class="cart-link">
+                        🛒 Giỏ hàng
+                        <span id="cart-count" class="cart-count">0</span>
+                    </a>
+                    <a href="../orders/orders.html">Đơn hàng</a>
+                    <a href="../promotions/promotions.html">Khuyến mãi</a>
+                    <span>Xin chào, <span id="user-name"></span></span>
+                    <a href="#" onclick="logout()">Đăng xuất</a>
+                </div>
+            </nav>
+        </div>
+    </header>
+
+    <main class="main">
+        <div class="container">
+            <div style="margin: 2rem 0;">
+                <a href="categories.html">← Quay lại danh mục</a>
+                <h2 style="margin: 1rem 0;">Món ăn</h2>
+            </div>
+            
+            <!-- Search & Filter -->
+            <div class="card" style="margin-bottom: 2rem;">
+                <div style="display: flex; gap: 1rem; flex-wrap: wrap; align-items: center;">
+                    <input type="text" id="search-input" placeholder="Tìm kiếm món ăn..." 
+                           style="flex: 1; min-width: 200px;" onkeyup="handleSearch(event)">
+                    <select id="category-filter" onchange="filterByCategory()">
+                        <option value="">Tất cả danh mục</option>
+                    </select>
+                    <select id="store-filter" onchange="filterByStore()">
+                        <option value="">Tất cả cửa hàng</option>
+                    </select>
+                    <select id="sort-filter" onchange="sortFoods()">
+                        <option value="created_date">Mới nhất</option>
+                        <option value="price_asc">Giá tăng dần</option>
+                        <option value="price_desc">Giá giảm dần</option>
+                        <option value="name">Tên A-Z</option>
+                    </select>
+                    <button class="btn btn-primary" onclick="searchFoods()">Tìm kiếm</button>
+                </div>
+            </div>
+            
+            <div id="foods-container">
+                <div id="foods-grid" class="grid foods-grid">
+                    <!-- Foods will be loaded here -->
+                </div>
+            </div>
+            
+            <div id="pagination" class="pagination">
+                <!-- Pagination will be loaded here -->
+            </div>
+        </div>
+    </main>
+
+    <script src="../assets/js/api.js"></script>
+    <script src="../assets/js/auth.js"></script>
+    <script src="../assets/js/cart.js"></script>
+    <script src="../assets/js/app.js"></script>
+    <!-- Ratings Modal -->
+    <div id="rating-modal-overlay" class="modal-overlay hidden">
+        <div class="modal">
+            <button id="rating-modal-close" class="modal-close">&times;</button>
+            <h3>Đánh giá</h3>
+            <div id="rating-modal-content" class="rating-details"></div>
+        </div>
+    </div>
+    <script>
+        let currentPage = 1;
+        let currentCategory = '';
+        let currentStore = '';
+        let currentSearch = '';
+        let currentSort = 'created_date';
+
+        async function loadCategories() {
+            try {
+                const categories_response = await API.get('/menu/categories/');
+                const categories = categories_response.results;
+                const select = document.getElementById('category-filter');
+                
+                // Clear existing options (except "Tất cả danh mục")
+                while (select.children.length > 1) {
+                    select.removeChild(select.lastChild);
+                }
+                
+                categories.forEach(category => {
+                    const option = document.createElement('option');
+                    option.value = category.id;
+                    option.textContent = category.cate_name;
+                    select.appendChild(option);
+                });
+                
+                // Check URL params for category and set it
+                const urlParams = new URLSearchParams(window.location.search);
+                const categoryId = urlParams.get('category');
+                if (categoryId) {
+                    select.value = categoryId;
+                    currentCategory = categoryId;
+                    
+                    // Update page title to show category name
+                    const selectedCategory = categories.find(cat => cat.id == categoryId);
+                    if (selectedCategory) {
+                        document.querySelector('h2').textContent = `Món ăn - ${selectedCategory.cate_name}`;
+                    }
+                }
+            } catch (error) {
+                console.error('Error loading categories:', error);
+            }
+        }
+
+        async function loadStores() {
+            try {
+                const stores_response = await API.get('/menu/stores/');
+                const stores = stores_response.results;
+                const select = document.getElementById('store-filter');
+                
+                // Clear existing options (except "Tất cả cửa hàng")
+                while (select.children.length > 1) {
+                    select.removeChild(select.lastChild);
+                }
+                
+                // Filter out system store (ID = 0) from frontend display
+                const filteredStores = stores.filter(store => store.id !== 0);
+                
+                filteredStores.forEach(store => {
+                    const option = document.createElement('option');
+                    option.value = store.id;
+                    option.textContent = store.store_name;
+                    select.appendChild(option);
+                });
+                
+                // Check URL params for store and set it (ignore store_id = 0)
+                const urlParams = new URLSearchParams(window.location.search);
+                const storeId = urlParams.get('store');
+                if (storeId && storeId !== '0') {
+                    select.value = storeId;
+                    currentStore = storeId;
+                }
+            } catch (error) {
+                console.error('Error loading stores:', error);
+            }
+        }
+
+        async function loadFoods(page = 1) {
+            try {
+                showLoading('foods-container');
+                
+                const params = new URLSearchParams();
+                if (currentCategory) params.append('category', currentCategory);
+                if (currentStore) params.append('store', currentStore);
+                if (currentSearch) params.append('search', currentSearch);
+                if (currentSort) params.append('sort', currentSort);
+                params.append('page', page.toString());
+
+                const response = await API.get(`/menu/items/?${params.toString()}`);
+                
+                hideLoading('foods-container');
+                displayFoods(response.results);
+                updatePagination(response.count, page);
+                
+            } catch (error) {
+                console.error('Error loading foods:', error);
+                const container = document.getElementById('foods-container');
+                if (container) {
+                    container.innerHTML = `
+                        <div class="empty-state">
+                            <h3>Không thể tải món ăn</h3>
+                            <p>Vui lòng thử lại sau. Lỗi: ${error.message}</p>
+                        </div>
+                    `;
+                }
+            }
+        }
+
+        function displayFoods(foods) {
+            const container = document.getElementById('foods-grid');
+            
+            if (!container) {
+                console.error('foods-grid element not found');
+                return;
+            }
+            
+            if (!foods || foods.length === 0) {
+                container.innerHTML = `
+                    <div class="empty-state">
+                        <h3>Không tìm thấy món ăn nào</h3>
+                        <p>Thử thay đổi bộ lọc hoặc từ khóa tìm kiếm</p>
+                    </div>
+                `;
+                return;
+            }
+
+            container.innerHTML = foods.map(food => {
+                const isAvailable = food.availability === 'Còn hàng';
+                const availabilityClass = isAvailable ? 'available' : 'unavailable';
+
+                return `
+                    <div class="food-card" data-food-id="${food.id}">
+                        <img src="${getImageUrl(food.image)}" alt="${food.title}">
+                        <div class="food-info">
+                            <h3>${food.title}</h3>
+                            <p class="description">${food.description}</p>
+                            ${food.store_name ? `<p class="store-name">🏪 ${food.store_name}</p>` : ''}
+                            <div class="food-rating clickable" onclick="toggleRatings(${food.id})">
+                                <span class="stars">${'★'.repeat(Math.floor(food.average_rating || 0))}${'☆'.repeat(5 - Math.floor(food.average_rating || 0))}</span>
+                                <span>(${food.rating_count} đánh giá)</span>
+                            </div>
+                            <div class="rating-details" id="ratings-${food.id}" style="display:none;"></div>
+                            <div class="availability-status ${availabilityClass}">${food.availability}</div>
+                            <div class="price">${formatPrice(food.price)}</div>
+                            <button class="btn btn-primary" onclick="addToCart(${food.id}, '${food.title}', ${food.price})" ${!isAvailable ? 'disabled' : ''}>
+                                ${isAvailable ? 'Thêm vào giỏ' : 'Tạm hết hàng'}
+                            </button>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        function handleSearch(event) {
+            if (event.key === 'Enter') {
+                searchFoods();
+            }
+        }
+
+        function searchFoods() {
+            currentSearch = document.getElementById('search-input').value;
+            currentPage = 1;
+            loadFoods(currentPage);
+        }
+
+        function filterByCategory() {
+            currentCategory = document.getElementById('category-filter').value;
+            currentPage = 1;
+            // Update URL with selected category and reset page
+            const params = new URLSearchParams(window.location.search);
+            if (currentCategory) {
+                params.set('category', currentCategory);
+            } else {
+                params.delete('category');
+            }
+            params.set('page', currentPage);
+            window.history.replaceState(null, '', `${window.location.pathname}?${params.toString()}`);
+            loadFoods(currentPage);
+        }
+
+        function filterByStore() {
+            currentStore = document.getElementById('store-filter').value;
+            currentPage = 1;
+            // Update URL with selected store and reset page
+            const params = new URLSearchParams(window.location.search);
+            if (currentStore) {
+                params.set('store', currentStore);
+            } else {
+                params.delete('store');
+            }
+            params.set('page', currentPage);
+            window.history.replaceState(null, '', `${window.location.pathname}?${params.toString()}`);
+            loadFoods(currentPage);
+        }
+
+        function sortFoods() {
+            currentSort = document.getElementById('sort-filter').value;
+            currentPage = 1;
+            loadFoods(currentPage);
+        }
+
+        function updatePagination(totalCount, currentPageNum) {
+            const itemsPerPage = 12;
+            const totalPages = Math.ceil(totalCount / itemsPerPage);
+            const pagination = document.getElementById('pagination');
+            
+            if (totalPages <= 1) {
+                pagination.innerHTML = '';
+                return;
+            }
+
+            let paginationHTML = '';
+            
+            if (currentPageNum > 1) {
+                paginationHTML += `<button onclick="loadFoods(${currentPageNum - 1})">Trước</button>`;
+            }
+            
+            for (let i = 1; i <= totalPages; i++) {
+                if (i === currentPageNum) {
+                    paginationHTML += `<button class="active">${i}</button>`;
+                } else {
+                    paginationHTML += `<button onclick="loadFoods(${i})">${i}</button>`;
+                }
+            }
+            
+            if (currentPageNum < totalPages) {
+                paginationHTML += `<button onclick="loadFoods(${currentPageNum + 1})">Sau</button>`;
+            }
+            
+            pagination.innerHTML = paginationHTML;
+            currentPage = currentPageNum;
+        }
+
+        function formatPrice(price) {
+            return new Intl.NumberFormat('vi-VN', {
+                style: 'currency',
+                currency: 'VND'
+            }).format(price);
+        }
+
+        function showLoading(elementId) {
+            const element = document.getElementById(elementId);
+            if (element) {
+                // Don't replace innerHTML, just add loading indicator
+                let loadingDiv = element.querySelector('.loading');
+                if (!loadingDiv) {
+                    loadingDiv = document.createElement('div');
+                    loadingDiv.className = 'loading';
+                    loadingDiv.textContent = 'Đang tải...';
+                    element.appendChild(loadingDiv);
+                }
+            }
+        }
+
+        function hideLoading(elementId) {
+            const element = document.getElementById(elementId);
+            if (element) {
+                const loading = element.querySelector('.loading');
+                if (loading) {
+                    loading.remove();
+                }
+            }
+        }
+
+        // Load data when page loads
+        document.addEventListener('DOMContentLoaded', async () => {
+            updateAuthUI();
+            await loadCategories(); // Wait for categories to load first
+            await loadStores(); // Wait for stores to load
+            loadFoods(); // Then load foods with correct filters
+            updateCartCount();
+        });
+    </script>
+</body>
+</html>

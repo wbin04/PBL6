@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Đăng ký - FastFood App</title>
+    <link rel="stylesheet" href="../assets/css/style.css">
+</head>
+<body>
+    <div class="auth-container">
+        <div class="auth-card">
+            <h2 class="text-center" style="margin-bottom: 2rem;">Đăng ký</h2>
+            
+            <form id="register-form">
+                <div class="form-group">
+                    <label for="fullname">Họ và tên</label>
+                    <input type="text" id="fullname" name="fullname" value="Bin" required>
+                </div>
+                
+                <div class="form-group">
+                    <label for="email">Email</label>
+                    <input type="email" id="email" name="email" value="bin@gmail.com" required>
+                </div>
+                
+                <div class="form-group">
+                    <label for="username">Tên đăng nhập</label>
+                    <input type="text" id="username" name="username" value="bin" required>
+                </div>
+                
+                <div class="form-group">
+                    <label for="phone_number">Số điện thoại</label>
+                    <input type="tel" id="phone_number" name="phone_number" value="123123123" required>
+                </div>
+                
+                <div class="form-group">
+                    <label for="address">Địa chỉ</label>
+                    <textarea id="address" name="address" rows="3" required placeholder="Nhập địa chỉ">Đà Nẵng</textarea>
+                </div>
+                
+                <div class="form-group">
+                    <label for="password">Mật khẩu</label>
+                    <input type="password" id="password" name="password" value="123" required>
+                </div>
+                
+                <div class="form-group">
+                    <label for="password_confirm">Xác nhận mật khẩu</label>
+                    <input type="password" id="password_confirm" name="password_confirm" value="123" required>
+                </div>
+                
+                <button type="submit" class="btn btn-primary" style="width: 100%; margin-bottom: 1rem;">
+                    Đăng ký
+                </button>
+            </form>
+            
+            <p class="text-center">
+                Đã có tài khoản? <a href="login.html">Đăng nhập ngay</a>
+            </p>
+            
+            <p class="text-center" style="margin-top: 1rem;">
+                <a href="../index.html">← Về trang chủ</a>
+            </p>
+        </div>
+    </div>
+
+    <script src="../assets/js/api.js"></script>
+    <script src="../assets/js/auth.js"></script>
+    <script>
+        document.getElementById('register-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const formData = new FormData(e.target);
+            const registerData = {
+                fullname: formData.get('fullname'),
+                email: formData.get('email'),
+                username: formData.get('username'),
+                phone_number: formData.get('phone_number'),
+                address: formData.get('address'),
+                password: formData.get('password'),
+                password_confirm: formData.get('password_confirm')
+            };
+            
+            if (registerData.password !== registerData.password_confirm) {
+                alert('Mật khẩu xác nhận không khớp!');
+                return;
+            }
+            
+            try {
+                const response = await API.post('/auth/register/', registerData, { skipAuth: true });
+                
+                // Store tokens and user info
+                localStorage.setItem('access_token', response.access);
+                localStorage.setItem('refresh_token', response.refresh);
+                localStorage.setItem('user', JSON.stringify(response.user));
+                
+                alert('Đăng ký thành công!');
+                window.location.href = '../index.html';
+            } catch (error) {
+                alert('Lỗi đăng ký: ' + error.message);
+            }
+        });
+        
+        // Redirect if already logged in
+        if (isAuthenticated()) {
+            window.location.href = '../index.html';
+        }
+    </script>
+</body>
+</html>

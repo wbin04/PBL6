@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Đăng nhập - FastFood App</title>
+    <link rel="stylesheet" href="../assets/css/style.css">
+</head>
+<body>
+    <div class="auth-container">
+        <div class="auth-card">
+            <h2 class="text-center" style="margin-bottom: 2rem;">Đăng nhập</h2>
+            
+            <form id="login-form">
+                <div class="form-group">
+                    <label for="email">Email / tên đăng nhập / số điện thoại</label>
+                    <input type="text" id="email" name="email" placeholder="admin / bin" value="bin" required>
+                </div>
+                
+                <div class="form-group">
+                    <label for="password">Mật khẩu</label>
+                    <input type="password" id="password" name="password" value="123" required>
+                </div>
+                
+                <button type="submit" class="btn btn-primary" style="width: 100%; margin-bottom: 1rem;">
+                    Đăng nhập
+                </button>
+            </form>
+            
+            <p class="text-center" style="margin-top: 1rem;">
+                <a href="forgot-password.html">Quên mật khẩu?</a>
+            </p>
+            <p class="text-center">
+                Chưa có tài khoản? <a href="register.html">Đăng ký ngay</a>
+            </p>
+            
+            <p class="text-center" style="margin-top: 1rem;">
+                <a href="../index.html">← Về trang chủ</a>
+            </p>
+        </div>
+    </div>
+
+    <script src="../assets/js/api.js"></script>
+    <script src="../assets/js/auth.js"></script>
+    <script>
+        document.getElementById('login-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const formData = new FormData(e.target);
+            const loginData = {
+                email: formData.get('email'),
+                password: formData.get('password')
+            };
+            
+            try {
+                const response = await API.post('/auth/login/', loginData, { skipAuth: true });
+                
+                // Store tokens and user info
+                localStorage.setItem('access_token', response.access);
+                localStorage.setItem('refresh_token', response.refresh);
+                localStorage.setItem('user', JSON.stringify(response.user));
+                // Redirect based on role
+                alert('Đăng nhập thành công!');
+                const userRole = (response.user.role || '').toLowerCase();
+                if (userRole.includes('quản lý')) {
+                    window.location.href = '../admin/admin.html';
+                } else if (userRole.includes('cửa hàng')) {
+                    window.location.href = '../store-manager/dashboard.html';
+                } else {
+                    window.location.href = '../index.html';
+                }
+            } catch (error) {
+                alert('Lỗi đăng nhập: ' + error.message);
+            }
+        });
+        
+        // Redirect if already logged in
+        if (isAuthenticated()) {
+            const currentUser = getCurrentUser();
+            const role = (currentUser?.role || '').toLowerCase();
+            if (role.includes('cửa hàng')) {
+                window.location.href = '../store-manager/dashboard.html';
+            } else if (role.includes('quản lý')) {
+                window.location.href = '../admin/admin.html';
+            } else {
+                window.location.href = '../index.html';
+            }
+        }
+    </script>
+</body>
+</html>

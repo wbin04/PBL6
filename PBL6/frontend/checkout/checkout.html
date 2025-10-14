@@ -1,0 +1,386 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Thanh toán - FastFood</title>
+    <link rel="stylesheet" href="../assets/css/style.css">
+    <style>
+        .store-order-group {
+            margin-bottom: 25px;
+            border: 1px solid #eee;
+            border-radius: 10px;
+            overflow: hidden;
+        }
+
+        .store-header {
+            background: #f8f9fa;
+            padding: 15px;
+            border-bottom: 1px solid #eee;
+            display: flex;
+            align-items: center;
+        }
+
+        .store-logo {
+            width: 40px;
+            height: 40px;
+            border-radius: 6px;
+            object-fit: cover;
+            margin-right: 12px;
+        }
+
+        .store-name {
+            font-size: 1.1em;
+            font-weight: bold;
+            color: #333;
+            margin: 0;
+        }
+
+        .store-items {
+            padding: 15px;
+        }
+
+        .summary-item {
+            display: flex;
+            align-items: center;
+            padding: 10px 0;
+            border-bottom: 1px solid #f0f0f0;
+        }
+
+        .summary-item:last-child {
+            border-bottom: none;
+        }
+
+        .summary-item .item-image {
+            width: 50px;
+            height: 50px;
+            border-radius: 6px;
+            object-fit: cover;
+            margin-right: 12px;
+        }
+
+        .summary-item .item-details {
+            flex: 1;
+        }
+
+        .summary-item .item-name {
+            font-weight: bold;
+            color: #333;
+            margin-bottom: 4px;
+        }
+
+        .summary-item .item-quantity {
+            color: #666;
+            font-size: 0.9em;
+            margin-bottom: 2px;
+        }
+
+        .summary-item .item-price {
+            color: #999;
+            font-size: 0.9em;
+        }
+
+        .summary-item .item-note {
+            background: #f8f9fa;
+            border: 1px solid #e9ecef;
+            border-radius: 4px;
+            padding: 6px 8px;
+            margin-top: 6px;
+            font-size: 0.85em;
+            color: #666;
+            font-style: italic;
+        }
+
+        .summary-item .item-note:empty {
+            display: none;
+        }
+
+        .summary-item .item-total {
+            font-weight: bold;
+            color: #ff6b35;
+        }
+
+        .store-summary {
+            background: #f8f9fa;
+            padding: 15px;
+            border-top: 1px solid #eee;
+        }
+
+        .store-summary .summary-row {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 8px;
+            color: #666;
+        }
+
+        .store-summary .store-total {
+            font-weight: bold;
+            color: #333;
+            border-top: 1px solid #ddd;
+            padding-top: 8px;
+            margin-top: 8px;
+        }
+
+        .store-summary .store-total span:last-child {
+            color: #ff6b35;
+        }
+
+        .store-summary .store-discount {
+            color: #28a745;
+        }
+
+        .store-summary .store-discount span:last-child {
+            color: #28a745;
+            font-weight: 600;
+        }
+
+        .order-summary {
+            max-height: 80vh;
+            overflow-y: auto;
+        }
+
+        /* Promo selection modal */
+        .promo-modal {
+            display: none;
+            position: fixed;
+            z-index: 1000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0,0,0,0.5);
+        }
+
+        .promo-modal-content {
+            background-color: #fefefe;
+            margin: 5% auto;
+            padding: 20px;
+            border-radius: 10px;
+            width: 80%;
+            max-width: 600px;
+            max-height: 80vh;
+            overflow-y: auto;
+        }
+
+        .promo-modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+            border-bottom: 1px solid #eee;
+            padding-bottom: 15px;
+        }
+
+        .promo-modal-close {
+            color: #aaa;
+            font-size: 28px;
+            font-weight: bold;
+            cursor: pointer;
+        }
+
+        .promo-modal-close:hover {
+            color: #000;
+        }
+
+        .promo-item {
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            padding: 15px;
+            margin-bottom: 10px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .promo-item:hover {
+            border-color: #ff6b35;
+            background-color: #f8f9fa;
+        }
+
+        .promo-item.selected {
+            border-color: #ff6b35;
+            background-color: #fff3f0;
+        }
+
+        .promo-item.promo-disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            background-color: #f8f9fa;
+        }
+
+        .promo-item.promo-disabled:hover {
+            border-color: #ddd;
+            background-color: #f8f9fa;
+        }
+
+        .promo-name {
+            font-weight: bold;
+            color: #333;
+            margin-bottom: 8px;
+        }
+
+        .promo-details {
+            color: #666;
+            font-size: 0.9em;
+            margin-bottom: 5px;
+        }
+
+        .promo-store {
+            color: #ff6b35;
+            font-size: 0.85em;
+            font-weight: 500;
+        }
+
+        .promo-requirement {
+            color: #dc3545;
+            font-size: 0.8em;
+            font-style: italic;
+            margin-top: 5px;
+        }
+
+        .promo-empty {
+            text-align: center;
+            color: #999;
+            padding: 40px 20px;
+        }
+
+        .promo-store-group {
+            margin-bottom: 25px;
+        }
+
+        .promo-store-group:last-child {
+            margin-bottom: 0;
+        }
+
+        .promo-store-title {
+            font-size: 1.1em;
+            font-weight: 600;
+            color: #333;
+            margin: 0 0 15px 0;
+            padding: 8px 12px;
+            background: linear-gradient(135deg, #ff6b35, #ff8c5a);
+            color: white;
+            border-radius: 6px;
+            text-align: center;
+        }
+
+        .promo-store-items {
+            padding-left: 0;
+        }
+
+        .promo-store-items .promo-item {
+            margin-left: 0;
+            border-left: 3px solid #ff6b35;
+            padding-left: 15px;
+        }
+
+        .promo-store-items .promo-item.promo-disabled {
+            border-left-color: #ddd;
+        }
+    </style>
+</head>
+<body>
+    <header class="header">
+        <div class="container">
+            <a href="../index.html" class="logo">🍔 FastFood</a>
+            <nav class="nav">
+                <a href="../index.html" class="nav-link">Trang chủ</a>
+                <a href="../menu/categories.html" class="nav-link">Thực đơn</a>
+                <a href="../promotions/promotions.html" class="nav-link">Khuyến mãi</a>
+                <div id="guest-menu" class="hidden">
+                    <a href="../auth/login.html">Đăng nhập</a>
+                    <a href="../auth/register.html">Đăng ký</a>
+                </div>
+                <div id="user-menu" class="hidden">
+                    <a href="../cart/cart.html" class="cart-link">
+                        🛒 Giỏ hàng <span id="cart-count" class="cart-count">0</span>
+                    </a>
+                    <a href="../orders/orders.html" class="nav-link">Đơn hàng</a>
+                    <span>Xin chào, <span id="user-name"></span></span>
+                    <a href="#" onclick="logout()">Đăng xuất</a>
+                </div>
+            </nav>
+        </div>
+    </header>
+
+    <div class="checkout-container container">
+        <div class="form-section">
+            <h2>Thông tin giao hàng</h2>
+            <div class="form-group">
+                <label for="receiver_name">Tên người nhận</label>
+                <input type="text" id="receiver_name" placeholder="Nguyễn Văn A">
+            </div>
+            <div class="form-group">
+                <label for="phone_number">Số điện thoại</label>
+                <input type="tel" id="phone_number" placeholder="0901234567">
+            </div>
+            <div class="form-group">
+                <label for="ship_address">Địa chỉ giao hàng</label>
+                <textarea id="ship_address" rows="3" placeholder="Số nhà, đường, quận, thành phố"></textarea>
+            </div>
+            <div class="form-group">
+                <label for="note">Ghi chú (tùy chọn)</label>
+                <textarea id="note" rows="2" placeholder="Ví dụ: Không thêm ớt">xin hộp giấy</textarea>
+            </div>
+            <div class="form-group">
+                <label for="promo_code">Mã khuyến mãi</label>
+                <div style="display:flex; gap:10px;">
+                    <input type="text" id="promo_code" placeholder="Nhập mã khuyến mãi">
+                    <button class="btn btn-secondary" id="choose-promo">Chọn mã</button>
+                    <button class="btn btn-secondary" id="apply-promo">Áp dụng</button>
+                </div>
+                <small id="promo-message" class="text-muted"></small>
+            </div>
+            <h2>Phương thức thanh toán</h2>
+            <div class="form-group">
+                <label><input type="radio" name="payment_method" value="cash" checked> Thanh toán khi nhận hàng</label>
+            </div>
+            <!-- Future: add card payment option -->
+            <button class="btn btn-primary" id="place-order">Đặt hàng</button>
+        </div>
+        <div class="order-summary">
+            <h2>Đơn hàng</h2>
+            <div id="summary-items"></div>
+            <div class="summary-row">
+                <span>Tạm tính</span>
+                <span id="summary-subtotal">0 ₫</span>
+            </div>
+            <div class="summary-row">
+                <span>Giảm giá</span>
+                <span id="summary-discount">0 ₫</span>
+            </div>
+            <div class="summary-row">
+                <span>Phí giao hàng</span>
+                <span id="summary-shipping">0 ₫</span>
+            </div>
+            <div class="summary-row total">
+                <span>Tổng cộng</span>
+                <span id="summary-total">0 ₫</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Promo Selection Modal -->
+    <div id="promo-modal" class="promo-modal">
+        <div class="promo-modal-content">
+            <div class="promo-modal-header">
+                <h3>Chọn mã khuyến mãi</h3>
+                <span class="promo-modal-close">&times;</span>
+            </div>
+            <div id="promo-list">
+                <div class="promo-empty">
+                    <p>Đang tải khuyến mãi...</p>
+                </div>
+            </div>
+            <div style="margin-top: 20px; text-align: right;">
+                <button class="btn btn-secondary" id="cancel-promo">Hủy</button>
+                <button class="btn btn-primary" id="select-promo" disabled>Chọn mã này</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="../assets/js/api.js"></script>
+    <script src="../assets/js/auth.js"></script>
+    <script src="../assets/js/cart.js"></script>
+    <script src="checkout-page.js"></script>
+</body>
+</html>
