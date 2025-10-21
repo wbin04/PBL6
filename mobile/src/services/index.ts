@@ -15,6 +15,8 @@ import {
   Order,
   CreateOrderRequest,
   Promotion,
+  ValidatePromoResponse,
+  AppliedPromo,
   Rating,
   CreateRatingRequest,
 } from '@/types';
@@ -200,15 +202,76 @@ export const ordersService = {
 
 // Promotions Service
 export const promotionsService = {
-  async getPromotions(): Promise<Promotion[]> {
-    const response: PaginatedResponse<Promotion> = await apiClient.get(ENDPOINTS.PROMOTIONS);
-    return response.results;
+  async getPromotions(storeId?: number): Promise<Promotion[]> {
+    try {
+      const url = storeId 
+        ? `${ENDPOINTS.PROMOTIONS}?store_id=${storeId}` 
+        : ENDPOINTS.PROMOTIONS;
+      const response = await apiClient.get(url);
+      
+      // Check if response is paginated or direct array
+      if (response && typeof response === 'object') {
+        // If it's a paginated response
+        if ('results' in response && Array.isArray(response.results)) {
+          return response.results;
+        }
+        // If it's a direct array
+        if (Array.isArray(response)) {
+          return response;
+        }
+      }
+      
+      // Fallback to empty array
+      return [];
+    } catch (error) {
+      console.error('Error fetching promotions:', error);
+      return [];
+    }
   },
 
-  async validatePromoCode(promoCode: string): Promise<{ valid: boolean; discount: number }> {
-    return apiClient.post(ENDPOINTS.VALIDATE_PROMO, { promo_code: promoCode });
+  async validatePromo(promoId: number, totalAmount: number): Promise<ValidatePromoResponse> {
+    return apiClient.post(ENDPOINTS.VALIDATE_PROMO, { 
+      promo_id: promoId,
+      total_amount: totalAmount 
+    });
+  },
+
+  async validateMultiplePromos(
+    promos: Array<{ promo: Promotion; storeAmount: number }>,
+    totalAmount: number
+  ): Promise<{
+    appliedPromos: Array<{ promo: Promotion; discount: number; storeAmount: number }>;
+    totalDiscount: number;
+  }> {
+    const appliedPromos = [];
+    let totalDiscount = 0;
+
+    for (const { promo, storeAmount } of promos) {
+      try {
+        // For system-wide promos (store = 0), use total cart amount
+        // For store-specific promos, use that store's subtotal
+        const amountToValidate = promo.store === 0 ? totalAmount : storeAmount;
+        
+        const response = await this.validatePromo(promo.id, amountToValidate);
+        
+        if (response.valid && response.discount_amount) {
+          const discount = parseFloat(response.discount_amount);
+          totalDiscount += discount;
+          appliedPromos.push({
+            promo,
+            discount,
+            storeAmount: amountToValidate
+          });
+        }
+      } catch (error) {
+        console.error(`Error validating promo ${promo.id}:`, error);
+      }
+    }
+
+    return { appliedPromos, totalDiscount };
   },
 };
+
 
 // Ratings Service
 export const ratingsService = {

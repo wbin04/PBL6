@@ -158,12 +158,34 @@ export interface CreateOrderRequest {
 // Promotion Types
 export interface Promotion {
   id: number;
-  promo_name: string;
-  promo_code: string;
-  discount_percentage: number;
+  name: string;
+  category: 'PERCENT' | 'AMOUNT';
+  discount_value: number;
+  minimum_pay: number;
+  max_discount_amount?: number;
   start_date: string;
   end_date: string;
+  store: number;
+  store_id?: number;
+  store_name?: string;
   is_active: boolean;
+  // Backward compatibility fields
+  percent?: number;
+  description?: string;
+}
+
+export interface ValidatePromoResponse {
+  valid: boolean;
+  discount_amount?: string;
+  final_amount?: string;
+  error?: string;
+  promo?: Promotion;
+}
+
+export interface AppliedPromo {
+  promo: Promotion;
+  discount: number;
+  storeAmount?: number;
 }
 
 // Rating Types

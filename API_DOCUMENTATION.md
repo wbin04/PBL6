@@ -1686,9 +1686,14 @@ image_file: [File] (optional - chỉ gửi khi thay đổi ảnh)
 - **Request Body:**
 ```json
 {
-  "order_status": "Đã giao"
+  "delivery_status": "Đã giao"
 }
 ```
+- **Các trạng thái hợp lệ:**
+  - `Chờ xác nhận` → `Đã xác nhận` (khi shipper nhận đơn)
+  - `Đã xác nhận` → `Đã lấy hàng` (khi lấy hàng)
+  - `Đã lấy hàng` → `Đang giao` (khi bắt đầu giao)
+  - `Đang giao` → `Đã giao` (khi giao thành công)
 - **Response:**
 ```json
 {
@@ -1705,19 +1710,19 @@ image_file: [File] (optional - chỉ gửi khi thay đổi ảnh)
 
 ---
 
-## 10. Admin API
+## 10. Admin & Store Manager API
 
-### 10.1 Quản lý đơn hàng
-- **GET** `/api/orders/admin/` - Danh sách tất cả đơn hàng
-- **GET** `/api/orders/admin/{order_id}/` - Chi tiết đơn hàng
-- **POST** `/api/orders/admin/{order_id}/assign-shipper/` - Phân công shipper
-- **PATCH** `/api/orders/admin/{order_id}/status/` - Cập nhật trạng thái
+### 10.1 Admin - Quản lý đơn hàng
 
-**Danh sách đơn hàng (GET /api/orders/admin/):**
+#### 10.1.1 Danh sách đơn hàng
+- **GET** `/api/orders/admin/`
+- **Headers:** `Authorization: Bearer {admin_token}`
+- **Mô tả:** Lấy danh sách tất cả đơn hàng (Admin) hoặc đơn hàng của cửa hàng (Store Manager)
 - **Query Parameters:**
-  - `status`: Lọc theo trạng thái
-  - `search`: Tìm kiếm theo thông tin khách hàng, ID đơn hàng
-  - `page`: Trang hiện tại
+  - `status`: Lọc theo trạng thái đơn hàng
+  - `search`: Tìm kiếm theo tên khách hàng, email, số điện thoại, ID đơn hàng, tên người nhận
+  - `page`: Trang hiện tại (mặc định: 1)
+  - `per_page`: Số items mỗi trang (mặc định: 10, tối đa: 100)
 - **Response:**
 ```json
 {
@@ -1727,13 +1732,47 @@ image_file: [File] (optional - chỉ gửi khi thay đổi ảnh)
       "user": {
         "id": 1,
         "fullname": "John Doe",
-        "email": "user@example.com"
+        "email": "user@example.com",
+        "phone_number": "0123456789"
       },
       "order_status": "Đã xác nhận",
       "delivery_status": "Đang giao",
       "total_money": "156000.00",
       "receiver_name": "John Doe",
-      "created_date_display": "2025-01-01 17:00:00"
+      "phone_number": "0123456789",
+      "ship_address": "123 Main St, Hà Nội",
+      "payment_method": "COD",
+      "note": "Giao hàng nhanh",
+      "shipping_fee": "15000.00",
+      "group_id": 1,
+      "store_name": "KFC Trần Phú",
+      "shipper": {
+        "id": 1,
+        "user": {
+          "fullname": "Nguyễn Văn A",
+          "phone_number": "0987654321"
+        }
+      },
+      "created_date": "2025-01-01T10:00:00Z",
+      "created_date_display": "2025-01-01 17:00:00",
+      "cancel_reason": null,
+      "cancelled_date": null,
+      "cancelled_by_role": null,
+      "items": [
+        {
+          "id": "1_1_1",
+          "food_id": 1,
+          "food_title": "Big Mac",
+          "food_image_url": "http://localhost:8000/media/assets/bigmac.jpg",
+          "food_price": "89000.00",
+          "food_option_id": 1,
+          "food_option_name": "Size L",
+          "food_option_price": "10000.00",
+          "quantity": 2,
+          "food_note": "Không hành"
+        }
+      ],
+      "items_count": 2
     }
   ],
   "total_pages": 5,
@@ -1742,13 +1781,105 @@ image_file: [File] (optional - chỉ gửi khi thay đổi ảnh)
 }
 ```
 
-**Phân công shipper (POST /api/orders/admin/{order_id}/assign-shipper/):**
+#### 10.1.2 Chi tiết đơn hàng
+- **GET** `/api/orders/admin/{order_id}/`
+- **Headers:** `Authorization: Bearer {admin_token}`
+- **Mô tả:** Lấy chi tiết một đơn hàng cụ thể
+- **Response:**
+```json
+{
+  "id": 1,
+  "user": {
+    "id": 1,
+    "fullname": "John Doe",
+    "email": "user@example.com",
+    "phone_number": "0123456789"
+  },
+  "order_status": "Đã xác nhận",
+  "delivery_status": "Đang giao",
+  "total_money": "156000.00",
+  "receiver_name": "John Doe",
+  "phone_number": "0123456789",
+  "ship_address": "123 Main St, Hà Nội",
+  "payment_method": "COD",
+  "note": "Giao hàng nhanh",
+  "shipping_fee": "15000.00",
+  "group_id": 1,
+  "store_name": "KFC Trần Phú",
+  "store_info_id": 1,
+  "shipper": {
+    "id": 1,
+    "user": {
+      "fullname": "Nguyễn Văn A",
+      "phone_number": "0987654321"
+    }
+  },
+  "promo": {
+    "id": 1,
+    "name": "Giảm giá 10%",
+    "promo_code": "DISCOUNT10"
+  },
+  "created_date": "2025-01-01T10:00:00Z",
+  "created_date_display": "2025-01-01 17:00:00",
+  "cancel_reason": null,
+  "cancelled_date": null,
+  "cancelled_by_role": null,
+  "items": [
+    {
+      "id": "1_1_1",
+      "food_id": 1,
+      "food_title": "Big Mac",
+      "food_image_url": "http://localhost:8000/media/assets/bigmac.jpg",
+      "food_price": "89000.00",
+      "food_option_id": 1,
+      "food_option_name": "Size L",
+      "food_option_price": "10000.00",
+      "quantity": 2,
+      "food_note": "Không hành"
+    }
+  ],
+  "items_count": 2
+}
+```
+
+#### 10.1.3 Cập nhật đơn hàng
+- **PUT** `/api/orders/admin/{order_id}/`
+- **Headers:** `Authorization: Bearer {admin_token}`
+- **Mô tả:** Admin cập nhật trạng thái đơn hàng
+- **Request Body:**
+```json
+{
+  "order_status": "Đã xác nhận"
+}
+```
+- **Các trạng thái hợp lệ:**
+  - `Chờ xác nhận`
+  - `Đã xác nhận`
+  - `Đang chuẩn bị`
+  - `Đang giao`
+  - `Đã giao`
+  - `Đã hủy`
+- **Response:**
+```json
+{
+  "id": 1,
+  "order_status": "Đã xác nhận",
+  "delivery_status": "Chờ xác nhận",
+  "total_money": "156000.00"
+}
+```
+
+#### 10.1.4 Phân công shipper
+- **PUT** `/api/orders/admin/{order_id}/assign-shipper/`
+- **Headers:** `Authorization: Bearer {admin_token}`
+- **Mô tả:** Admin phân công shipper cho đơn hàng
 - **Request Body:**
 ```json
 {
   "shipper_id": 1
 }
 ```
+- **Lưu ý:** Gửi `shipper_id: null` để hủy phân công shipper
 - **Response:**
 ```json
 {
@@ -1758,29 +1889,154 @@ image_file: [File] (optional - chỉ gửi khi thay đổi ảnh)
     "shipper": {
       "id": 1,
       "user": {
-        "fullname": "Nguyễn Văn A"
+        "id": 10,
+        "fullname": "Nguyễn Văn A",
+        "phone_number": "0987654321"
       }
     },
-    "order_status": "Đang giao"
+    "order_status": "Đang giao",
+    "delivery_status": "Đã xác nhận"
   }
 }
 ```
 
-**Cập nhật trạng thái (PATCH /api/orders/admin/{order_id}/status/):**
+#### 10.1.5 Cập nhật trạng thái đơn hàng (Admin/Store Manager)
+- **PATCH** `/api/orders/admin/{order_id}/status/`
+- **Headers:** `Authorization: Bearer {admin_or_store_manager_token}`
+- **Mô tả:** Admin hoặc Store Manager cập nhật trạng thái đơn hàng
 - **Request Body:**
 ```json
 {
-  "order_status": "Đã giao",
-  "cancel_reason": "Lý do hủy (nếu có)"
+  "order_status": "Đã huỷ",
+  "cancel_reason": "Hết hàng"
+}
+```
+- **Response:**
+```json
+{
+  "id": 1,
+  "order_status": "Đã huỷ",
+  "delivery_status": "Đã huỷ",
+  "cancel_reason": "Hết hàng",
+  "cancelled_date": "2025-01-01T11:00:00Z",
+  "cancelled_by_role": "Quản lý"
 }
 ```
 
-### 10.2 Quản lý món ăn
-- **GET** `/api/menu/admin/foods/` - Danh sách tất cả món ăn (đã có ở mục 2.6)
-- **GET** `/api/menu/admin/foods/{food_id}/` - Chi tiết món ăn (đã có ở mục 2.7)
-- **POST** `/api/menu/admin/foods/` - Tạo món ăn mới (đã có ở mục 2.6)
-- **PUT** `/api/menu/admin/foods/{food_id}/` - Cập nhật món ăn (đã có ở mục 2.7)
-- **DELETE** `/api/menu/admin/foods/{food_id}/` - Xóa món ăn (đã có ở mục 2.7)
+### 10.2 Store Manager - Quản lý đơn hàng cửa hàng
+
+#### 10.2.1 Danh sách đơn hàng của cửa hàng
+- **GET** `/api/stores/{store_id}/orders/`
+- **Headers:** `Authorization: Bearer {store_manager_token}`
+- **Mô tả:** Lấy tất cả đơn hàng có món ăn từ cửa hàng của Store Manager
+- **Response:**
+```json
+[
+  {
+    "id": 1,
+    "user": {
+      "id": 1,
+      "fullname": "John Doe",
+      "email": "user@example.com"
+    },
+    "order_status": "Đã xác nhận",
+    "delivery_status": "Đang giao",
+    "total_money": "156000.00",
+    "receiver_name": "John Doe",
+    "phone_number": "0123456789",
+    "ship_address": "123 Main St, Hà Nội",
+    "created_date": "2025-01-01T10:00:00Z",
+    "items": [
+      {
+        "id": "1_1_1",
+        "food_id": 1,
+        "food_title": "Big Mac",
+        "food_price": "89000.00",
+        "quantity": 2
+      }
+    ]
+  }
+]
+```
+
+#### 10.2.2 Cập nhật trạng thái đơn hàng (Store Manager)
+- **PATCH** `/api/stores/{store_id}/orders/{order_id}/status/`
+- **Headers:** `Authorization: Bearer {store_manager_token}`
+- **Mô tả:** Store Manager cập nhật trạng thái đơn hàng cho các món của cửa hàng mình
+- **Request Body:**
+```json
+{
+  "order_status": "Đang chuẩn bị",
+  "cancel_reason": "Hết hàng (nếu hủy)"
+}
+```
+- **Các trạng thái hợp lệ cho Store Manager:**
+  - `Chờ xác nhận` → `Đã xác nhận` (xác nhận đơn)
+  - `Đã xác nhận` → `Đang chuẩn bị` (bắt đầu chuẩn bị)
+  - `Đang chuẩn bị` → `Sẵn sàng` (sẵn sàng giao)
+  - `Chờ xác nhận` → `Đã huỷ` (từ chối đơn)
+- **Response:**
+```json
+{
+  "id": 1,
+  "order_status": "Đang chuẩn bị",
+  "delivery_status": "Chờ xác nhận",
+  "total_money": "156000.00",
+  "receiver_name": "John Doe",
+  "store_name": "KFC Trần Phú"
+}
+```
+
+### 10.3 Admin - Quản lý món ăn
+- **GET** `/api/menu/admin/foods/` - Danh sách tất cả món ăn (xem mục 2.6)
+- **GET** `/api/menu/admin/foods/{food_id}/` - Chi tiết món ăn (xem mục 2.7)
+- **POST** `/api/menu/admin/foods/` - Tạo món ăn mới (xem mục 2.6)
+- **PUT** `/api/menu/admin/foods/{food_id}/` - Cập nhật món ăn (xem mục 2.7)
+- **DELETE** `/api/menu/admin/foods/{food_id}/` - Xóa món ăn (xem mục 2.7)
+
+### 10.4 Store Manager - Thêm món ăn mới
+- **POST** `/api/menu/admin/foods/`
+- **Headers:** `Authorization: Bearer {store_manager_token}`
+- **Content-Type:** `multipart/form-data`
+- **Mô tả:** Store Manager thêm món ăn mới cho cửa hàng của mình (store_id tự động được gán)
+- **Request Body (FormData):**
+```
+title: "Burger Gà Giòn"
+description: "Burger gà giòn rụm với xà lách tươi"
+price: "59000.00"
+category_id: 1
+availability: "Còn hàng"
+image_file: [File - JPG/PNG]
+```
+- **Response:**
+```json
+{
+  "id": 15,
+  "title": "Burger Gà Giòn",
+  "description": "Burger gà giòn rụm với xà lách tươi",
+  "price": "59000.00",
+  "category": {
+    "id": 1,
+    "cate_name": "Burger"
+  },
+  "category_id": 1,
+  "store": {
+    "id": 1,
+    "store_name": "KFC Trần Phú"
+  },
+  "store_id": 1,
+  "image": "assets/abc123def456.jpg",
+  "image_url": "http://localhost:8000/media/assets/abc123def456.jpg",
+  "availability": "Còn hàng",
+  "average_rating": 0.0,
+  "rating_count": 0,
+  "sizes": []
+}
+```
+- **Lưu ý:** 
+  - File ảnh sẽ được lưu với tên unique để tránh xung đột
+  - Store Manager không cần truyền `store_id`, hệ thống tự động gán cửa hàng của họ
+  - Admin có thể truyền `store_id` để tạo món cho bất kỳ cửa hàng nào
 
 ---
 
@@ -2223,7 +2479,404 @@ image_file: [File] (optional - chỉ gửi khi thay đổi ảnh)
 
 ### Technical Improvements
 - **Database:** Bảng `order_promo` với trigger tự động tính toán discount
+- **Pagination:** Hỗ trợ tham số `per_page` để tuỳ chỉnh số items mỗi trang
+- **Performance:** Tối ưu query với `select_related` và `prefetch_related`
+- **Image Upload:** Hỗ trợ upload file với unique filename để tránh xung đột
+
+---
+
+## 12. API Bổ sung chi tiết
+
+### 12.1 Shipper - Lấy đơn hàng theo shipper_id
+- **GET** `/api/orders/shipper/{shipper_id}/orders/`
+- **Mô tả:** Lấy tất cả đơn hàng được phân công cho một shipper cụ thể
+- **Query Parameters:**
+  - `delivery_status`: Lọc theo trạng thái giao hàng
+  - `page`: Trang hiện tại (mặc định: 1)
+  - `per_page`: Số items mỗi trang (mặc định: 20)
+- **Response:**
+```json
+{
+  "shipper": {
+    "id": 1,
+    "user_id": 10,
+    "fullname": "Nguyễn Văn A",
+    "phone": "0123456789",
+    "email": "shipper@example.com",
+    "address": "123 Main St"
+  },
+  "status_counts": {
+    "Chờ xác nhận": 5,
+    "Đã xác nhận": 3,
+    "Đang giao": 2,
+    "Đã giao": 10,
+    "Đã hủy": 1,
+    "Đã huỷ": 0
+  },
+  "total_orders": 21,
+  "orders": {
+    "count": 5,
+    "num_pages": 1,
+    "current_page": 1,
+    "has_next": false,
+    "has_previous": false,
+    "results": [
+      {
+        "id": 1,
+        "order_status": "Đang giao",
+        "delivery_status": "Đang giao",
+        "total_money": "156000.00",
+        "receiver_name": "John Doe",
+        "ship_address": "123 Main St, Hà Nội",
+        "phone_number": "0123456789",
+        "created_date": "2025-01-01T10:00:00Z"
+      }
+    ]
+  }
+}
+```
+
+### 12.2 Store Manager - Cập nhật trạng thái đơn hàng
+- **PATCH** `/api/stores/{store_id}/orders/{order_id}/status/`
+- **Headers:** `Authorization: Bearer {store_manager_token}`
+- **Mô tả:** Store Manager có thể cập nhật trạng thái đơn hàng cho các món ăn của cửa hàng mình
+- **Request Body:**
+```json
+{
+  "order_status": "Đã xác nhận",
+  "cancel_reason": "Hết hàng" 
+}
+```
+- **Các trạng thái hợp lệ:**
+  - `Chờ xác nhận` (Pending)
+  - `Đã xác nhận` (Confirmed)
+  - `Đang chuẩn bị` (Preparing)
+  - `Sẵn sàng` (Ready for pickup)
+  - `Đã huỷ` (Cancelled - chỉ khi Chờ xác nhận)
+- **Response:**
+```json
+{
+  "id": 1,
+  "order_status": "Đã xác nhận",
+  "delivery_status": "Chờ xác nhận",
+  "total_money": "156000.00",
+  "receiver_name": "John Doe",
+  "store_name": "KFC Trần Phú"
+}
+```
+
+### 12.3 Shipper - Danh sách đơn hàng available
+- **GET** `/api/orders/?shipper__isnull=true&delivery_status=Chờ xác nhận`
+- **Headers:** `Authorization: Bearer {shipper_token}`
+- **Mô tả:** Lấy danh sách các đơn hàng chưa có shipper nhận (để shipper tự chọn)
+- **Response:**
+```json
+{
+  "count": 10,
+  "num_pages": 1,
+  "current_page": 1,
+  "has_next": false,
+  "has_previous": false,
+  "results": [
+    {
+      "id": 5,
+      "order_status": "Sẵn sàng",
+      "delivery_status": "Chờ xác nhận",
+      "total_money": "156000.00",
+      "receiver_name": "John Doe",
+      "ship_address": "123 Main St, Hà Nội",
+      "phone_number": "0123456789",
+      "store_name": "KFC Trần Phú",
+      "created_date": "2025-01-01T10:00:00Z",
+      "shipper": null
+    }
+  ]
+}
+```
+
+### 12.4 Admin - Danh sách Users có role Shipper chưa có profile
+- **GET** `/api/shipper/shippers/available_users/`
+- **Headers:** `Authorization: Bearer {admin_token}`
+- **Mô tả:** Lấy danh sách các user đã có role Shipper nhưng chưa được tạo profile Shipper
+- **Response:**
+```json
+{
+  "available_users": [
+    {
+      "id": 15,
+      "fullname": "Trần Văn B",
+      "email": "shipper2@example.com",
+      "phone_number": "0987654321",
+      "address": "456 Elm St"
+    }
+  ]
+}
+```
+
+### 12.5 Admin - Thống kê Shipper
+- **GET** `/api/shipper/shippers/statistics/`
+- **Headers:** `Authorization: Bearer {admin_token}`
+- **Response:**
+```json
+{
+  "total_shippers": 10,
+  "total_users_with_shipper_role": 15,
+  "available_users": 5
+}
+```
+
+### 12.6 Tạo Shipper profile từ User ID
+- **POST** `/api/shipper/shippers/`
+- **Headers:** `Authorization: Bearer {admin_token}`
+- **Request Body:**
+```json
+{
+  "user_id": 15
+}
+```
+- **Response:**
+```json
+{
+  "id": 5,
+  "user": {
+    "id": 15,
+    "fullname": "Trần Văn B",
+    "email": "shipper2@example.com",
+    "phone_number": "0987654321"
+  },
+  "user_id": 15
+}
+```
+
+### 12.7 Cập nhật thông tin Shipper
+- **PUT** `/api/shipper/shippers/{shipper_id}/`
+- **Headers:** `Authorization: Bearer {admin_token}`
+- **Request Body:**
+```json
+{
+  "fullname": "Trần Văn B Updated",
+  "phone": "0987654322",
+  "email": "shipper2_new@example.com",
+  "address": "New Address 789"
+}
+```
+- **Response:**
+```json
+{
+  "id": 5,
+  "user": {
+    "id": 15,
+    "fullname": "Trần Văn B Updated",
+    "email": "shipper2_new@example.com",
+    "phone_number": "0987654322",
+    "address": "New Address 789"
+  },
+  "user_id": 15
+}
+```
+
+### 12.8 Store Manager - Thống kê cửa hàng
+- **GET** `/api/stores/{store_id}/stats/`
+- **Headers:** `Authorization: Bearer {store_manager_token}`
+- **Mô tả:** Lấy thống kê tổng quan về cửa hàng
+- **Response:**
+```json
+{
+  "total_foods": 25,
+  "total_orders": 150,
+  "total_revenue": "45000000.00",
+  "average_rating": 4.5,
+  "total_ratings": 89
+}
+```
+
+### 12.9 Store Manager - Danh sách đơn hàng của cửa hàng
+- **GET** `/api/stores/{store_id}/orders/`
+- **Headers:** `Authorization: Bearer {store_manager_token}`
+- **Mô tả:** Lấy danh sách tất cả đơn hàng có món ăn của cửa hàng
+- **Response:**
+```json
+[
+  {
+    "id": 1,
+    "order_status": "Đã xác nhận",
+    "delivery_status": "Đang giao",
+    "total_money": "156000.00",
+    "receiver_name": "John Doe",
+    "phone_number": "0123456789",
+    "ship_address": "123 Main St, Hà Nội",
+    "created_date": "2025-01-01T10:00:00Z",
+    "items": [
+      {
+        "food_id": 1,
+        "food_title": "Big Mac",
+        "quantity": 2,
+        "food_price": "89000.00"
+      }
+    ]
+  }
+]
+```
+
+### 12.10 Menu - Thêm món ăn mới (Store Manager)
+- **POST** `/api/menu/admin/foods/`
+- **Headers:** `Authorization: Bearer {store_manager_token}`
+- **Content-Type:** `multipart/form-data`
+- **Request Body (FormData):**
+```
+title: "Burger Gà"
+description: "Burger gà giòn rụm"
+price: "59000.00"
+category_id: 1
+availability: "Còn hàng"
+image_file: [File]
+```
+- **Response:**
+```json
+{
+  "id": 10,
+  "title": "Burger Gà",
+  "description": "Burger gà giòn rụm",
+  "price": "59000.00",
+  "category": {
+    "id": 1,
+    "cate_name": "Burger"
+  },
+  "store": {
+    "id": 1,
+    "store_name": "KFC Trần Phú"
+  },
+  "image": "assets/abc123def456.jpg",
+  "image_url": "http://localhost:8000/media/assets/abc123def456.jpg",
+  "availability": "Còn hàng",
+  "sizes": []
+}
+```
+
+### 12.11 Hủy nhóm đơn hàng
+- **POST** `/api/orders/{order_id}/cancel-group/`
+- **Headers:** `Authorization: Bearer {access_token}`
+- **Mô tả:** Hủy tất cả đơn hàng trong cùng nhóm (group_id)
+- **Request Body (Step 1 - Check):**
+```json
+{
+  "check_only": true
+}
+```
+- **Response (Step 1):**
+```json
+{
+  "can_cancel": true,
+  "group_orders": [
+    {
+      "id": 1,
+      "store_name": "KFC Trần Phú",
+      "total_money": 156000.0,
+      "order_status": "Chờ xác nhận"
+    },
+    {
+      "id": 2,
+      "store_name": "McDonald's Nguyễn Huệ",
+      "total_money": 120000.0,
+      "order_status": "Chờ xác nhận"
+    }
+  ],
+  "total_orders": 2
+}
+```
+- **Request Body (Step 2 - Confirm):**
+```json
+{
+  "confirmed": true,
+  "cancel_reason": "Thay đổi địa chỉ giao hàng"
+}
+```
+- **Response (Step 2):**
+```json
+{
+  "message": "Đã hủy thành công 2 đơn hàng trong nhóm",
+  "cancelled_orders": [1, 2]
+}
+```
+
+---
+
+## 13. Lưu ý về Workflow
+
+### 13.1 Workflow tạo đơn hàng
+1. Khách hàng thêm món ăn vào giỏ hàng
+2. Chọn khuyến mãi (nếu có) và xác nhận
+3. Hệ thống tự động chia đơn hàng theo cửa hàng
+4. Mỗi cửa hàng sẽ có một đơn hàng riêng với `group_id` giống nhau
+5. Khuyến mãi được phân bổ tỷ lệ theo giá trị từng cửa hàng
+
+### 13.2 Workflow xử lý đơn hàng
+**Trạng thái đơn hàng (order_status):**
+1. `Chờ xác nhận` - Đơn hàng mới tạo
+2. `Đã xác nhận` - Cửa hàng xác nhận
+3. `Đang chuẩn bị` - Cửa hàng đang chuẩn bị
+4. `Sẵn sàng` - Sẵn sàng để shipper lấy
+5. `Đã lấy hàng` - Shipper đã lấy hàng
+6. `Đang giao` - Đang giao hàng
+7. `Đã giao` - Giao thành công
+8. `Đã huỷ` - Đơn hàng bị hủy
+
+**Trạng thái giao hàng (delivery_status):**
+- Theo dõi chi tiết quá trình giao hàng của shipper
+- Có thể khác với `order_status` trong một số trường hợp
+
+### 13.3 Workflow Shipper nhận đơn
+1. Shipper xem danh sách đơn hàng available (`shipper__isnull=true`)
+2. Shipper chọn và nhận đơn: `POST /api/orders/shipper/{order_id}/accept/`
+3. Hệ thống gán shipper và chuyển trạng thái sang "Đã xác nhận"
+4. Shipper cập nhật trạng thái: Đã lấy hàng → Đang giao → Đã giao
+
+### 13.4 Quyền hạn
+- **Admin**: Toàn quyền quản lý tất cả
+- **Store Manager**: Quản lý món ăn và đơn hàng của cửa hàng mình
+- **Shipper**: Nhận và cập nhật trạng thái đơn hàng được gán
+- **Customer**: Xem và tạo đơn hàng, hủy đơn khi còn "Chờ xác nhận"
 - **Business Logic:** Hỗ trợ áp dụng nhiều khuyến mãi cùng lúc cho một đơn hàng
 - **User Experience:** Workflow đăng ký Shipper/Store Manager có thông báo realtime
+
+### 13.5 Tổng hợp API Store Manager (Tham khảo nhanh)
+
+#### Quản lý Món ăn:
+- `GET /api/menu/store/foods/` - Danh sách món ăn (mục 2.9.1)
+- `GET /api/menu/store/foods/{food_id}/` - Chi tiết món ăn (mục 2.9.2)
+- `POST /api/menu/admin/foods/` - Thêm món ăn mới (mục 10.4)
+- `PUT /api/menu/store/foods/{food_id}/` - Cập nhật món ăn (mục 2.9.3)
+- `DELETE /api/menu/store/foods/{food_id}/` - Xóa món ăn (mục 2.9.4)
+
+#### Quản lý Sizes:
+- `GET /api/menu/store/foods/{food_id}/sizes/` - Danh sách sizes (mục 2.9.5)
+- `POST /api/menu/store/foods/{food_id}/sizes/` - Thêm size mới (mục 2.9.5)
+- `GET /api/menu/store/foods/{food_id}/sizes/{size_id}/` - Chi tiết size (mục 2.9.5)
+- `PUT /api/menu/store/foods/{food_id}/sizes/{size_id}/` - Cập nhật size (mục 2.9.5)
+- `DELETE /api/menu/store/foods/{food_id}/sizes/{size_id}/` - Xóa size (mục 2.9.5)
+
+#### Quản lý Đơn hàng:
+- `GET /api/orders/admin/` - Danh sách đơn hàng (tự động lọc theo cửa hàng) (mục 10.1.1)
+- `GET /api/stores/{store_id}/orders/` - Danh sách đơn hàng của cửa hàng (mục 10.2.1)
+- `PATCH /api/stores/{store_id}/orders/{order_id}/status/` - Cập nhật trạng thái (mục 10.2.2)
+- `PATCH /api/orders/admin/{order_id}/status/` - Cập nhật trạng thái (mục 10.1.5)
+
+#### Thông tin Cửa hàng:
+- `GET /api/stores/my_store/` - Thông tin cửa hàng của tôi (mục 8.3)
+- `GET /api/stores/{store_id}/stats/` - Thống kê cửa hàng (mục 8.6)
+- `GET /api/stores/{store_id}/foods/` - Món ăn của cửa hàng (mục 8.4)
+
+#### Quản lý Khuyến mãi:
+- `GET /api/promotions/` - Danh sách khuyến mãi (mục 6.1)
+- `POST /api/promotions/create/` - Tạo khuyến mãi (mục 6.3)
+- `GET /api/promotions/{promo_id}/` - Chi tiết khuyến mãi (mục 6.5)
+- `PUT /api/promotions/{promo_id}/update/` - Cập nhật khuyến mãi (mục 6.6)
+- `DELETE /api/promotions/{promo_id}/delete/` - Xóa khuyến mãi (mục 6.7)
+
+**Lưu ý quan trọng:**
+- Store Manager tự động chỉ thấy/quản lý dữ liệu của cửa hàng mình
+- Khi tạo món ăn mới, không cần truyền `store_id`, hệ thống tự động gán
+- Endpoint `/api/menu/admin/foods/` cũng được Store Manager sử dụng để thêm món ăn
+- Endpoint `/api/orders/admin/` tự động lọc đơn hàng theo cửa hàng của Store Manager
 
 ---
