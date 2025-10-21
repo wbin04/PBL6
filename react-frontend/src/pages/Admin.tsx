@@ -2,7 +2,7 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { API, getImageUrl, formatDate, isAuthenticated, getUser } from '@/lib/api';
-import type { Store, Food, Category, Customer, AdminOrder } from '@/lib/api';
+import type { Store, Food, Category, Customer, AdminOrder } from '@/types/index-tuan';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 

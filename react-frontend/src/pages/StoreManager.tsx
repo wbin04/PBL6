@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { API, getImageUrl, formatDate, isAuthenticated, getUser } from '@/lib/api';
-import type { Food, Category, FoodSize, StoreOrder, MyStore} from '@/lib/api';
+import type { Food, Category, FoodSize, StoreOrder, MyStore} from '@/types/index-tuan';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 

@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { API, getImageUrl, type Category } from '@/lib/api';
+import { API, getImageUrl} from '@/lib/api';
+import type { Category } from '@/types/index-ngu';
 import { Card, CardContent } from '@/components/ui/card';
 
 const Categories: React.FC = () => {

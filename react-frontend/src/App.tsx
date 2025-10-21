@@ -8,7 +8,11 @@ import Menu from "./pages/Menu";
 import Cart from "./pages/Cart";
 import Orders from "./pages/Orders";
 import Admin from "./pages/Admin";
+import Checkout from "./pages/Checkout";
+import CheckoutResult from "./pages/CheckoutResult";
 import StoreManager from "./pages/StoreManager";
+import Account from "./pages/Account";
+
 
 function App() {
   return (
@@ -27,7 +31,10 @@ function App() {
                 <Route path="/menu" element={<Categories />} />
                 <Route path="/menu/items" element={<Menu />} />
                 <Route path="/cart" element={<Cart />} />
+                <Route path="/checkout" element={<Checkout />} />
+                <Route path="/checkout-result" element={<CheckoutResult />} />
                 <Route path="/orders" element={<Orders />} />
+                <Route path="/account" element={<Account />} />
                 {/* Add more routes as needed */}
               </Routes>
             </Layout>
