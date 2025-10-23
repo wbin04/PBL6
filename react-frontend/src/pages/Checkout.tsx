@@ -339,7 +339,7 @@ const Checkout: React.FC = () => {
 
                 <div>
                   <label className="block text-sm font-medium mb-2">
-                    Số điện thoại *
+                    SDT nhận hàng *
                   </label>
                   <input
                     type="tel"

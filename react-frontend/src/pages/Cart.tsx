@@ -438,6 +438,15 @@ const Cart: React.FC = () => {
               selectedItems.has(item.id)
             ).length;
 
+            // Tính tổng tiền của cửa hàng
+            const storeTotal = storeItems.reduce((total, item) => {
+              const itemSubtotal =
+                typeof item.subtotal === "number"
+                  ? item.subtotal
+                  : parseFloat(item.subtotal);
+              return total + itemSubtotal;
+            }, 0);
+
             return (
               <div key={`store-${storeId}`} className="mb-6">
                 {/* Store Header */}
@@ -534,6 +543,18 @@ const Cart: React.FC = () => {
                     </button>
                   </div>
                 ))}
+
+                {/* Store Total */}
+                <div className="ml-4 mt-3 mb-3 p-3 bg-gray-50 border rounded-lg">
+                  <div className="flex justify-between items-center">
+                    <span className="text-gray-700 font-medium">
+                      Tổng tiền cửa hàng:
+                    </span>
+                    <span className="text-xl font-bold text-orange-500">
+                      {formatCurrency(storeTotal)}
+                    </span>
+                  </div>
+                </div>
               </div>
             );
           })}

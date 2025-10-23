@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { API, getImageUrl} from "@/lib/api";
-import type {Category} from '@/types/index-ngu';
+import { API, getImageUrl } from "@/lib/api";
+import type { Category } from "@/types/index-ngu";
 import { Card } from "@/components/ui/card";
 import Footer from "@/components/Footer";
 import FoodDetailModal from "@/components/FoodDetailModal";
@@ -429,61 +429,90 @@ const Home: React.FC = () => {
             </div>
           ) : (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-              {searchResults.map((food) => (
-                <Card
-                  key={food.id}
-                  className="p-4 hover:shadow-lg transition-shadow">
-                  <div
-                    className="cursor-pointer"
-                    onClick={() =>
-                      openFoodModal({
-                        id: food.id,
-                        title: food.title,
-                        price: food.price,
-                        image_url: food.image_url,
-                        description: food.description,
-                      })
-                    }>
-                    <img
-                      src={food.image_url}
-                      alt={food.title}
-                      className="w-full h-40 object-cover rounded-lg mb-3"
-                      onError={(e) => {
-                        e.currentTarget.src = "/images/placeholder.jpg";
-                      }}
-                    />
-                    <h3 className="font-bold text-lg mb-2">{food.title}</h3>
-                    <p
-                      className="text-gray-600 text-sm mb-2 overflow-hidden"
-                      style={{
-                        display: "-webkit-box",
-                        WebkitLineClamp: 2,
-                        WebkitBoxOrient: "vertical" as const,
-                      }}>
-                      {food.description}
-                    </p>
-                    <div className="flex justify-between items-center mb-2">
-                      <span className="text-orange-600 font-semibold">
-                        {Number(food.price).toLocaleString()} đ
-                      </span>
-                      {food.rating_count &&
-                        food.rating_count > 0 &&
-                        food.average_rating && (
-                          <div className="flex items-center text-sm text-gray-500">
-                            <span className="text-yellow-400">★</span>
-                            <span className="ml-1">
-                              {food.average_rating.toFixed(1)}
-                            </span>
-                          </div>
+              {searchResults.map((food) => {
+                // Debug: log dữ liệu rating
+                console.log("Food rating data:", {
+                  id: food.id,
+                  title: food.title,
+                  average_rating: food.average_rating,
+                  rating_count: food.rating_count,
+                });
+
+                return (
+                  <Card
+                    key={food.id}
+                    className="p-4 hover:shadow-lg transition-shadow">
+                    <div
+                      className="cursor-pointer"
+                      onClick={() =>
+                        openFoodModal({
+                          id: food.id,
+                          title: food.title,
+                          price: food.price,
+                          image_url: food.image_url,
+                          description: food.description,
+                        })
+                      }>
+                      <img
+                        src={food.image_url}
+                        alt={food.title}
+                        className="w-full h-40 object-cover rounded-lg mb-3"
+                        onError={(e) => {
+                          e.currentTarget.src = "/images/placeholder.jpg";
+                        }}
+                      />
+                      <div className="space-y-3">
+                        {/* Tên món ăn - màu đen đậm, nổi bật */}
+                        <h3 className="text-xl font-bold text-gray-900 cursor-pointer hover:text-orange-600 transition-colors">
+                          {food.title}
+                        </h3>
+
+                        {/* Tên cửa hàng - màu xanh dương đậm */}
+                        {food.store?.store_name && (
+                          <p className="text-sm font-semibold text-blue-700">
+                            🏪 Cửa hàng: {food.store.store_name}
+                          </p>
                         )}
+
+                        {/* Mô tả món ăn - màu xám đậm */}
+                        {food.description && (
+                          <p
+                            className="text-sm text-gray-800 leading-relaxed overflow-hidden"
+                            style={{
+                              display: "-webkit-box",
+                              WebkitLineClamp: 2,
+                              WebkitBoxOrient: "vertical" as const,
+                            }}>
+                            {food.description}
+                          </p>
+                        )}
+
+                        {/* Giá tiền - màu đỏ cam rất nổi bật với background */}
+                        <div className="text-xl font-black text-red-600 bg-yellow-50 px-3 py-2 rounded-lg inline-block border-l-4 border-red-500">
+                          {Number(food.price).toLocaleString()} đ
+                        </div>
+
+                        {/* Đánh giá */}
+                        {/* Đánh giá */}
+                        {food.average_rating !== undefined &&
+                          food.average_rating > 0 && (
+                            <div className="flex items-center text-sm text-gray-500">
+                              <span className="text-yellow-400">★</span>
+                              <span className="ml-1">
+                                {food.average_rating.toFixed(1)}
+                              </span>
+                              {food.rating_count && food.rating_count > 0 && (
+                                <span className="ml-1">
+                                  ({food.rating_count})
+                                </span>
+                              )}
+                            </div>
+                          )}
+                      </div>
                     </div>
-                    <div className="text-xs text-gray-500">
-                      <p>Cửa hàng: {food.store?.store_name || "N/A"}</p>
-                      <p>Danh mục: {food.category?.cate_name || "N/A"}</p>
-                    </div>
-                  </div>
-                </Card>
-              ))}
+                  </Card>
+                );
+              })}
             </div>
           )}
         </section>
@@ -551,10 +580,12 @@ const Home: React.FC = () => {
                           }}
                         />
                         <div>
-                          <p className="font-medium">{p.title}</p>
-                          <p className="text-orange-600 font-semibold">
-                            {Number(p.price).toLocaleString()} đ
-                          </p>
+                          <p className="text-gray-900 font-bold">{p.title}</p>
+                          <div className="bg-red-50 px-2 py-1 rounded-md inline-block mt-1">
+                            <span className="text-red-600 font-bold">
+                              {Number(p.price).toLocaleString()} đ
+                            </span>
+                          </div>
                         </div>
                       </div>
                     ))
@@ -647,10 +678,12 @@ const Home: React.FC = () => {
                     }}
                   />
                   <div>
-                    <p className="font-medium">{p.title}</p>
-                    <p className="text-orange-600 font-semibold">
-                      {Number(p.price).toLocaleString()} đ
-                    </p>
+                    <p className="text-gray-900 font-bold">{p.title}</p>
+                    <div className="bg-red-50 px-2 py-1 rounded-md inline-block mt-1">
+                      <span className="text-red-600 font-bold">
+                        {Number(p.price).toLocaleString()} đ
+                      </span>
+                    </div>
                   </div>
                 </div>
               ))
