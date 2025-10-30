@@ -34,8 +34,9 @@ class Promo(models.Model):
     def save(self, *args, **kwargs):
         # Sync legacy field
         self.category = self.discount_type
-        # Set scope based on store
-        if self.store_id:
+        # Set scope based on store_id
+        # Check if store_id is 0 (system-wide) or None
+        if self.store_id and self.store_id != 0:
             self.scope = 'STORE'
         else:
             self.scope = 'GLOBAL'

@@ -207,7 +207,7 @@ export default function CheckoutScreen() {
   const [storeInfoMap, setStoreInfoMap] = useState<{[storeName: string]: { id: number; name: string }}>({});
   const [isLoadingProfile, setIsLoadingProfile] = useState(true);
 
-  const [deliveryFee] = useState<number>(20000);
+  const deliveryFeePerStore = 15000; // Phí ship mỗi cửa hàng
   const [tax] = useState<number>(0);
   
   // Promo state
@@ -402,9 +402,18 @@ export default function CheckoutScreen() {
     [appliedPromos]
   );
 
+  // Calculate total delivery fee based on number of stores
+  const getTotalDeliveryFee = useMemo(
+    () => () => {
+      const numberOfStores = Object.keys(groupedItems).length;
+      return numberOfStores * deliveryFeePerStore;
+    },
+    [groupedItems, deliveryFeePerStore]
+  );
+
   const getFinalTotal = useMemo(
-    () => () => parseFloat((getSubtotal() + deliveryFee + tax - getTotalDiscount()).toFixed(3)),
-    [getSubtotal, deliveryFee, tax, getTotalDiscount]
+    () => () => parseFloat((getSubtotal() + getTotalDeliveryFee() + tax - getTotalDiscount()).toFixed(3)),
+    [getSubtotal, getTotalDeliveryFee, tax, getTotalDiscount]
   );
 
   const getVoucherIcon = (category: Voucher["category"]) => {
@@ -429,6 +438,9 @@ export default function CheckoutScreen() {
       // Get unique store IDs from cart
       const storeIds = Object.values(storeInfoMap).map(store => store.id);
       
+      console.log('Current storeInfoMap:', storeInfoMap);
+      console.log('Extracted store IDs:', storeIds);
+      
       if (storeIds.length === 0) {
         console.log('No stores in cart');
         setAvailablePromos([]);
@@ -439,6 +451,8 @@ export default function CheckoutScreen() {
       
       // Load promotions for stores in cart + system-wide (store = 0)
       const allStoreIds = [0, ...storeIds];
+      
+      console.log('Fetching promos for store IDs (including system):', allStoreIds);
       
       const promoPromises = allStoreIds.map(storeId => 
         promotionsService.getPromotions(storeId)
@@ -453,6 +467,8 @@ export default function CheckoutScreen() {
       );
       
       console.log('Loaded unique promos:', uniquePromos.length);
+      console.log('Promo details:', uniquePromos.map(p => ({ id: p.id, name: p.name, store: p.store })));
+      
       setAvailablePromos(uniquePromos);
     } catch (error) {
       console.error('Error loading promotions:', error);
@@ -492,15 +508,36 @@ export default function CheckoutScreen() {
     try {
       const totalAmount = getSubtotal();
       
-      // Prepare promo data with store amounts
+      // Calculate subtotal for each store by store ID (not store name)
+      const storeSubtotalsByStoreId: { [storeId: number]: number } = {};
+      
+      Object.entries(groupedItems).forEach(([storeName, items]) => {
+        const storeInfo = storeInfoMap[storeName];
+        if (storeInfo) {
+          const storeId = storeInfo.id;
+          const storeSubtotal = items.reduce((sum, item) => sum + item.totalPrice, 0);
+          storeSubtotalsByStoreId[storeId] = storeSubtotal;
+        }
+      });
+      
+      console.log('Store subtotals by ID:', storeSubtotalsByStoreId);
+      
+      // Prepare promo data with correct store amounts
       const promosWithAmounts = selectedPromos.map(promo => {
         // For system-wide promos (store = 0), use total cart amount
-        // For store-specific promos, find the matching store's subtotal
+        // For store-specific promos, use that store's subtotal
         let storeAmount = totalAmount;
+        
         if (promo.store !== 0) {
-          // Find store subtotal - this is simplified, you may need better store matching logic
-          const storeSubtotal = Object.values(storeSubtotals).reduce((sum, val) => sum + val, 0);
-          storeAmount = storeSubtotal || totalAmount;
+          // Find the correct store amount by matching promo.store with storeId
+          const promoStoreId = promo.store;
+          storeAmount = storeSubtotalsByStoreId[promoStoreId] || 0;
+          
+          console.log(`Promo ${promo.id} (${promo.name}) for store ${promoStoreId}: ${storeAmount}`);
+          
+          if (storeAmount === 0) {
+            console.warn(`Store ${promoStoreId} not found in cart, promo may not apply`);
+          }
         }
         
         return { promo, storeAmount };
@@ -627,16 +664,25 @@ export default function CheckoutScreen() {
         note: customerInfo.note || '',
         payment_method: paymentMethodMap[selectedPayment],
         total_money: getFinalTotal(),
-        shipping_fee: deliveryFee
+        shipping_fee: getTotalDeliveryFee()
       };
 
       // Add promo data if promos are applied
       if (appliedPromos && appliedPromos.length > 0) {
         orderData.promo_ids = appliedPromos.map(ap => ap.promo.id);
         orderData.discount_amount = getTotalDiscount();
+        
+        // Include detailed promo info for backend to save correctly
+        orderData.promo_details = appliedPromos.map(ap => ({
+          promo_id: ap.promo.id,
+          store_id: ap.promo.store,
+          discount: ap.discount
+        }));
+        
         console.log('Including promos in order:', {
           promo_ids: orderData.promo_ids,
-          discount_amount: orderData.discount_amount
+          discount_amount: orderData.discount_amount,
+          promo_details: orderData.promo_details
         });
       }
 
@@ -670,13 +716,39 @@ export default function CheckoutScreen() {
   };
 
   const renderStoreGroup = (storeName: string, items: CartItem[]) => {
-    const storeTotal = parseFloat((items.reduce((sum, item) => sum + item.totalPrice, 0)).toFixed(3));
+    const storeSubtotal = parseFloat((items.reduce((sum, item) => sum + item.totalPrice, 0)).toFixed(3));
+    
+    // Calculate discount for this store
+    let storeDiscount = 0;
+    const totalCartAmount = getSubtotal();
+    
+    if (appliedPromos && appliedPromos.length > 0) {
+      // Get store ID from storeInfoMap
+      const storeInfo = storeInfoMap[storeName];
+      const storeId = storeInfo?.id;
+      
+      appliedPromos.forEach(ap => {
+        const promoStoreId = ap.promo?.store;
+        
+        if (promoStoreId === storeId) {
+          // Store-specific promo - use full discount for this store
+          storeDiscount += ap.discount;
+        } else if (promoStoreId === 0 && totalCartAmount > 0) {
+          // System-wide promo - distribute proportionally based on store subtotal
+          const storeRatio = storeSubtotal / totalCartAmount;
+          const systemDiscountForThisStore = ap.discount * storeRatio;
+          storeDiscount += systemDiscountForThisStore;
+        }
+      });
+    }
+    
+    const storeFee = 15000; // Phí ship mỗi cửa hàng
+    const storeTotal = storeSubtotal - storeDiscount + storeFee;
 
     return (
       <View key={storeName} style={styles.storeGroup}>
         <View style={styles.storeHeader}>
           <Text style={styles.storeName}>{storeName}</Text>
-          <Text style={styles.storeTotal}>{formatPriceWithCurrency(storeTotal)}</Text>
         </View>
         
         {items.map((item) => (
@@ -715,6 +787,31 @@ export default function CheckoutScreen() {
             </View>
           </View>
         ))}
+        
+        {/* Store Summary */}
+        <View style={styles.storeSummary}>
+          <View style={styles.storeSummaryRow}>
+            <Text style={styles.storeSummaryLabel}>Tạm tính cửa hàng:</Text>
+            <Text style={styles.storeSummaryValue}>{formatPriceWithCurrency(storeSubtotal)}</Text>
+          </View>
+          
+          {storeDiscount > 0 && (
+            <View style={styles.storeSummaryRow}>
+              <Text style={[styles.storeSummaryLabel, { color: '#16a34a' }]}>Giảm giá:</Text>
+              <Text style={[styles.storeSummaryValue, { color: '#16a34a' }]}>-{formatPriceWithCurrency(storeDiscount)}</Text>
+            </View>
+          )}
+          
+          <View style={styles.storeSummaryRow}>
+            <Text style={styles.storeSummaryLabel}>Phí vận chuyển:</Text>
+            <Text style={styles.storeSummaryValue}>{formatPriceWithCurrency(storeFee)}</Text>
+          </View>
+          
+          <View style={[styles.storeSummaryRow, styles.storeSummaryTotal]}>
+            <Text style={styles.storeSummaryTotalLabel}>Tổng cửa hàng:</Text>
+            <Text style={styles.storeSummaryTotalValue}>{formatPriceWithCurrency(storeTotal)}</Text>
+          </View>
+        </View>
       </View>
     );
   };
@@ -801,7 +898,7 @@ export default function CheckoutScreen() {
 
             <View style={{ gap: 12 }}>
               <Row label="Tạm tính" value={`${getSubtotal().toLocaleString()}đ`} />
-              <Row label="Phí giao hàng" value={`${deliveryFee.toLocaleString()}đ`} />
+              <Row label="Phí giao hàng" value={`${getTotalDeliveryFee().toLocaleString()}đ`} />
               {tax > 0 && <Row label="Thuế" value={`${tax.toLocaleString()}đ`} />}
 
               <View style={styles.divider} />
@@ -824,28 +921,6 @@ export default function CheckoutScreen() {
                 </View>
                 <ChevronRight size={16} color="#9ca3af" />
               </TouchableOpacity>
-
-              {appliedPromos && appliedPromos.length > 0 && (
-                <View style={{ marginTop: 8 }}>
-                  <Text style={styles.appliedTitle}>Mã giảm giá đã áp dụng:</Text>
-
-                  {appliedPromos.map(ap => (
-                    <AppliedPromoRow
-                      key={ap.promo.id}
-                      pillStyle={getPromoPillStyle(ap.promo.category)}
-                      icon={getPromoIcon(ap.promo.category)}
-                      title={ap.promo.name}
-                      saving={`-${formatPriceWithCurrency(ap.discount)}`}
-                      onRemove={() => removeAppliedPromo(ap.promo.id)}
-                    />
-                  ))}
-
-                  <View style={styles.totalSavingRow}>
-                    <Text style={styles.totalSavingLabel}>Tổng tiết kiệm</Text>
-                    <Text style={styles.totalSavingValue}>-{formatPriceWithCurrency(getTotalDiscount())}</Text>
-                  </View>
-                </View>
-              )}
             </View>
           </View>
 
@@ -1207,6 +1282,46 @@ const styles = StyleSheet.create({
     color: ACCENT,
     fontFamily: Fonts.LeagueSpartanExtraBold,
     fontSize: 16,
+  },
+  
+  // Store summary styles
+  storeSummary: {
+    marginTop: 12,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: "#dee2e6",
+  },
+  storeSummaryRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 6,
+  },
+  storeSummaryLabel: {
+    color: "#6b7280",
+    fontFamily: Fonts.LeagueSpartanRegular,
+    fontSize: 13,
+  },
+  storeSummaryValue: {
+    color: BROWN,
+    fontFamily: Fonts.LeagueSpartanSemiBold,
+    fontSize: 13,
+  },
+  storeSummaryTotal: {
+    marginTop: 6,
+    paddingTop: 8,
+    borderTopWidth: 1,
+    borderTopColor: "#dee2e6",
+  },
+  storeSummaryTotalLabel: {
+    color: BROWN,
+    fontFamily: Fonts.LeagueSpartanBold,
+    fontSize: 14,
+  },
+  storeSummaryTotalValue: {
+    color: ACCENT,
+    fontFamily: Fonts.LeagueSpartanExtraBold,
+    fontSize: 14,
   },
 
   addressCard: { backgroundColor: "#fff", borderRadius: 16, padding: 16, borderWidth: 1, borderColor: "#f3f4f6" },

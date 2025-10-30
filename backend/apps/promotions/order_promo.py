@@ -1,4 +1,6 @@
 from django.db import models
+from django.utils import timezone
+import pytz
 
 
 class OrderPromo(models.Model):

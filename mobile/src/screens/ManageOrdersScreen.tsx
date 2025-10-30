@@ -176,17 +176,24 @@ const ManageOrdersScreen: React.FC = () => {
     });
 
     // Calculate shipping details based on order
+    // NEW: total_money is now food items total ONLY (no shipping, no discount)
     const subtotal = parseFloat(order.total_money);
-    const shippingFee = 15000;
-    const shippingDiscount = order.promo ? -15000 : 0;
-    const voucherDiscount = order.promo ? -50000 : 0;
+    const shippingFee = parseFloat(order.shipping_fee || '15000');
+    const promoDiscount = order.promo_discount || 0;
+    
+    // Calculate final total: subtotal + shipping - discount
+    const finalTotal = subtotal + shippingFee - promoDiscount;
+    
+    // For display: keep shipping discount as 0, all discounts in voucherDiscount
+    const shippingDiscount = 0;
+    const voucherDiscount = promoDiscount > 0 ? -promoDiscount : 0;
     
     return {
       orderId: order.id,
       shopName: order.items[0]?.food.store?.store_name || 'Cửa hàng',
       foodItems: foodItems,
-      totalAmount: formatCurrency(subtotal),
-      subtotalAmount: formatCurrency(subtotal - shippingFee - shippingDiscount - voucherDiscount),
+      totalAmount: formatCurrency(finalTotal),
+      subtotalAmount: formatCurrency(subtotal),
       shippingFee,
       shippingDiscount,
       voucherDiscount,
@@ -200,6 +207,7 @@ const ManageOrdersScreen: React.FC = () => {
       orderTime: new Date(order.created_date).toLocaleTimeString('vi-VN'),
       status: order.order_status,
       note: order.note, // Thêm note cho toàn đơn hàng
+      appliedPromos: order.applied_promos || [], // Thêm danh sách promos đã áp dụng
     };
   };
 

@@ -127,6 +127,8 @@ REST_FRAMEWORK = {
     # ],  # Temporarily disabled for testing
     'DEFAULT_PAGINATION_CLASS': 'rest_framework.pagination.PageNumberPagination',
     'PAGE_SIZE': 12,
+    # Tự động convert datetime sang múi giờ Việt Nam khi serialize
+    'DATETIME_FORMAT': '%Y-%m-%d %H:%M:%S',  # Format không có timezone suffix
 }
 
 # JWT Configuration

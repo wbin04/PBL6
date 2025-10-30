@@ -2,6 +2,7 @@ from rest_framework import serializers
 from rest_framework_simplejwt.tokens import RefreshToken
 from django.db.models import Q
 from .models import User, Role
+from apps.utils import VietnamDateTimeField
 
 
 class LoginSerializer(serializers.Serializer):
@@ -81,6 +82,7 @@ class RoleSerializer(serializers.ModelSerializer):
 class UserSerializer(serializers.ModelSerializer):
     role = serializers.CharField(source='role.role_name', read_only=True)
     role_id = serializers.IntegerField(source='role.id', read_only=True)
+    created_date = VietnamDateTimeField(read_only=True)
     
     class Meta:
         model = User

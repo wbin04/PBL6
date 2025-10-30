@@ -410,7 +410,7 @@ const ShipperDetailScreen: React.FC = () => {
                       </View>
                       <View style={styles.orderDetailItem}>
                         <Text style={styles.orderDetailLabel}>Thời gian đặt:</Text>
-                        <Text style={styles.orderDetailValue}>{formatDate(selectedOrder.created_date || selectedOrder.created_date_display)}</Text>
+                        <Text style={styles.orderDetailValue}>{formatDate(selectedOrder.created_date)}</Text>
                       </View>
                       <View style={styles.orderDetailItem}>
                         <Text style={styles.orderDetailLabel}>Trạng thái:</Text>

@@ -204,24 +204,30 @@ export const ordersService = {
 export const promotionsService = {
   async getPromotions(storeId?: number): Promise<Promotion[]> {
     try {
-      const url = storeId 
-        ? `${ENDPOINTS.PROMOTIONS}?store_id=${storeId}` 
-        : ENDPOINTS.PROMOTIONS;
+      const url = storeId !== undefined
+        ? `${ENDPOINTS.PROMOTIONS}?store=${storeId}&active=true` 
+        : `${ENDPOINTS.PROMOTIONS}?active=true`;
+      
+      console.log('Fetching promotions from:', url);
+      
       const response = await apiClient.get(url);
       
       // Check if response is paginated or direct array
       if (response && typeof response === 'object') {
         // If it's a paginated response
         if ('results' in response && Array.isArray(response.results)) {
+          console.log(`Got ${response.results.length} promos for store ${storeId}`);
           return response.results;
         }
         // If it's a direct array
         if (Array.isArray(response)) {
+          console.log(`Got ${response.length} promos for store ${storeId}`);
           return response;
         }
       }
       
       // Fallback to empty array
+      console.log(`No promos found for store ${storeId}`);
       return [];
     } catch (error) {
       console.error('Error fetching promotions:', error);
@@ -246,27 +252,44 @@ export const promotionsService = {
     const appliedPromos = [];
     let totalDiscount = 0;
 
+    console.log('=== Validating Multiple Promos ===');
+    console.log('Total cart amount:', totalAmount);
+
     for (const { promo, storeAmount } of promos) {
       try {
         // For system-wide promos (store = 0), use total cart amount
         // For store-specific promos, use that store's subtotal
         const amountToValidate = promo.store === 0 ? totalAmount : storeAmount;
         
+        console.log(`\nValidating promo: ${promo.name}`);
+        console.log(`  - Store ID: ${promo.store} ${promo.store === 0 ? '(System-wide)' : '(Store-specific)'}`);
+        console.log(`  - Store amount: ${storeAmount}`);
+        console.log(`  - Amount to validate: ${amountToValidate}`);
+        console.log(`  - Minimum required: ${promo.minimum_pay}`);
+        
         const response = await this.validatePromo(promo.id, amountToValidate);
         
         if (response.valid && response.discount_amount) {
           const discount = parseFloat(response.discount_amount);
+          console.log(`  ✓ Valid! Discount: ${discount}`);
           totalDiscount += discount;
           appliedPromos.push({
             promo,
             discount,
             storeAmount: amountToValidate
           });
+        } else {
+          console.log(`  ✗ Invalid or not eligible`);
+          console.log(`  Reason: ${response.error || 'Unknown'}`);
         }
       } catch (error) {
         console.error(`Error validating promo ${promo.id}:`, error);
       }
     }
+
+    console.log(`\n=== Validation Complete ===`);
+    console.log(`Applied promos: ${appliedPromos.length}`);
+    console.log(`Total discount: ${totalDiscount}`);
 
     return { appliedPromos, totalDiscount };
   },

@@ -32,6 +32,11 @@ type OrderWithDisplayData = {
   ship_address: string;
   created_date: string;
   user?: any;
+  // Financial fields
+  subtotal: number;           // Food items only
+  shipping_fee: number;        // Shipping fee
+  promo_discount: number;      // Promo discount
+  total_after_discount: number; // Final total
 };
 
 const NewOrderListScreen = () => {
@@ -55,7 +60,13 @@ const NewOrderListScreen = () => {
       food_option_price: item.food_option_price // Include option price
     })) || [];
 
-    const total = parseFloat(order.total_money || '0');
+    // Parse financial fields
+    const subtotal = parseFloat(order.total_money || '0');
+    const shippingFee = parseFloat(order.shipping_fee || '15000');
+    const promoDiscount = order.promo_discount || 0;
+    const totalAfterDiscount = order.total_after_discount 
+      ? parseFloat(order.total_after_discount.toString())
+      : subtotal + shippingFee - promoDiscount;
     
     return {
       ...order,
@@ -67,7 +78,11 @@ const NewOrderListScreen = () => {
       }),
       address: order.ship_address,
       items,
-      total,
+      total: totalAfterDiscount, // Use final total
+      subtotal,
+      shipping_fee: shippingFee,
+      promo_discount: promoDiscount,
+      total_after_discount: totalAfterDiscount,
       status: mapOrderStatus(order.order_status),
       payment: order.payment_method === 'cash' ? 'COD' : 'Online',
       notes: order.note
@@ -319,7 +334,29 @@ const NewOrderListScreen = () => {
                 </View>
               ))}
               <View style={styles.totalRow}>
-                <Text style={styles.totalText}>{order.total > 0 ? `Tổng cộng: ` : ''}<Text style={{ color: '#ea580c', fontWeight: 'bold' }}>{order.total > 0 ? `${order.total.toLocaleString()} đ` : ''}</Text></Text>
+                <View style={{ flex: 1 }}>
+                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 2 }}>
+                    <Text style={{ color: '#6b7280', fontSize: 13 }}>Tạm tính:</Text>
+                    <Text style={{ color: '#1e293b', fontSize: 13 }}>{order.subtotal.toLocaleString()} đ</Text>
+                  </View>
+                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 2 }}>
+                    <Text style={{ color: '#6b7280', fontSize: 13 }}>Phí vận chuyển:</Text>
+                    <Text style={{ color: '#1e293b', fontSize: 13 }}>{order.shipping_fee.toLocaleString()} đ</Text>
+                  </View>
+                  {order.promo_discount > 0 && (
+                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 2 }}>
+                      <Text style={{ color: '#10b981', fontSize: 13 }}>Giảm giá:</Text>
+                      <Text style={{ color: '#10b981', fontSize: 13, fontWeight: 'bold' }}>-{order.promo_discount.toLocaleString()} đ</Text>
+                    </View>
+                  )}
+                  <View style={{ height: 1, backgroundColor: '#e5e7eb', marginVertical: 4 }} />
+                  <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+                    <Text style={{ fontWeight: 'bold', fontSize: 15, color: '#1e293b' }}>Tổng cộng:</Text>
+                    <Text style={{ color: '#ea580c', fontWeight: 'bold', fontSize: 16 }}>{order.total.toLocaleString()} đ</Text>
+                  </View>
+                </View>
+              </View>
+              <View style={[styles.totalRow, { marginTop: 8 }]}>
                 <Text style={styles.payment}>{order.payment === 'COD' ? '💰 COD' : 'Online'}</Text>
                 {order.status === 'pending' ? (
                   <View style={[styles.statusBadge, { backgroundColor: '#f59e0b' }]}><Text style={styles.statusBadgeText}>Chờ xác nhận</Text></View>
@@ -461,9 +498,27 @@ const NewOrderListScreen = () => {
                     <Text style={{ fontWeight: 'bold', fontSize: 15, color: '#ea580c' }}>{((item.price + (item.food_option_price || 0)) * item.qty).toLocaleString() + ' đ'}</Text>
                   </View>
                 ))}
-                <View style={{ flexDirection: 'row', justifyContent: 'flex-end', alignItems: 'center', marginTop: 8 }}>
-                  <Text style={{ color: '#6b7280', fontSize: 15, marginRight: 8 }}>Tổng cộng:</Text>
-                  <Text style={{ fontWeight: 'bold', fontSize: 18, color: '#ea580c' }}>{selectedOrder.total.toLocaleString() + ' đ'}</Text>
+                <View style={{ height: 1, backgroundColor: '#e5e7eb', marginVertical: 12 }} />
+                <View style={{ gap: 6 }}>
+                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <Text style={{ color: '#6b7280', fontSize: 14 }}>Tạm tính (món ăn):</Text>
+                    <Text style={{ color: '#1e293b', fontSize: 14, fontWeight: '600' }}>{selectedOrder.subtotal.toLocaleString()} đ</Text>
+                  </View>
+                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <Text style={{ color: '#6b7280', fontSize: 14 }}>Phí vận chuyển:</Text>
+                    <Text style={{ color: '#1e293b', fontSize: 14, fontWeight: '600' }}>+{selectedOrder.shipping_fee.toLocaleString()} đ</Text>
+                  </View>
+                  {selectedOrder.promo_discount > 0 && (
+                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <Text style={{ color: '#10b981', fontSize: 14, fontWeight: 'bold' }}>🎁 Giảm giá khuyến mãi:</Text>
+                      <Text style={{ color: '#10b981', fontSize: 14, fontWeight: 'bold' }}>-{selectedOrder.promo_discount.toLocaleString()} đ</Text>
+                    </View>
+                  )}
+                  <View style={{ height: 1, backgroundColor: '#ea580c', marginVertical: 4, opacity: 0.3 }} />
+                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#fff7ed', padding: 10, borderRadius: 8 }}>
+                    <Text style={{ color: '#ea580c', fontSize: 16, fontWeight: 'bold' }}>Tổng thanh toán:</Text>
+                    <Text style={{ fontWeight: 'bold', fontSize: 20, color: '#ea580c' }}>{selectedOrder.total.toLocaleString()} đ</Text>
+                  </View>
                 </View>
               </View>
               {/* Ghi chú */}

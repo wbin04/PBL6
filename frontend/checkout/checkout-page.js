@@ -467,7 +467,19 @@ async function placeOrder() {
         console.log('Applied promos before order:', window.appliedPromos);
         payload.promo_ids = window.appliedPromos.map(ap => ap.promo?.id || ap.id);
         payload.discount_amount = window.appliedPromos.reduce((sum, ap) => sum + ap.discount, 0);
-        console.log('Promo payload:', { promo_ids: payload.promo_ids, discount_amount: payload.discount_amount });
+        
+        // Include detailed promo info for backend to save correctly
+        payload.promo_details = window.appliedPromos.map(ap => ({
+            promo_id: ap.promo?.id || ap.id,
+            store_id: ap.promo?.store_id || 0,
+            discount: ap.discount
+        }));
+        
+        console.log('Promo payload:', { 
+            promo_ids: payload.promo_ids, 
+            discount_amount: payload.discount_amount,
+            promo_details: payload.promo_details
+        });
     }
 
     console.log('Final order payload:', payload);

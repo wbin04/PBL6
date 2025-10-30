@@ -115,6 +115,7 @@ def order_list_create(request):
             # Handle multiple promos (new format)
             promo_ids = request.data.get('promo_ids', [])
             discount_amount = request.data.get('discount_amount', 0)
+            promo_details = request.data.get('promo_details', [])  # New: detailed promo info
             
             if promo_ids and discount_amount:
                 # Use discount amount calculated by frontend - convert to Decimal
@@ -123,6 +124,7 @@ def order_list_create(request):
                 # Set first promo as primary for database storage
                 base_order_data['promo'] = promo_ids[0] if promo_ids else None
                 print(f"Applied multiple promos: {applied_promos}, discount: {promo_discount}")
+                print(f"Promo details: {promo_details}")
                 
                 # Store promo info for order_promo table
                 try:
@@ -132,7 +134,7 @@ def order_list_create(request):
                     multi_promo_support = False
                 
                 # Validate discount amount is reasonable
-                if promo_discount > Decimal('1000000'):  # 1 million VND max discount
+                if promo_discount > Decimal('10000000'):  # 10 million VND max discount
                     print(f"ERROR: Discount too large: {promo_discount}")
                     return Response({
                         'error': f'Số tiền giảm giá quá lớn: {promo_discount}'
@@ -227,7 +229,8 @@ def order_list_create(request):
                 
                 # Create order data for this store
                 order_data = base_order_data.copy()
-                order_data['total_money'] = store_total
+                # total_money should be FOOD ONLY (no shipping, no discount applied)
+                order_data['total_money'] = float(store_subtotal)
                 order_data['store_id'] = store_id
                 
                 # Only set promo on the first order (for database storage)
@@ -246,35 +249,54 @@ def order_list_create(request):
                     
                     # Update financial fields if they exist
                     if hasattr(order, 'total_before_discount'):
-                        # Calculate store subtotal without shipping
-                        store_subtotal_only = store_total - shipping_fee_decimal
-                        if len(created_orders) == 0 and promo_discount > Decimal('0'):
-                            # For first order, apply proportional discount
-                            store_discount = promo_discount  # Apply full discount to first store for simplicity
-                        else:
-                            store_discount = Decimal('0')
-                            
-                        order.total_before_discount = store_subtotal_only + shipping_fee_decimal
+                        # total_money is already set to store_subtotal (food only)
+                        # Now calculate with shipping and discount
+                        order.total_before_discount = store_subtotal + shipping_fee_decimal
                         order.total_discount = store_discount
                         order.total_after_discount = max(shipping_fee_decimal, order.total_before_discount - store_discount)
-                        order.total_money = order.total_after_discount  # Keep legacy field in sync
+                        # total_money remains as food subtotal only (no shipping, no discount)
                     
                     order.save()
                     
-                    # Save multiple promotions if supported
-                    if len(created_orders) == 0 and applied_promos and multi_promo_support:
+                    # Save promotions for this specific store
+                    if applied_promos and multi_promo_support and promo_details:
                         try:
-                            for promo_id in applied_promos:
-                                promo = Promo.objects.get(id=promo_id)
-                                # Calculate individual promo discount
-                                individual_discount = promo.calculate_discount(store_subtotal_only)
-                                OrderPromo.objects.create(
-                                    order=order,
-                                    promo=promo,
-                                    applied_amount=individual_discount
-                                )
+                            # Find promos that apply to this store
+                            for promo_detail in promo_details:
+                                promo_id = promo_detail.get('promo_id')
+                                promo_store_id = promo_detail.get('store_id')
+                                promo_discount_amount = Decimal(str(promo_detail.get('discount', 0)))
+                                
+                                # Apply promo to this order if:
+                                # 1. It's a system-wide promo (store_id = 0), OR
+                                # 2. It's specific to this store
+                                if promo_store_id == 0:
+                                    # System-wide promo: distribute proportionally
+                                    if total_cart_amount > Decimal('0'):
+                                        store_ratio = store_subtotal / total_cart_amount
+                                        individual_discount = (promo_discount_amount * store_ratio).quantize(Decimal('0.01'), rounding='ROUND_HALF_UP')
+                                    else:
+                                        individual_discount = Decimal('0')
+                                elif promo_store_id == store_id:
+                                    # Store-specific promo: full discount
+                                    individual_discount = promo_discount_amount
+                                else:
+                                    # This promo doesn't apply to this store
+                                    continue
+                                
+                                if individual_discount > Decimal('0'):
+                                    promo = Promo.objects.get(id=promo_id)
+                                    OrderPromo.objects.create(
+                                        order=order,
+                                        promo=promo,
+                                        applied_amount=individual_discount,
+                                        note=f"Store {store_id}"
+                                    )
+                                    print(f"Saved promo {promo_id} for order {order.id}, store {store_id}, discount: {individual_discount}")
                         except Exception as e:
-                            print(f"Warning: Could not save multiple promos: {e}")
+                            print(f"Warning: Could not save promos for store {store_id}: {e}")
+                            import traceback
+                            traceback.print_exc()
                     
                     # Insert order details for this store
                     with connection.cursor() as cursor:

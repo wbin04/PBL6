@@ -106,7 +106,7 @@ export default function CancelDetailScreen() {
             </View>
           </View>
           <Text style={styles.cancelDate}>
-            vào {order.cancelled_date || order.created_date_display || order.created_date}
+            vào {order.cancelled_date || order.created_date}
           </Text>
           {order.cancelled_by_role && (
             <Text style={styles.cancelledByText}>
@@ -181,7 +181,7 @@ export default function CancelDetailScreen() {
 
           <View style={styles.detailRow}>
             <Text style={styles.detailLabel}>Thời gian đặt</Text>
-            <Text style={styles.detailValue}>{order.created_date_display || order.created_date}</Text>
+            <Text style={styles.detailValue}>{order.created_date}</Text>
           </View>
 
           {order.cancelled_date && (

@@ -439,7 +439,33 @@ export default function OrderListScreen() {
                     </View>
                   </View>
                   <View style={styles.orderCardFooter}>
-                    <Text style={styles.orderCardTotal}>{formatPrice(order.total_money)}</Text>
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.orderCardPriceLabel}>Tạm tính:</Text>
+                      <Text style={styles.orderCardPrice}>{formatPrice(order.total_money || 0)}</Text>
+                      {(order.shipping_fee || order.ship_fee) && (
+                        <>
+                          <Text style={styles.orderCardPriceLabel}>Phí vận chuyển:</Text>
+                          <Text style={styles.orderCardPrice}>{formatPrice(order.shipping_fee || order.ship_fee || 0)}</Text>
+                        </>
+                      )}
+                      {(order.promo_discount || order.total_discount) && (
+                        <>
+                          <Text style={styles.orderCardPriceLabel}>Giảm giá:</Text>
+                          <Text style={[styles.orderCardPrice, { color: '#10b981' }]}>-{formatPrice(order.promo_discount || order.total_discount || 0)}</Text>
+                        </>
+                      )}
+                      <View style={styles.orderCardTotalRow}>
+                        <Text style={styles.orderCardTotalLabel}>Tổng cộng:</Text>
+                        <Text style={styles.orderCardTotal}>
+                          {formatPrice(
+                            order.total_after_discount || 
+                            (parseFloat(order.total_money || 0) + 
+                             parseFloat(order.shipping_fee || order.ship_fee || 0) - 
+                             parseFloat(order.promo_discount || order.total_discount || 0))
+                          )}
+                        </Text>
+                      </View>
+                    </View>
                     <View style={[styles.statusBadge, { backgroundColor: getStatusColor(order.order_status) }]}>
                       <Text style={styles.statusText}>{order.order_status}</Text>
                     </View>
@@ -493,7 +519,7 @@ export default function OrderListScreen() {
                       </View>
                       <View style={styles.orderDetailItem}>
                         <Text style={styles.orderDetailLabel}>Thời gian đặt:</Text>
-                        <Text style={styles.orderDetailValue}>{selectedOrder.created_date_display || 'Chưa xác định'}</Text>
+                        <Text style={styles.orderDetailValue}>{selectedOrder.created_date || 'Chưa xác định'}</Text>
                       </View>
                       <View style={styles.orderDetailItem}>
                         <Text style={styles.orderDetailLabel}>Trạng thái:</Text>
@@ -526,9 +552,38 @@ export default function OrderListScreen() {
                           <Text style={styles.orderDetailFoodPrice}>{formatPrice(item.subtotal)}</Text>
                         </View>
                       ))}
-                      <View style={styles.orderDetailTotal}>
-                        <Text style={styles.orderDetailTotalLabel}>Tổng cộng:</Text>
-                        <Text style={styles.orderDetailTotalValue}>{formatPrice(selectedOrder.total_money)}</Text>
+                      
+                      <View style={styles.orderDetailPriceBreakdown}>
+                        <View style={styles.orderDetailPriceRow}>
+                          <Text style={styles.orderDetailPriceLabel}>Tạm tính:</Text>
+                          <Text style={styles.orderDetailPriceValue}>{formatPrice(selectedOrder.total_money || 0)}</Text>
+                        </View>
+                        
+                        {(selectedOrder.shipping_fee || selectedOrder.ship_fee) && (
+                          <View style={styles.orderDetailPriceRow}>
+                            <Text style={styles.orderDetailPriceLabel}>Phí vận chuyển:</Text>
+                            <Text style={styles.orderDetailPriceValue}>{formatPrice(selectedOrder.shipping_fee || selectedOrder.ship_fee || 0)}</Text>
+                          </View>
+                        )}
+                        
+                        {(selectedOrder.promo_discount || selectedOrder.total_discount) && (
+                          <View style={styles.orderDetailPriceRow}>
+                            <Text style={styles.orderDetailPriceLabel}>Giảm giá:</Text>
+                            <Text style={[styles.orderDetailPriceValue, { color: '#10b981' }]}>-{formatPrice(selectedOrder.promo_discount || selectedOrder.total_discount || 0)}</Text>
+                          </View>
+                        )}
+                        
+                        <View style={styles.orderDetailTotal}>
+                          <Text style={styles.orderDetailTotalLabel}>Tổng cộng:</Text>
+                          <Text style={styles.orderDetailTotalValue}>
+                            {formatPrice(
+                              selectedOrder.total_after_discount || 
+                              (parseFloat(selectedOrder.total_money || 0) + 
+                               parseFloat(selectedOrder.shipping_fee || selectedOrder.ship_fee || 0) - 
+                               parseFloat(selectedOrder.promo_discount || selectedOrder.total_discount || 0))
+                            )}
+                          </Text>
+                        </View>
                       </View>
                     </View>
 
@@ -750,11 +805,37 @@ const styles = StyleSheet.create({
   orderCardFooter: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     marginTop: 8,
     paddingTop: 12,
     borderTopWidth: 1,
     borderTopColor: '#f3f4f6',
+  },
+  orderCardPriceLabel: {
+    fontSize: 13,
+    fontFamily: Fonts.LeagueSpartanMedium,
+    color: '#6b7280',
+    marginBottom: 4,
+  },
+  orderCardPrice: {
+    fontSize: 14,
+    fontFamily: Fonts.LeagueSpartanSemiBold,
+    color: '#1f2937',
+    marginBottom: 8,
+  },
+  orderCardTotalRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginTop: 4,
+    paddingTop: 8,
+    borderTopWidth: 1,
+    borderTopColor: '#e5e7eb',
+  },
+  orderCardTotalLabel: {
+    fontSize: 15,
+    fontFamily: Fonts.LeagueSpartanBold,
+    color: '#1f2937',
   },
   orderCardTotal: {
     fontSize: 18,
@@ -822,6 +903,31 @@ const styles = StyleSheet.create({
   orderDetailFoodSize: { fontSize: 12, color: '#6b7280', fontFamily: Fonts.LeagueSpartanRegular, marginLeft: 8 },
   orderDetailFoodQuantity: { fontSize: 14, fontFamily: Fonts.LeagueSpartanMedium, color: '#6b7280', marginHorizontal: 12 },
   orderDetailFoodPrice: { fontSize: 14, fontFamily: Fonts.LeagueSpartanBold, color: '#1f2937' },
+  
+  // Price breakdown
+  orderDetailPriceBreakdown: {
+    marginTop: 16,
+    paddingTop: 16,
+    borderTopWidth: 2,
+    borderTopColor: '#f3f4f6',
+  },
+  orderDetailPriceRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 6,
+  },
+  orderDetailPriceLabel: {
+    fontSize: 14,
+    fontFamily: Fonts.LeagueSpartanMedium,
+    color: '#6b7280',
+  },
+  orderDetailPriceValue: {
+    fontSize: 14,
+    fontFamily: Fonts.LeagueSpartanSemiBold,
+    color: '#1f2937',
+  },
+  
   orderDetailTotal: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 12, marginTop: 8, borderTopWidth: 2, borderTopColor: '#e5e7eb' },
   orderDetailTotalLabel: { fontSize: 16, fontFamily: Fonts.LeagueSpartanBold, color: '#1f2937' },
   orderDetailTotalValue: { fontSize: 16, fontFamily: Fonts.LeagueSpartanBold, color: '#dc2626' },

@@ -555,7 +555,7 @@ export default function TrackingScreen() {
               )}
               {trackingInfo.voucherDiscount < 0 && (
                 <View style={styles.costRow}>
-                  <Text style={styles.costLabel}>Voucher từ cửa hàng</Text>
+                  <Text style={styles.costLabel}>Giảm giá khuyến mãi</Text>
                   <Text style={[styles.costValue, styles.discountText]}>{costBreakdown.voucherDiscount}</Text>
                 </View>
               )}

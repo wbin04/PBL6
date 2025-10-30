@@ -1,6 +1,15 @@
 from django.db import models
 from django.contrib.auth.models import AbstractBaseUser, PermissionsMixin
 from django.contrib.auth.models import UserManager
+from django.utils import timezone
+
+
+def get_vietnam_time():
+    """Trả về thời gian hiện tại theo múi giờ Việt Nam"""
+    now = timezone.now()
+    # Chuyển về múi giờ Việt Nam (UTC+7)
+    vietnam_tz = timezone.get_fixed_timezone(7 * 60)  # 7 giờ * 60 phút
+    return now.astimezone(vietnam_tz)
 
 
 class Role(models.Model):
@@ -23,7 +32,7 @@ class User(AbstractBaseUser, PermissionsMixin):
     email = models.EmailField(max_length=50, unique=True)
     address = models.CharField(max_length=100, blank=True)
     phone_number = models.CharField(max_length=10, blank=True)
-    created_date = models.DateTimeField(auto_now_add=True)
+    created_date = models.DateTimeField(default=get_vietnam_time)
     role = models.ForeignKey(Role, on_delete=models.SET_NULL, null=True, blank=True, db_column='role_id')
     
     # Registration status fields
@@ -35,7 +44,7 @@ class User(AbstractBaseUser, PermissionsMixin):
     is_superuser = models.BooleanField(default=False)
     is_staff = models.BooleanField(default=False)
     is_active = models.BooleanField(default=True)
-    date_joined = models.DateTimeField(auto_now_add=True)
+    date_joined = models.DateTimeField(default=get_vietnam_time)
     
     objects = UserManager()
     

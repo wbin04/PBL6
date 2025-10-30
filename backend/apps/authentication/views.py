@@ -73,7 +73,19 @@ def refresh_view(request):
 @permission_classes([IsAuthenticated])
 def profile_view(request):
     serializer = UserSerializer(request.user)
-    return Response(serializer.data)
+    data = serializer.data
+    
+    # Debug logging
+    import logging
+    logger = logging.getLogger(__name__)
+    logger.info(f"=== Profile Request ===")
+    logger.info(f"User ID: {request.user.id}")
+    logger.info(f"Username: {request.user.username}")
+    logger.info(f"Role: {request.user.role.role_name if request.user.role else None}")
+    logger.info(f"Role ID: {request.user.role.id if request.user.role else None}")
+    logger.info(f"Serialized data: {data}")
+    
+    return Response(data)
 
 
 @api_view(['PUT'])

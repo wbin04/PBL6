@@ -7,8 +7,10 @@ export interface ShipperOrder {
   created_date: string;
   total_before_discount?: number | string;
   total_after_discount?: number | string;
-  total_money?: number | string; // Backend uses this field
+  total_money?: number | string; // Backend uses this field (food only)
+  total_discount?: number | string; // Total discount applied
   shipping_fee: number | string;
+  promo_discount?: number; // Total promo discount from database
   user: {
     id: number;
     fullname: string;

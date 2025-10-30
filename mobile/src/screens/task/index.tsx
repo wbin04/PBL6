@@ -228,28 +228,36 @@ export default function ShipperOrdersScreen() {
         return null;
       }
       
-      // Handle both string and number types from API
-      // Backend may use total_money instead of total_after_discount
-      const totalMoney = order.total_money || order.total_after_discount || 0;
-      const parsedTotalMoney = typeof totalMoney === 'string' 
-        ? parseFloat(totalMoney) || 0
-        : totalMoney || 0;
+      // For shipper screen, show FINAL total (after discount)
+      // Priority: total_after_discount > calculated from total_money + shipping - discount
+      let total = 0;
       
-      const shippingFee = typeof order.shipping_fee === 'string'
-        ? parseFloat(order.shipping_fee) || 0  
-        : order.shipping_fee || 0;
-      
-      // For shipper screen, use total_money which includes shipping
-      // If not available, calculate total_after_discount + shipping_fee
-      const total = parsedTotalMoney > 0 ? parsedTotalMoney : shippingFee;
+      if (order.total_after_discount) {
+        // Use total_after_discount directly (already includes shipping and discount)
+        total = typeof order.total_after_discount === 'string' 
+          ? parseFloat(order.total_after_discount) || 0
+          : order.total_after_discount || 0;
+      } else {
+        // Fallback: Calculate manually
+        const foodTotal = typeof order.total_money === 'string' 
+          ? parseFloat(order.total_money) || 0
+          : order.total_money || 0;
+        
+        const shippingFee = typeof order.shipping_fee === 'string'
+          ? parseFloat(order.shipping_fee) || 0  
+          : order.shipping_fee || 0;
+        
+        const discount = order.promo_discount || 0;
+        
+        total = foodTotal + shippingFee - discount;
+      }
       
       console.log(`Order ${order.id} total calculation:`, {
         total_before_discount: order.total_before_discount,
         total_after_discount: order.total_after_discount,
         total_money: order.total_money,
         shipping_fee: order.shipping_fee,
-        parsed_total_money: parsedTotalMoney,
-        parsed_shipping_fee: shippingFee,
+        promo_discount: order.promo_discount,
         calculated_total: total,
         formatted_total: vnd(total)
       });
