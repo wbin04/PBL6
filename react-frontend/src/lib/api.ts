@@ -5,8 +5,6 @@ interface ApiRequestOptions extends Omit<RequestInit, "body"> {
   body?: unknown;
 }
 
-
-
 class APIClient {
   private baseURL: string;
 

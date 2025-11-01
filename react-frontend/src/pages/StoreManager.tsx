@@ -308,7 +308,7 @@ const StoreManager: React.FC = () => {
       alert(`Lỗi khi cập nhật cửa hàng: ${error}`);
     }
   };
-  // *** KẾT THÚC PHẦN THÊM MỚI ***
+
 
 
   // --- Order Functions ---
@@ -373,14 +373,14 @@ const StoreManager: React.FC = () => {
     'Đã hủy': 'bg-red-100 text-red-800'
   }[status] || 'bg-gray-100 text-gray-800');
 
-  // *** BẮT ĐẦU PHẦN THÊM MỚI ***
+
   const sectionTitles: { [key: string]: string } = {
     dashboard: 'Dashboard',
     foods: 'Món ăn',
     orders: 'Đơn hàng',
     'my-store': 'Cửa hàng của tôi'
   };
-  // *** KẾT THÚC PHẦN THÊM MỚI ***
+
 
   if (loading && !storeInfo) {
     return <div className="text-center p-10">Đang tải thông tin cửa hàng...</div>;
@@ -684,7 +684,7 @@ const StoreManager: React.FC = () => {
         </div>
       )}
 
-      {/* *** BẮT ĐẦU PHẦN THÊM MỚI *** */}
+
       {/* Edit Store Modal */}
       {showEditStoreModal && editableStoreInfo && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
@@ -719,7 +719,7 @@ const StoreManager: React.FC = () => {
           </div>
         </div>
       )}
-      {/* *** KẾT THÚC PHẦN THÊM MỚI *** */}
+
 
     </div>
   );
