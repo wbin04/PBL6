@@ -6,6 +6,7 @@ import { Star, Plus, UserCheck, UserX } from 'lucide-react-native';
 import { useNavigation } from '@react-navigation/native';
 import { apiClient, authApi } from '@/services/api';
 import { API_CONFIG } from "@/constants";
+import { getImageSource } from '@/utils/imageUtils';
 
 type Store = {
   id: number;
@@ -339,22 +340,10 @@ const StoreListScreen = () => {
   );
 
   const renderItem = ({ item }: any) => {
-    // Create full image URL from API
-    const getImageSource = () => {
-      if (!item.image) {
-        return require('../assets/images/placeholder.png');
-      }
-      
-      // If image is already a full URL
-      if (item.image.startsWith('http')) {
-        return { uri: item.image };
-      }
-      
-      // Construct full URL from media path
-      const baseUrl = API_CONFIG.BASE_URL.replace("/api", ""); // Remove /api from base URL
-      const fullUrl = `${baseUrl}/media/${item.image}`;
-      console.log('Store image URL:', fullUrl);
-      return { uri: fullUrl };
+    // Use centralized image helper to resolve image source safely
+    const getImage = () => {
+      if (!item.image) return require('../assets/images/placeholder.png');
+      return getImageSource(item.image as any);
     };
 
     return (
@@ -383,7 +372,7 @@ const StoreListScreen = () => {
         <View style={{ flexDirection: 'row', alignItems: 'center' }}>
           <View style={{ marginRight: 12 }}>
             <Image
-              source={getImageSource()}
+              source={getImage()}
               style={{ width: 54, height: 54, borderRadius: 12 }}
               onError={() => console.log('Image load error for store:', item.store_name)}
             />

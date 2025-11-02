@@ -20,6 +20,7 @@ import { addToCart } from '@/store/slices/cartSlice';
 import { menuService, cartService } from '@/services';
 import { FoodDetail, RootStackParamList } from '@/types';
 import { COLORS, SPACING, BORDER_RADIUS, SHADOWS, API_CONFIG, STORAGE_KEYS } from '@/constants';
+import { getImageSource } from '@/utils/imageUtils';
 
 type FoodDetailRouteProp = RouteProp<RootStackParamList, 'FoodDetail'>;
 type FoodDetailNavigationProp = NativeStackNavigationProp<RootStackParamList, 'FoodDetail'>;
@@ -134,10 +135,8 @@ const FoodDetailScreen: React.FC = () => {
     }).format(parseInt(price));
   };
 
-  const getImageUri = (imageUrl: string) => {
-    return imageUrl.startsWith('http')
-      ? imageUrl
-      : `${API_CONFIG.BASE_URL.replace(/\/api$/, '')}/media/${imageUrl}`;
+  const getImageUri = (imageUrl?: string | null) => {
+    return getImageSource(imageUrl as any);
   };
 
   if (loading) {
@@ -180,7 +179,7 @@ const FoodDetailScreen: React.FC = () => {
         {/* Food Image */}
         <View style={styles.imageContainer}>
           <Image
-            source={{ uri: getImageUri(foodDetail.image) }}
+            source={getImageUri(foodDetail.image)}
             style={styles.foodImage}
             resizeMode="cover"
           />

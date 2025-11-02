@@ -61,7 +61,7 @@ Column	Type
 id	INT PK
 user_id	INT FK
 food_id	INT FK
-comment	VARCHAR
+content	VARCHAR
 point	INT
 order_id	INT FK
 ```

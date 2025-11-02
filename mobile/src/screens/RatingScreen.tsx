@@ -20,6 +20,7 @@ import { RootState, AppDispatch } from '@/store';
 import { ratingService, menuService } from '@/services';
 import { FoodRating, FoodDetail, RootStackParamList, CreateRatingRequest } from '@/types';
 import { COLORS, SPACING, BORDER_RADIUS, SHADOWS, API_CONFIG } from '@/constants';
+import { getImageSource } from '@/utils/imageUtils';
 
 type RatingScreenRouteProp = RouteProp<RootStackParamList, 'RatingScreen'>;
 type RatingScreenNavigationProp = NativeStackNavigationProp<RootStackParamList, 'RatingScreen'>;
@@ -105,10 +106,8 @@ const RatingScreen: React.FC = () => {
     </View>
   );
 
-  const getImageUri = (imageUrl: string) => {
-    return imageUrl.startsWith('http')
-      ? imageUrl
-      : `${API_CONFIG.BASE_URL.replace(/\/api$/, '')}/media/${imageUrl}`;
+  const getImageUri = (imageUrl?: string | null) => {
+    return getImageSource(imageUrl as any);
   };
 
   if (loading) {
@@ -149,7 +148,7 @@ const RatingScreen: React.FC = () => {
         {/* Food Info */}
         <View style={styles.foodInfo}>
           <Image
-            source={{ uri: getImageUri(foodDetail.image) }}
+            source={getImageUri(foodDetail.image)}
             style={styles.foodImage}
             resizeMode="cover"
           />

@@ -1,6 +1,7 @@
 import React from 'react';
 import { View, Text, Image, StyleSheet, TouchableOpacity, ViewStyle } from 'react-native';
 import { API_CONFIG } from '@/constants';
+import { getImageSource } from '@/utils/imageUtils';
 import { Food } from '@/types';
 import { COLORS, SPACING, BORDER_RADIUS, SHADOWS } from '@/constants';
 
@@ -24,16 +25,16 @@ export const FoodCard: React.FC<FoodCardProps> = ({
     }).format(parseInt(price));
   };
 
+  // Prefer image_url (full URL from API) over image (relative path)
+  const imageSource = food.image
+    ? { uri: food.image_url } 
+    : getImageSource(food.image);
+
   return (
     <TouchableOpacity style={[styles.container, style]} onPress={onPress}>
       <View style={styles.imageContainer}>
-        {/* Load full URL for image: prefix API host if relative path */}
         <Image
-          source={{
-            uri: food.image.startsWith('http')
-              ? food.image
-              : `${API_CONFIG.BASE_URL.replace(/\/api$/, '')}/media/${food.image}`
-          }}
+          source={imageSource}
           style={styles.image}
           resizeMode="cover"
         />
