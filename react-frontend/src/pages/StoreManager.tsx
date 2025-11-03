@@ -321,9 +321,21 @@ const StoreManager: React.FC = () => {
         status: orderStatusFilter,
       }).toString();
       const res = await API.get(`/stores/${storeInfo.id}/orders/?${params}`);
-      setOrders(res.results || []);
-      setTotalOrderPages(res.num_pages || 1);
-      setOrderPage(res.current_page || 1);
+      
+      // [SỬA Ở ĐÂY]
+      // Lỗi: API trả về 'orders', không phải 'results'
+      // Lỗi: API trả về 'total_pages' và 'current_page', không phải 'num_pages'
+      
+      // Cũ:
+      // setOrders(res.results || []);
+      // setTotalOrderPages(res.num_pages || 1);
+      // setOrderPage(res.current_page || 1);
+
+      // Mới:
+      setOrders(res.orders || []); // <-- Sửa 'results' thành 'orders'
+      setTotalOrderPages(res.total_pages || 1); // <-- Sửa 'num_pages' thành 'total_pages'
+      setOrderPage(res.current_page || 1); // <-- Giữ nguyên (hoặc 'res.current_page')
+      
     } catch (error) {
       console.error('Error loading orders:', error);
       alert('Không thể tải danh sách đơn hàng');

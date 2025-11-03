@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useSearchParams, useNavigate } from "react-router-dom";
-import { API, getImageUrl} from "@/lib/api";
-import type { Category } from '@/types/index-ngu';
+import { API, getImageUrl } from "@/lib/api";
+import type { Category } from "@/types/index-ngu";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import FoodDetailModal from "@/components/FoodDetailModal";
@@ -262,24 +262,37 @@ export default function Menu() {
                 className="w-full h-48 object-cover rounded-md mb-4 cursor-pointer"
                 onClick={() => openFoodModal(food)}
               />
-              <div className="space-y-2">
+              <div className="space-y-3">
+                {/* Tên món ăn - màu đen đậm, nổi bật */}
                 <h3
-                  className="text-lg font-semibold cursor-pointer hover:text-orange-500"
+                  className="text-xl font-bold text-gray-900 cursor-pointer hover:text-orange-600 transition-colors"
                   onClick={() => openFoodModal(food)}>
                   {food.title}
                 </h3>
-                {/* Store name */}
+
+                {/* Tên cửa hàng - màu xanh dương đậm */}
                 {(food.store?.store_name || storeInfo?.store_name) && (
-                  <p className="text-xs text-gray-500 font-medium">
-                    Cửa hàng: {food.store?.store_name || storeInfo?.store_name}
+                  <p className="text-sm font-semibold text-blue-700">
+                    🏪 Cửa hàng:{" "}
+                    {food.store?.store_name || storeInfo?.store_name}
                   </p>
                 )}
+
+                {/* Mô tả món ăn - màu xám đậm */}
                 {food.description && (
-                  <p className="text-sm text-muted-foreground line-clamp-2">
+                  <p
+                    className="text-sm text-gray-800 leading-relaxed overflow-hidden"
+                    style={{
+                      display: "-webkit-box",
+                      WebkitLineClamp: 2,
+                      WebkitBoxOrient: "vertical" as const,
+                    }}>
                     {food.description}
                   </p>
                 )}
-                <div className="text-lg font-bold text-primary">
+
+                {/* Giá tiền - màu đỏ cam rất nổi bật với background */}
+                <div className="text-xl font-black text-red-600 bg-yellow-50 px-3 py-2 rounded-lg inline-block border-l-4 border-red-500">
                   {Number(food.price).toLocaleString()} đ
                 </div>
               </div>

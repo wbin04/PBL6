@@ -141,6 +141,9 @@ const Admin: React.FC = () => {
       case 'foods':
         loadCategories();
         loadFoods(1);
+        if (stores.length === 0) {
+          loadStores();
+        }
         break;
       case 'orders':
         loadOrders(1);
@@ -179,23 +182,7 @@ const Admin: React.FC = () => {
 
   const changeSection = (section: string) => {
     setActiveSection(section);
-    localStorage.setItem('admin_active_section', section);
-    switch (section) {
-      case 'customers':
-        loadCustomers();
-        break;
-      case 'foods':
-        loadFoods();
-        break;
-      case 'orders':
-        loadOrders();
-        break;
-      case 'stores':
-        if (stores.length === 0) {
-          loadStores();
-        }
-        break;
-    }
+    
   };
 
   const loadDashboard = async () => {
@@ -472,16 +459,23 @@ const Admin: React.FC = () => {
 
   const updateOrderStatus = async (orderId: number, newStatus: string) => {
     try {
-      await API.put(`/orders/admin/${orderId}/`, {
+      // Sửa từ .put thành .patch và thêm /status/ vào cuối URL
+      await API.patch(`/orders/admin/${orderId}/status/`, {
         order_status: newStatus
       });
 
       alert('Cập nhật trạng thái đơn hàng thành công');
-      setShowOrderModal(false);
-      loadOrders();
+      
+      // Tùy chọn: Cập nhật lại list ngay sau khi thành công
+      if (selectedOrder) {
+          setSelectedOrder({ ...selectedOrder, order_status: newStatus });
+      }
+      loadOrders(orderPage); // Tải lại danh sách đơn hàng
+      setShowOrderModal(false); // Đóng modal
+
     } catch (error) {
       console.error('Error updating order status:', error);
-      alert('Không thể cập nhật trạng thái đơn hàng');
+      alert(`Không thể cập nhật trạng thái đơn hàng: ${error}`);
     }
   };
 
@@ -550,12 +544,13 @@ const Admin: React.FC = () => {
       'Chờ xác nhận': 'bg-yellow-100 text-yellow-800',
       'Đã xác nhận': 'bg-green-100 text-green-800',
       'Đang chuẩn bị': 'bg-blue-100 text-blue-800',
-      'Đang giao': 'bg-gray-100 text-gray-800',
+      'Đang giao': 'bg-teal-100 text-teal-800', // <-- đổi sang teal
       'Đã giao': 'bg-cyan-100 text-cyan-800',
-      'Đã hủy': 'bg-red-100 text-red-800'
+      'Đã huỷ': 'bg-red-100 text-red-800'
     };
     return statusMap[status] || 'bg-gray-100 text-gray-800';
   };
+  
 
   const formatCurrency = (amount: number | string) => {
     // Chuyển đổi amount thành number trước khi format
@@ -1152,7 +1147,7 @@ const Admin: React.FC = () => {
               <option value="Đang chuẩn bị">Đang chuẩn bị</option>
               <option value="Đang giao">Đang giao</option>
               <option value="Đã giao">Đã giao</option>
-              <option value="Đã hủy">Đã hủy</option>
+              <option value="Đã huỷ">Đã huỷ</option>
             </select>
 
             <Button onClick={() => loadOrders(1)}>Lọc</Button>
@@ -1212,7 +1207,7 @@ const Admin: React.FC = () => {
               </div>
             </CardContent>
           </Card>
-          {/* Phân trang đơn hàng */}
+          {/* Phân trang đơn hàng  */}
           <div className="flex justify-between items-center mt-4">
             <p className="text-sm text-gray-600">Tổng: {totalOrders} đơn hàng</p>
             <div>
@@ -1459,7 +1454,7 @@ const Admin: React.FC = () => {
                     <option value="Đang chuẩn bị">Đang chuẩn bị</option>
                     <option value="Đang giao">Đang giao</option>
                     <option value="Đã giao">Đã giao</option>
-                    <option value="Đã hủy">Đã hủy</option>
+                    <option value="Đã huỷ">Đã huỷ</option>
                   </select>
                   <Button
                     onClick={() => {
