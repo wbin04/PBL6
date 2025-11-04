@@ -320,22 +320,20 @@ const StoreManager: React.FC = () => {
         page: String(page),
         status: orderStatusFilter,
       }).toString();
+      
       const res = await API.get(`/stores/${storeInfo.id}/orders/?${params}`);
       
       // [SỬA Ở ĐÂY]
-      // Lỗi: API trả về 'orders', không phải 'results'
-      // Lỗi: API trả về 'total_pages' và 'current_page', không phải 'num_pages'
-      
-      // Cũ:
-      // setOrders(res.results || []);
-      // setTotalOrderPages(res.num_pages || 1);
-      // setOrderPage(res.current_page || 1);
+      // Response `res` mà API trả về chính là mảng đơn hàng.
+      setOrders(res || []); 
 
-      // Mới:
-      setOrders(res.orders || []); // <-- Sửa 'results' thành 'orders'
-      setTotalOrderPages(res.total_pages || 1); // <-- Sửa 'num_pages' thành 'total_pages'
-      setOrderPage(res.current_page || 1); // <-- Giữ nguyên (hoặc 'res.current_page')
-      
+      // [CẢNH BÁO VỀ PHÂN TRANG]
+      // Vì response chỉ là một mảng, nó không chứa thông tin phân trang 
+      // (như total_pages, current_page).
+      // Do đó, chúng ta phải tạm thời set phân trang về 1.
+      setTotalOrderPages(1); 
+      setOrderPage(1);
+
     } catch (error) {
       console.error('Error loading orders:', error);
       alert('Không thể tải danh sách đơn hàng');
@@ -346,7 +344,7 @@ const StoreManager: React.FC = () => {
 
   const viewOrderDetail = async (orderId: number) => {
     try {
-      const res = await API.get(`/api/orders/${orderId}/`); // Assuming generic endpoint works
+      const res = await API.get(`/orders/store/${orderId}/`); // <-- Sửa (Dành cho Admin/Manager)
       setSelectedOrder(res);
       setShowOrderModal(true);
     } catch (error) {
@@ -357,7 +355,7 @@ const StoreManager: React.FC = () => {
 
   const updateOrderStatus = async (orderId: number, status: string) => {
     try {
-      await API.patch(`/api/orders/${orderId}/status/`, { order_status: status });
+      await API.patch(`/orders/store/${orderId}/status/`, { order_status: status });
       alert('Cập nhật trạng thái thành công!');
       if (selectedOrder) {
         setSelectedOrder({ ...selectedOrder, order_status: status });
