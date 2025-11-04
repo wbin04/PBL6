@@ -35,6 +35,17 @@ interface PopularFoodsReport {
   foods: PopularFoodItem[];
 }
 
+// Interface cho đơn đăng ký cửa hàng
+interface StoreApplication {
+  id: number; // User ID
+  username: string;
+  email: string;
+  fullname: string;
+  phone_number: string;
+  address: string;
+  created_date: string;
+}
+
 const Admin: React.FC = () => {
   const [activeSection, setActiveSection] = useState<string>(() => {
     return localStorage.getItem('admin_active_section') || 'dashboard';
@@ -65,6 +76,16 @@ const Admin: React.FC = () => {
   const [showAddStoreModal, setShowAddStoreModal] = useState(false);
   const [selectedStore, setSelectedStore] = useState<Store | null>(null);
   const [showEditStoreModal, setShowEditStoreModal] = useState(false);
+
+  // State cho mục Cửa hàng (phân view)
+  const [storeViewMode, setStoreViewMode] = useState<'list' | 'applications'>('list');
+  const [applications, setApplications] = useState<StoreApplication[]>([]);
+  const [applicationsLoading, setApplicationsLoading] = useState(false);
+  const [applicationsPage, setApplicationsPage] = useState(1);
+  const [totalApplicationsPages, setTotalApplicationsPages] = useState(1);
+  const [totalApplications, setTotalApplications] = useState(0);
+  const [applicationsSearch, setApplicationsSearch] = useState('');
+
 
   //Món ăn
   const [foods, setFoods] = useState<Food[]>([]);
@@ -149,6 +170,9 @@ const Admin: React.FC = () => {
         loadOrders(1);
         break;
       case 'stores':
+        // Khi chuyển sang tab Cửa hàng, luôn mặc định tải danh sách cửa hàng
+        // Việc tải applications sẽ do người dùng nhấn nút
+        setStoreViewMode('list'); 
         loadStores();
         break;
       case 'revenueReport':
@@ -281,6 +305,55 @@ const Admin: React.FC = () => {
       console.error('Error deleting store:', error);
       alert('Không thể xóa cửa hàng');
     }
+  };
+
+  // ==== Store Applications ====
+  const loadStoreApplications = async (page = 1, searchQuery = '') => {
+    try {
+      setApplicationsLoading(true);
+      const response = await API.get(
+        `/auth/store/applications/?page=${page}&search=${searchQuery}`
+      );
+      setApplications(response.applications || []);
+      setTotalApplicationsPages(response.total_pages || 1);
+      setApplicationsPage(response.current_page || 1);
+      setTotalApplications(response.total_applications || 0);
+    } catch (error) {
+      console.error('Error loading store applications:', error);
+      alert('Không thể tải danh sách đăng ký');
+    } finally {
+      setApplicationsLoading(false);
+    }
+  };
+
+  const handleApproveApplication = async (userId: number) => {
+    if (!window.confirm('Bạn có chắc muốn duyệt đăng ký này? Thao tác này sẽ tạo một cửa hàng mới.')) return;
+    try {
+      await API.post(`/auth/store/applications/${userId}/approve/`);
+      alert('Duyệt đăng ký thành công!');
+      loadStoreApplications(applicationsPage, applicationsSearch); // Refresh applications list
+    } catch (error) {
+      console.error('Error approving application:', error);
+      alert(`Không thể duyệt đăng ký: ${error}`);
+    }
+  };
+
+  const handleRejectApplication = async (userId: number) => {
+    if (!window.confirm('Bạn có chắc muốn từ chối đăng ký này?')) return;
+    try {
+      await API.post(`/auth/store/applications/${userId}/reject/`);
+      alert('Từ chối đăng ký thành công!');
+      loadStoreApplications(applicationsPage, applicationsSearch); // Refresh applications list
+    } catch (error) {
+      console.error('Error rejecting application:', error);
+      alert(`Không thể từ chối đăng ký: ${error}`);
+    }
+  };
+  
+  // Helper to switch view
+  const showStoreApplications = () => {
+    setStoreViewMode('applications');
+    loadStoreApplications(1, ''); // Load data when switching
   };
 
 
@@ -700,61 +773,154 @@ const Admin: React.FC = () => {
       {activeSection === 'stores' && (
         <div>
           <div className="flex justify-between items-center mb-6">
-            <h2 className="text-xl font-semibold">Quản lý cửa hàng</h2>
-            <Button onClick={() => setShowAddStoreModal(true)}>+ Thêm cửa hàng</Button>
+            <h2 className="text-xl font-semibold">
+              {storeViewMode === 'list' ? 'Quản lý cửa hàng' : 'Đơn đăng ký cửa hàng'}
+            </h2>
+            <div className="flex gap-2">
+              {storeViewMode === 'list' ? (
+                <>
+                  <Button variant="outline" onClick={showStoreApplications}>Đơn đăng ký</Button>
+                  <Button onClick={() => setShowAddStoreModal(true)}>+ Thêm cửa hàng</Button>
+                </>
+              ) : (
+                <Button onClick={() => setStoreViewMode('list')}>Quay lại danh sách</Button>
+              )}
+            </div>
           </div>
-          <Card>
-            <CardContent className="p-0">
-              <div className="overflow-x-auto">
-                <table className="w-full">
-                  <thead className="bg-gray-50">
-                    <tr>
-                      <th className="px-4 py-3">ID</th>
-                      <th className="px-4 py-3">Hình ảnh</th>
-                      <th className="px-4 py-3">Tên cửa hàng</th>
-                      <th className="px-4 py-3">Mô tả</th>
-                      <th className="px-4 py-3">Quản lý</th>
-                      <th className="px-4 py-3">Sửa</th>
-                      <th className="px-4 py-3">Xóa</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-gray-200">
-                    {(!stores || stores.length === 0) ? (
+          
+          {storeViewMode === 'list' ? (
+            <Card>
+              <CardContent className="p-0">
+                <div className="overflow-x-auto">
+                  <table className="w-full">
+                    <thead className="bg-gray-50">
                       <tr>
-                        <td colSpan={7} className="px-4 py-8 text-center text-gray-500">
-                          {loading ? 'Đang tải...' : 'Không có cửa hàng nào'}
-                        </td>
+                        <th className="px-4 py-3">ID</th>
+                        <th className="px-4 py-3">Hình ảnh</th>
+                        <th className="px-4 py-3">Tên cửa hàng</th>
+                        <th className="px-4 py-3">Mô tả</th>
+                        <th className="px-4 py-3">Quản lý</th>
+                        <th className="px-4 py-3">Sửa</th>
+                        <th className="px-4 py-3">Xóa</th>
                       </tr>
-                    ) : (
-                      stores.map((store) => (
-                        <tr key={store.id}>
-                          <td className="px-4 py-4">{store.id}</td>
-                          <td className="px-4 py-4">
-                            {store.image ? (
-                              <img src={getImageUrl(store.image)} alt={store.store_name} className="w-12 h-12 object-cover rounded" />
-                            ) : (
-                              <div className="w-12 h-12 bg-gray-200 flex items-center justify-center">No image</div>
-                            )}
-
-                          </td>
-                          <td className="px-4 py-4">{store.store_name}</td>
-                          <td className="px-4 py-4">{store.description}</td>
-                          <td className="px-4 py-4">{store.manager}</td>
-                          <td className="px-4 py-4">
-                            <Button size="sm" onClick={() => viewStoreDetail(store.id)}>✏️ Sửa</Button>
-                          </td>
-                          <td className="px-4 py-4">
-                            <Button size="sm" variant="destructive" onClick={() => deleteStore(store.id)}>🗑️ Xóa</Button>
+                    </thead>
+                    <tbody className="divide-y divide-gray-200">
+                      {(!stores || stores.length === 0) ? (
+                        <tr>
+                          <td colSpan={7} className="px-4 py-8 text-center text-gray-500">
+                            {loading ? 'Đang tải...' : 'Không có cửa hàng nào'}
                           </td>
                         </tr>
-                      ))
-                    )}
-                  </tbody>
-                </table>
-              </div>
-            </CardContent>
-          </Card>
+                      ) : (
+                        stores.map((store) => (
+                          <tr key={store.id}>
+                            <td className="px-4 py-4">{store.id}</td>
+                            <td className="px-4 py-4">
+                              {store.image ? (
+                                <img src={getImageUrl(store.image)} alt={store.store_name} className="w-12 h-12 object-cover rounded" />
+                              ) : (
+                                <div className="w-12 h-12 bg-gray-200 flex items-center justify-center">No image</div>
+                              )}
 
+                            </td>
+                            <td className="px-4 py-4">{store.store_name}</td>
+                            <td className="px-4 py-4">{store.description}</td>
+                            <td className="px-4 py-4">{store.manager}</td>
+                            <td className="px-4 py-4">
+                              <Button size="sm" onClick={() => viewStoreDetail(store.id)}>✏️ Sửa</Button>
+                            </td>
+                            <td className="px-4 py-4">
+                              <Button size="sm" variant="destructive" onClick={() => deleteStore(store.id)}>🗑️ Xóa</Button>
+                            </td>
+                          </tr>
+                        ))
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </CardContent>
+            </Card>
+          ) : (
+            // Chế độ xem đơn đăng ký
+            <div>
+              <div className="flex gap-2 mb-4">
+                <input
+                  type="text"
+                  placeholder="Tìm kiếm..."
+                  value={applicationsSearch}
+                  onChange={(e) => setApplicationsSearch(e.target.value)}
+                  className="border px-3 py-2 rounded"
+                />
+                <Button onClick={() => loadStoreApplications(1, applicationsSearch)}>Tìm</Button>
+              </div>
+              <Card>
+                <CardContent className="p-0">
+                  <div className="overflow-x-auto">
+                    <table className="w-full">
+                      <thead className="bg-gray-50">
+                        <tr>
+                          <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">ID User</th>
+                          <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Username</th>
+                          <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Họ tên</th>
+                          <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Email</th>
+                          <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Số ĐT</th>
+                          <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Địa chỉ</th>
+                          <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Ngày ĐK</th>
+                          <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Hành động</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-gray-200">
+                        {applications.length === 0 ? (
+                          <tr>
+                            <td colSpan={8} className="px-4 py-8 text-center text-gray-500">
+                              {applicationsLoading ? 'Đang tải...' : 'Không có đơn đăng ký nào'}
+                            </td>
+                          </tr>
+                        ) : (
+                          applications.map((app) => (
+                            <tr key={app.id}>
+                              <td className="px-4 py-4 text-sm">{app.id}</td>
+                              <td className="px-4 py-4 text-sm">{app.username}</td>
+                              <td className="px-4 py-4 text-sm">{app.fullname}</td>
+                              <td className="px-4 py-4 text-sm">{app.email}</td>
+                              <td className="px-4 py-4 text-sm">{app.phone_number || 'N/A'}</td>
+                              <td className="px-4 py-4 text-sm">{app.address || 'N/A'}</td>
+                              <td className="px-4 py-4 text-sm">{new Date(app.created_date).toLocaleDateString('vi-VN')}</td>
+                              <td className="px-4 py-4 flex gap-2">
+                                <Button size="sm" onClick={() => handleApproveApplication(app.id)}>✅ Duyệt</Button>
+                                <Button size="sm" variant="destructive" onClick={() => handleRejectApplication(app.id)}>❌ Từ chối</Button>
+                              </td>
+                            </tr>
+                          ))
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                </CardContent>
+              </Card>
+              {/* Pagination for applications */}
+              <div className="flex justify-between items-center mt-4">
+                <p className="text-sm text-gray-600">Tổng: {totalApplications} đơn</p>
+                <div>
+                  <Button
+                    disabled={applicationsPage === 1}
+                    onClick={() => loadStoreApplications(applicationsPage - 1, applicationsSearch)}
+                  >
+                    Trang trước
+                  </Button>
+                  <span className="mx-2">
+                    Trang {applicationsPage}/{totalApplicationsPages}
+                  </span>
+                  <Button
+                    disabled={applicationsPage === totalApplicationsPages}
+                    onClick={() => loadStoreApplications(applicationsPage + 1, applicationsSearch)}
+                  >
+                    Trang sau
+                  </Button>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       )}
 
@@ -1597,11 +1763,6 @@ const Admin: React.FC = () => {
           </div>
         </div>
       )}
-
-
-
-
-
     </div>
   );
 };
