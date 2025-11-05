@@ -13,6 +13,13 @@ type Food = {
   description: string;
   price: string;
   image_url: string;
+  // Thông tin giảm giá từ API
+  discount_info?: {
+    type: "percent" | "amount";
+    value: number;
+    amount: number;
+    final_price: number;
+  };
   // Nếu API có thêm rating hoặc availability thì khai báo ở đây:
   average_rating?: number;
   rating_count?: number;
@@ -291,9 +298,29 @@ export default function Menu() {
                   </p>
                 )}
 
-                {/* Giá tiền - màu đỏ cam rất nổi bật với background */}
-                <div className="text-xl font-black text-red-600 bg-yellow-50 px-3 py-2 rounded-lg inline-block border-l-4 border-red-500">
-                  {Number(food.price).toLocaleString()} đ
+                {/* Giá tiền - với giảm giá nếu có */}
+                <div className="space-y-2">
+                  {food.discount_info ? (
+                    <div className="text-xl font-black text-red-600 bg-yellow-50 px-3 py-2 rounded-lg inline-block border-l-4 border-red-500">
+                      <span className="text-2xl">
+                        {food.discount_info.final_price.toLocaleString()} đ
+                      </span>
+                      <div className="flex items-center gap-2 mt-1">
+                        <span className="text-sm line-through text-gray-500">
+                          {Number(food.price).toLocaleString()} đ
+                        </span>
+                        <span className="text-sm font-semibold bg-red-100 text-red-600 px-2 py-0.5 rounded-full">
+                          {food.discount_info.type === "percent"
+                            ? `-${food.discount_info.value}%`
+                            : `-${food.discount_info.amount.toLocaleString()}đ`}
+                        </span>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="text-xl font-black text-red-600 bg-yellow-50 px-3 py-2 rounded-lg inline-block border-l-4 border-red-500">
+                      {Number(food.price).toLocaleString()} đ
+                    </div>
+                  )}
                 </div>
               </div>
             </CardContent>

@@ -41,12 +41,28 @@ type Promo = {
   max_discount?: number;
 };
 
+// Backend promo response type (with different field names)
+type BackendPromo = {
+  id: number;
+  name: string;
+  title?: string;
+  discount_type: "PERCENTAGE" | "FIXED" | "PERCENT" | "AMOUNT";
+  discount_value: number;
+  minimum_pay: number;
+  min_order_value?: number;
+  max_discount?: number;
+};
+
 const Checkout: React.FC = () => {
   const [cart, setCart] = useState<Cart | null>(null);
   const [promos, setPromos] = useState<Promo[]>([]);
   const [selectedPromos, setSelectedPromos] = useState<number[]>([]);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
+
+  // Tooltip state for voucher details
+  const [hoveredPromo, setHoveredPromo] = useState<number | null>(null);
+  const [tooltipPosition, setTooltipPosition] = useState({ x: 0, y: 0 });
 
   // Form data
   const [formData, setFormData] = useState({
@@ -78,9 +94,10 @@ const Checkout: React.FC = () => {
       try {
         const response = await API.get("/promotions/");
         const promosData = response as { results?: Promo[] } | Promo[];
-        setPromos(
-          Array.isArray(promosData) ? promosData : promosData.results || []
-        );
+        const finalPromos = Array.isArray(promosData)
+          ? promosData
+          : promosData.results || [];
+        setPromos(finalPromos);
       } catch (error) {
         console.error("Error loading promos:", error);
       }
@@ -117,33 +134,100 @@ const Checkout: React.FC = () => {
     fetchData();
   }, [navigate]);
 
+  // Helper function to get minimum order value from backend data
+  const getPromoMinOrder = (promo: Promo | BackendPromo): number => {
+    try {
+      return (promo as BackendPromo).minimum_pay || promo.min_order_value || 0;
+    } catch (error) {
+      console.error("Error getting promo min order:", error, promo);
+      return 0;
+    }
+  };
+
   // Calculate totals
   const calculations = useMemo(() => {
-    if (!cart) return { subtotal: 0, deliveryFee: 0, discount: 0, total: 0 };
+    try {
+      if (!cart) return { subtotal: 0, deliveryFee: 0, discount: 0, total: 0 };
 
-    const subtotal = parseFloat(cart.total_money);
-    const deliveryFee = 15000; // Fixed delivery fee
+      const subtotal = parseFloat(cart.total_money) || 0;
 
-    // Calculate discount from selected promos
-    let discount = 0;
-    selectedPromos.forEach((promoId) => {
-      const promo = promos.find((p) => p.id === promoId);
-      if (promo && subtotal >= promo.min_order_value) {
-        if (promo.discount_type === "PERCENTAGE") {
-          let promoDiscount = (subtotal * promo.discount_value) / 100;
-          if (promo.max_discount) {
-            promoDiscount = Math.min(promoDiscount, promo.max_discount);
+      // Calculate delivery fee based on number of stores (15,000 VND per store)
+      const storeNames = new Set();
+      cart.items.forEach((item) => {
+        try {
+          // Backend trả về store object, cần access đúng cách
+          const foodData = item.food as Record<string, unknown>;
+          let storeName = null;
+
+          // Try different possible structures
+          if (foodData.store && typeof foodData.store === "object") {
+            const storeData = foodData.store as Record<string, unknown>;
+            storeName = storeData.store_name as string;
+          } else if (typeof foodData.store_name === "string") {
+            storeName = foodData.store_name;
           }
-          discount += promoDiscount;
-        } else {
-          discount += promo.discount_value;
+
+          if (storeName) {
+            storeNames.add(storeName);
+          }
+        } catch (error) {
+          console.error("Error processing store name:", error, item);
         }
+      });
+      const numberOfStores = storeNames.size || 1; // At least 1 store
+      const deliveryFee = numberOfStores * 15000;
+
+      // Calculate discount from selected promos
+      let discount = 0;
+      selectedPromos.forEach((promoId) => {
+        try {
+          const promo = promos.find((p) => p.id === promoId);
+          if (promo && subtotal >= getPromoMinOrder(promo)) {
+            if (promo.discount_type === "PERCENTAGE") {
+              let promoDiscount =
+                (subtotal * Number(promo.discount_value)) / 100;
+              if (promo.max_discount) {
+                promoDiscount = Math.min(
+                  promoDiscount,
+                  Number(promo.max_discount)
+                );
+              }
+              discount += promoDiscount;
+            } else {
+              discount += Number(promo.discount_value);
+            }
+          }
+        } catch (error) {
+          console.error("Error calculating promo discount:", error, promoId);
+        }
+      });
+
+      const total = Math.max(0, subtotal + deliveryFee - discount);
+
+      // Validate all numbers
+      const result = {
+        subtotal: isNaN(subtotal) ? 0 : subtotal,
+        deliveryFee: isNaN(deliveryFee) ? 0 : deliveryFee,
+        discount: isNaN(discount) ? 0 : discount,
+        total: isNaN(total) ? 0 : total,
+      };
+
+      if (selectedPromos.length > 0) {
+        console.log("Multiple promo calculation:", {
+          selectedPromos,
+          subtotal,
+          deliveryFee,
+          discount,
+          total,
+          result,
+        });
       }
-    });
 
-    const total = Math.max(0, subtotal + deliveryFee - discount);
-
-    return { subtotal, deliveryFee, discount, total };
+      return result;
+    } catch (error) {
+      console.error("Error in calculations:", error);
+      return { subtotal: 0, deliveryFee: 0, discount: 0, total: 0 };
+    }
   }, [cart, selectedPromos, promos]);
 
   const handleInputChange = (
@@ -158,11 +242,54 @@ const Checkout: React.FC = () => {
   };
 
   const handlePromoToggle = (promoId: number) => {
-    setSelectedPromos((prev) =>
-      prev.includes(promoId)
-        ? prev.filter((id) => id !== promoId)
-        : [...prev, promoId]
+    try {
+      setSelectedPromos((prev) => {
+        const newSelected = prev.includes(promoId)
+          ? prev.filter((id) => id !== promoId)
+          : [...prev, promoId];
+        return newSelected;
+      });
+    } catch (error) {
+      console.error("Error toggling promo:", error, promoId);
+    }
+  };
+
+  // Helper function to format voucher details for tooltip
+  const getVoucherDetails = (promo: Promo) => {
+    const details = [];
+
+    // Discount info
+    if (promo.discount_type === "PERCENTAGE") {
+      details.push(`🎯 Giảm ${promo.discount_value}% giá trị đơn hàng`);
+      if (promo.max_discount) {
+        details.push(`💰 Tối đa: ${formatCurrency(promo.max_discount)}`);
+      }
+    } else {
+      details.push(
+        `💰 Giảm ${formatCurrency(promo.discount_value)} cho đơn hàng`
+      );
+    }
+
+    // Minimum order
+    details.push(
+      `📦 Đơn tối thiểu: ${formatCurrency(getPromoMinOrder(promo))}`
     );
+
+    return details;
+  };
+
+  // Handle mouse events for tooltip
+  const handlePromoMouseEnter = (e: React.MouseEvent, promoId: number) => {
+    const rect = e.currentTarget.getBoundingClientRect();
+    setTooltipPosition({
+      x: rect.right + 10,
+      y: rect.top,
+    });
+    setHoveredPromo(promoId);
+  };
+
+  const handlePromoMouseLeave = () => {
+    setHoveredPromo(null);
   };
 
   const validateForm = () => {
@@ -274,12 +401,19 @@ const Checkout: React.FC = () => {
     }
   };
 
-  const formatCurrency = (amount: number) =>
-    new Intl.NumberFormat("vi-VN", {
+  const formatCurrency = (amount: number | string | undefined | null) => {
+    const numericAmount =
+      typeof amount === "number" ? amount : parseFloat(String(amount || 0));
+    if (isNaN(numericAmount)) {
+      console.error("formatCurrency received NaN:", amount);
+      return "0 ₫";
+    }
+    return new Intl.NumberFormat("vi-VN", {
       style: "currency",
       currency: "VND",
       minimumFractionDigits: 0,
-    }).format(amount);
+    }).format(numericAmount);
+  };
 
   if (loading) {
     return (
@@ -402,53 +536,62 @@ const Checkout: React.FC = () => {
                   <h3 className="text-lg font-semibold mb-4">Khuyến mãi</h3>
                   <div className="space-y-2">
                     {promos.map((promo) => {
-                      const isApplicable =
-                        calculations.subtotal >= promo.min_order_value;
-                      const isSelected = selectedPromos.includes(promo.id);
+                      try {
+                        const isApplicable =
+                          calculations.subtotal >= getPromoMinOrder(promo);
+                        const isSelected = selectedPromos.includes(promo.id);
 
-                      return (
-                        <div
-                          key={promo.id}
-                          className={`p-3 border rounded-lg cursor-pointer transition-colors ${
-                            isSelected
-                              ? "border-orange-500 bg-orange-50"
-                              : isApplicable
-                              ? "border-gray-300 hover:border-orange-300"
-                              : "border-gray-200 opacity-50 cursor-not-allowed"
-                          }`}
-                          onClick={() =>
-                            isApplicable && handlePromoToggle(promo.id)
-                          }>
-                          <div className="flex items-center justify-between">
-                            <div>
-                              <p className="font-medium">{promo.title}</p>
-                              <p className="text-sm text-gray-600">
-                                {promo.discount_type === "PERCENTAGE"
-                                  ? `Giảm ${promo.discount_value}%`
-                                  : `Giảm ${formatCurrency(
-                                      promo.discount_value
-                                    )}`}
-                                {promo.max_discount &&
-                                  promo.discount_type === "PERCENTAGE" &&
-                                  ` (tối đa ${formatCurrency(
-                                    promo.max_discount
-                                  )})`}
-                              </p>
-                              <p className="text-xs text-gray-500">
-                                Đơn tối thiểu:{" "}
-                                {formatCurrency(promo.min_order_value)}
-                              </p>
+                        return (
+                          <div
+                            key={promo.id}
+                            className={`relative p-3 border rounded-lg cursor-pointer transition-colors ${
+                              isSelected
+                                ? "border-orange-500 bg-orange-50"
+                                : isApplicable
+                                ? "border-gray-300 hover:border-orange-300"
+                                : "border-gray-200 opacity-50 cursor-not-allowed"
+                            }`}
+                            onClick={() =>
+                              isApplicable && handlePromoToggle(promo.id)
+                            }
+                            onMouseEnter={(e) =>
+                              handlePromoMouseEnter(e, promo.id)
+                            }
+                            onMouseLeave={handlePromoMouseLeave}>
+                            <div className="flex items-center justify-between">
+                              <div>
+                                <p className="font-medium">{promo.title}</p>
+                                <p className="text-sm text-gray-600">
+                                  {promo.discount_type === "PERCENTAGE"
+                                    ? `Giảm ${promo.discount_value}%`
+                                    : `Giảm ${formatCurrency(
+                                        promo.discount_value
+                                      )}`}
+                                  {promo.max_discount &&
+                                    promo.discount_type === "PERCENTAGE" &&
+                                    ` (tối đa ${formatCurrency(
+                                      promo.max_discount
+                                    )})`}
+                                </p>
+                                <p className="text-xs text-gray-500">
+                                  Đơn tối thiểu:{" "}
+                                  {formatCurrency(getPromoMinOrder(promo))}
+                                </p>
+                              </div>
+                              <input
+                                type="checkbox"
+                                checked={isSelected}
+                                disabled={!isApplicable}
+                                onChange={() => {}}
+                                className="w-4 h-4 text-orange-600"
+                              />
                             </div>
-                            <input
-                              type="checkbox"
-                              checked={isSelected}
-                              disabled={!isApplicable}
-                              onChange={() => {}}
-                              className="w-4 h-4 text-orange-600"
-                            />
                           </div>
-                        </div>
-                      );
+                        );
+                      } catch (error) {
+                        console.error("Error rendering promo:", error, promo);
+                        return null;
+                      }
                     })}
                   </div>
                 </div>
@@ -489,7 +632,22 @@ const Checkout: React.FC = () => {
                     <div className="flex-1">
                       <h4 className="font-semibold">{item.food.title}</h4>
                       <p className="text-sm text-gray-600">
-                        {item.food.store_name}
+                        {(() => {
+                          const foodData = item.food as Record<string, unknown>;
+                          if (
+                            foodData.store &&
+                            typeof foodData.store === "object"
+                          ) {
+                            const storeData = foodData.store as Record<
+                              string,
+                              unknown
+                            >;
+                            return storeData.store_name as string;
+                          } else if (typeof foodData.store_name === "string") {
+                            return foodData.store_name;
+                          }
+                          return "Unknown Store";
+                        })()}
                       </p>
                       {item.food_option && (
                         <p className="text-sm text-gray-500">
@@ -553,6 +711,26 @@ const Checkout: React.FC = () => {
           </Card>
         </div>
       </div>
+
+      {/* Voucher Tooltip */}
+      {hoveredPromo && (
+        <div
+          className="fixed z-50 bg-gray-800 text-white p-3 rounded-lg shadow-lg max-w-xs pointer-events-none"
+          style={{
+            left: `${tooltipPosition.x}px`,
+            top: `${tooltipPosition.y}px`,
+            transform: "translateY(-50%)",
+          }}>
+          <div className="text-sm font-semibold mb-2">Chi tiết voucher</div>
+          <div className="text-xs space-y-1">
+            {getVoucherDetails(promos.find((p) => p.id === hoveredPromo)!).map(
+              (detail, index) => (
+                <div key={index}>{detail}</div>
+              )
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 };

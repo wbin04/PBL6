@@ -30,6 +30,12 @@ export interface DetailedFood {
   }>;
   average_rating?: number;
   rating_count?: number;
+  discount_info?: {
+    type: "percent" | "amount";
+    value: number;
+    amount: number;
+    final_price: number;
+  };
 }
 
 // Interface for search results

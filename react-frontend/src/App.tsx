@@ -11,6 +11,7 @@ import Admin from "./pages/Admin";
 import Checkout from "./pages/Checkout";
 import CheckoutResult from "./pages/CheckoutResult";
 import StoreManager from "./pages/StoreManager";
+import StoreManagerRegister from "./pages/StoreManagerRegister";
 import Account from "./pages/Account";
 
 
@@ -21,7 +22,9 @@ function App() {
         <Route path="/login" element={<Login />} />
         <Route path="/register" element={<Register />} />
         <Route path="/admin" element={<Admin />} />
+        <Route path="/store-manager" element={<StoreManager />} />
         <Route path="/storemanager" element={<StoreManager />} />
+        <Route path="/store-manager/register" element={<StoreManagerRegister />} />
         <Route
           path="/*"
           element={

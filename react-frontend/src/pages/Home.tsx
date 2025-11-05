@@ -88,7 +88,7 @@ const Home: React.FC = () => {
   const [totalPages, setTotalPages] = useState(0);
   const [hasNext, setHasNext] = useState(false);
   const [hasPrevious, setHasPrevious] = useState(false);
-  const storesPerPage = 6; // Hiển thị 6 cửa hàng mỗi trang
+  const storesPerPage = 6;
 
   const navigate = useNavigate();
 
@@ -650,13 +650,6 @@ const Home: React.FC = () => {
           )}
 
           {/* Store count info */}
-          {totalStores > 0 && (
-            <div className="text-center mt-4 text-gray-600">
-              Hiển thị {(currentPage - 1) * storesPerPage + 1} -{" "}
-              {Math.min(currentPage * storesPerPage, totalStores)}
-              trong tổng số {totalStores} cửa hàng
-            </div>
-          )}
         </div>
 
         {/* Sidebar */}

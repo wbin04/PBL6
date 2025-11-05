@@ -30,13 +30,18 @@ interface BackendOrder {
   id: number;
   order_status: string;
   delivery_status: string;
-  total_money: string;
+  total_money: string; // Chỉ giá món ăn
   payment_method: string;
   receiver_name: string;
   phone_number: string;
   ship_address: string;
   note?: string;
   shipping_fee: string;
+  // Pricing fields from backend
+  total_before_discount?: string; // Giá món + ship
+  total_discount?: string; // Số tiền giảm giá
+  total_after_discount?: string; // Tổng cuối cùng
+  promo_discount?: number; // Discount từ promos
   created_date: string;
   created_date_display: string;
   store_name: string;
@@ -188,6 +193,29 @@ const Orders: React.FC = () => {
       style: "currency",
       currency: "VND",
     }).format(amount);
+  };
+
+  // Helper function để tính tổng tiền chính xác từ backend data
+  const getOrderTotal = (order: BackendOrder): number => {
+    // Ưu tiên sử dụng total_after_discount nếu có
+    if (order.total_after_discount) {
+      return parseFloat(order.total_after_discount);
+    }
+
+    // Fallback: total_money (giá món) + shipping_fee - discounts
+    let total = parseFloat(order.total_money);
+
+    if (order.shipping_fee) {
+      total += parseFloat(order.shipping_fee);
+    }
+
+    if (order.total_discount) {
+      total -= parseFloat(order.total_discount);
+    } else if (order.promo_discount) {
+      total -= order.promo_discount;
+    }
+
+    return Math.max(total, parseFloat(order.shipping_fee || "0")); // Tối thiểu = phí ship
   };
 
   const viewOrderDetail = async (orderId: number) => {
@@ -446,6 +474,24 @@ const Orders: React.FC = () => {
                   ))}
                 </div>
 
+                {/* Order Total */}
+                <div className="mb-4 p-3 bg-orange-50 rounded border border-orange-200">
+                  <div className="flex justify-between items-center text-lg font-bold text-orange-700">
+                    <span>Tổng tiền:</span>
+                    <span>{formatCurrency(getOrderTotal(order))}</span>
+                  </div>
+                  {(order.total_discount || order.promo_discount) && (
+                    <div className="text-sm text-green-600 mt-1">
+                      Đã giảm:{" "}
+                      {formatCurrency(
+                        parseFloat(order.total_discount || "0") ||
+                          order.promo_discount ||
+                          0
+                      )}
+                    </div>
+                  )}
+                </div>
+
                 {/* Delivery Info */}
                 <div className="mb-4 text-sm text-gray-600">
                   <div>
@@ -546,7 +592,50 @@ const Orders: React.FC = () => {
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-lg max-w-md w-full max-h-screen overflow-y-auto">
             <div className="p-6">
-              <h2 className="text-xl font-bold mb-4">Chi tiết đơn hàng</h2>
+              <h2 className="text-xl font-bold mb-4">
+                Chi tiết đơn hàng #{selectedOrder.id}
+              </h2>
+
+              {/* Order Summary */}
+              <div className="mb-6 p-4 bg-gray-50 rounded">
+                <h3 className="font-semibold mb-3">Thông tin đơn hàng</h3>
+                <div className="space-y-2 text-sm">
+                  <div className="flex justify-between">
+                    <span>Giá món ăn:</span>
+                    <span>
+                      {formatCurrency(parseFloat(selectedOrder.total_money))}
+                    </span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span>Phí giao hàng:</span>
+                    <span>
+                      {formatCurrency(
+                        parseFloat(selectedOrder.shipping_fee || "0")
+                      )}
+                    </span>
+                  </div>
+                  {(selectedOrder.total_discount ||
+                    selectedOrder.promo_discount) && (
+                    <div className="flex justify-between text-green-600">
+                      <span>Giảm giá:</span>
+                      <span>
+                        -
+                        {formatCurrency(
+                          parseFloat(selectedOrder.total_discount || "0") ||
+                            selectedOrder.promo_discount ||
+                            0
+                        )}
+                      </span>
+                    </div>
+                  )}
+                  <div className="flex justify-between font-bold text-lg border-t pt-2">
+                    <span>Tổng cộng:</span>
+                    <span className="text-orange-600">
+                      {formatCurrency(getOrderTotal(selectedOrder))}
+                    </span>
+                  </div>
+                </div>
+              </div>
 
               <div className="space-y-4">
                 <div>

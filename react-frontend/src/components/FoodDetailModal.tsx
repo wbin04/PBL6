@@ -12,6 +12,12 @@ interface Food {
   price: string;
   image_url: string;
   description: string;
+  discount_info?: {
+    type: "percent" | "amount";
+    value: number;
+    amount: number;
+    final_price: number;
+  };
 }
 
 interface FoodDetailModalProps {
@@ -139,7 +145,10 @@ const FoodDetailModal: React.FC<FoodDetailModalProps> = ({
     setQuantity((prev) => Math.max(1, prev - 1));
   };
 
-  const totalPrice = (Number(currentFood.price) * quantity).toLocaleString();
+  const basePrice = currentFood.discount_info
+    ? currentFood.discount_info.final_price
+    : Number(currentFood.price);
+  const totalPrice = (basePrice * quantity).toLocaleString();
 
   // Component to render star rating
   const StarRating = ({ rating }: { rating: number }) => {
@@ -222,9 +231,29 @@ const FoodDetailModal: React.FC<FoodDetailModalProps> = ({
             </div>
           )}
 
-          <p className="text-lg font-semibold text-orange-600 mb-3">
-            {Number(currentFood.price).toLocaleString()} đ
-          </p>
+          <div className="space-y-2 mb-3">
+            {currentFood.discount_info ? (
+              <>
+                <p className="text-2xl font-bold text-orange-600">
+                  {currentFood.discount_info.final_price.toLocaleString()} đ
+                </p>
+                <div className="flex items-center gap-2">
+                  <span className="text-lg line-through text-gray-500">
+                    {Number(currentFood.price).toLocaleString()} đ
+                  </span>
+                  <span className="text-sm font-semibold bg-red-100 text-red-600 px-2 py-0.5 rounded-full">
+                    {currentFood.discount_info.type === "percent"
+                      ? `-${currentFood.discount_info.value}%`
+                      : `-${currentFood.discount_info.amount.toLocaleString()}đ`}
+                  </span>
+                </div>
+              </>
+            ) : (
+              <p className="text-2xl font-bold text-orange-600">
+                {Number(currentFood.price).toLocaleString()} đ
+              </p>
+            )}
+          </div>
 
           {/* Rating Display */}
           {detailedFood &&

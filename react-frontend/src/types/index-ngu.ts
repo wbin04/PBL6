@@ -29,6 +29,8 @@ export interface User {
     role: string;
     role_id: number;
     created_date: string;
+    is_store_registered?: boolean;
+    is_shipper_registered?: boolean;
 }
 
 export interface Category {
