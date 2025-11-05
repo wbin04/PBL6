@@ -1222,93 +1222,345 @@ image_file: [File] (optional - chỉ gửi khi thay đổi ảnh)
 
 ## 6. Promotions API (`/api/promotions/`)
 
-### 6.1 Danh sách khuyến mãi
+### 6.1 Danh sách khuyến mãi (Public/Store Manager)
 - **GET** `/api/promotions/`
+- **Permission:** AllowAny
+- **Mô tả:**
+  - **Public (không đăng nhập):** Chỉ xem khuyến mãi đang hoạt động (trong thời gian hiệu lực)
+  - **Store Manager (role_id=3):** Xem tất cả khuyến mãi của cửa hàng mình (cả đã hết hạn)
 - **Query Parameters:**
-  - `store_id`: Lọc theo cửa hàng
-  - `active_only`: Chỉ lấy khuyến mãi đang hoạt động
+  - `store` hoặc `store_id`: Lọc theo cửa hàng (cho public)
 - **Response:**
 ```json
 [
   {
     "id": 1,
-    "name": "Giảm 10% cho đơn hàng từ 100k",
-    "category": "PERCENT",
-    "discount_value": 10.0,
+    "name": "Giảm giá 20%",
+    "scope": "STORE",
+    "discount_type": "PERCENT",
+    "discount_value": "20.00",
+    "start_date": "2025-01-01T00:00:00Z",
+    "end_date": "2025-12-31T23:59:59Z",
     "minimum_pay": "100000.00",
     "max_discount_amount": "50000.00",
-    "start_date": "2025-01-01",
-    "end_date": "2025-01-31",
     "store_id": 1,
-    "store_name": "McDonald's Nguyễn Huệ",
+    "store": {
+      "id": 1,
+      "store_name": "KFC Trần Phú"
+    },
     "is_active": true,
-    "percent": 10.0,
-    "description": "Giảm 10% cho đơn hàng từ 100k - 10% off (max 50,000đ)"
+    "category": "PERCENT"
   },
   {
     "id": 2,
-    "name": "Giảm 20k cho đơn hàng từ 200k",
-    "category": "AMOUNT",
-    "discount_value": 20000.0,
+    "name": "Giảm 50k cho đơn từ 200k",
+    "scope": "GLOBAL",
+    "discount_type": "AMOUNT",
+    "discount_value": "50000.00",
+    "start_date": "2025-01-01T00:00:00Z",
+    "end_date": "2025-12-31T23:59:59Z",
     "minimum_pay": "200000.00",
     "max_discount_amount": null,
-    "start_date": "2025-01-01",
-    "end_date": "2025-01-31",
-    "store_id": 1,
-    "store_name": "McDonald's Nguyễn Huệ",
+    "store_id": 0,
+    "store": null,
     "is_active": true,
-    "percent": 0,
-    "description": "Giảm 20k cho đơn hàng từ 200k - 20,000đ off"
+    "category": "AMOUNT"
   }
 ]
 ```
 
-### 6.2 Xác thực mã khuyến mãi
+**Lưu ý về scope:**
+- `STORE`: Khuyến mãi của cửa hàng cụ thể (store_id > 0)
+- `GLOBAL`: Khuyến mãi toàn hệ thống (store_id = 0)
+
+**Lưu ý về discount_type:**
+- `PERCENT`: Giảm theo phần trăm (discount_value = 20 nghĩa là 20%)
+- `AMOUNT`: Giảm theo số tiền cố định (discount_value = 50000 nghĩa là giảm 50,000đ)
+
+### 6.2 Xác thực mã khuyến mãi đơn lẻ
 - **POST** `/api/promotions/validate/`
-- **Headers:** `Authorization: Bearer {access_token}`
+- **Permission:** AllowAny
+- **Mô tả:** Validate một mã khuyến mãi và tính discount
 - **Request Body:**
 ```json
 {
-  "promo_code": "DISCOUNT10",
-  "total_amount": "150000.00",
+  "promo_id": 1,
+  "total_amount": 250000,
   "store_id": 1
 }
 ```
-- **Response:**
+- **Response (Success):**
 ```json
 {
   "valid": true,
+  "discount_amount": "50000.00",
+  "final_amount": "200000.00",
   "promo": {
     "id": 1,
-    "name": "Giảm 10% cho đơn hàng từ 100k",
-    "category": "PERCENT",
-    "discount_value": 10.0,
-    "max_discount_amount": "50000.00",
-    "applied_amount": "15000.00"
-  },
-  "message": "Mã khuyến mãi hợp lệ"
+    "name": "Giảm giá 20%",
+    "scope": "STORE",
+    "discount_type": "PERCENT",
+    "discount_value": "20.00",
+    "minimum_pay": "100000.00",
+    "max_discount_amount": "50000.00"
+  }
+}
+```
+- **Response (Error - Không đủ điều kiện):**
+```json
+{
+  "valid": false,
+  "error": "Minimum order amount is 100,000 VND"
+}
+```
+- **Response (Error - Hết hạn):**
+```json
+{
+  "valid": false,
+  "error": "Invalid or expired promo code"
 }
 ```
 
-### 6.3 Tạo khuyến mãi (Store Manager)
+---
+
+## 6A. Store Manager - Quản lý Khuyến mãi của Cửa hàng
+
+### 6A.1 Tạo khuyến mãi (Store Manager)
 - **POST** `/api/promotions/create/`
 - **Headers:** `Authorization: Bearer {store_manager_token}`
+- **Permission:** Chỉ Store Manager (role_id = 3)
+- **Mô tả:** Tạo khuyến mãi cho cửa hàng của mình (store_id tự động gán)
 - **Request Body:**
 ```json
 {
-  "name": "Khuyến mãi mới",
-  "category": "PERCENT",
-  "discount_value": 15.0,
-  "minimum_pay": "80000.00",
-  "max_discount_amount": "30000.00",
-  "start_date": "2025-02-01",
-  "end_date": "2025-02-28",
-  "store": 1
+  "name": "Khuyến mãi cuối tuần",
+  "discount_type": "PERCENT",
+  "discount_value": "15.00",
+  "start_date": "2025-11-10T00:00:00Z",
+  "end_date": "2025-11-12T23:59:59Z",
+  "minimum_pay": "150000.00",
+  "max_discount_amount": "40000.00",
+  "is_active": true
 }
 ```
-- **Response:** Tương tự danh sách khuyến mãi
+**Lưu ý:** Không cần truyền `store` trong body, hệ thống tự động gán cửa hàng của Store Manager
 
-### 6.4 Validate nhiều khuyến mãi
+- **Response:**
+```json
+{
+  "id": 5,
+  "name": "Khuyến mãi cuối tuần",
+  "scope": "STORE",
+  "discount_type": "PERCENT",
+  "discount_value": "15.00",
+  "start_date": "2025-11-10T00:00:00Z",
+  "end_date": "2025-11-12T23:59:59Z",
+  "minimum_pay": "150000.00",
+  "max_discount_amount": "40000.00",
+  "store_id": 1,
+  "store": {
+    "id": 1,
+    "store_name": "KFC Trần Phú"
+  },
+  "is_active": true,
+  "category": "PERCENT"
+}
+```
+
+### 6A.2 Chi tiết khuyến mãi (Store Manager)
+- **GET** `/api/promotions/{promo_id}/`
+- **Headers:** `Authorization: Bearer {store_manager_token}`
+- **Permission:** Store Manager chỉ xem được khuyến mãi của cửa hàng mình
+- **Response:** Tương tự item trong danh sách
+- **Error (403):** Nếu promo không thuộc cửa hàng của Store Manager
+
+### 6A.3 Cập nhật khuyến mãi (Store Manager)
+- **PUT** `/api/promotions/{promo_id}/update/`
+- **Headers:** `Authorization: Bearer {store_manager_token}`
+- **Permission:** Chỉ Store Manager (role_id = 3)
+- **Mô tả:** Cập nhật khuyến mãi của cửa hàng mình
+- **Request Body:**
+```json
+{
+  "name": "Khuyến mãi cuối tuần - Updated",
+  "discount_value": "20.00",
+  "end_date": "2025-11-15T23:59:59Z",
+  "is_active": true
+}
+```
+**Lưu ý:** 
+- Hỗ trợ partial update (PATCH)
+- Không thể thay đổi `store` (luôn giữ nguyên cửa hàng)
+- Chỉ cập nhật được promo của cửa hàng mình
+
+- **Response:** Tương tự response tạo khuyến mãi
+
+### 6A.4 Xóa khuyến mãi (Store Manager)
+- **DELETE** `/api/promotions/{promo_id}/delete/`
+- **Headers:** `Authorization: Bearer {store_manager_token}`
+- **Permission:** Chỉ Store Manager (role_id = 3)
+- **Mô tả:** Xóa khuyến mãi của cửa hàng mình
+- **Response:**
+```json
+{
+  "success": true,
+  "message": "Promotion \"Khuyến mãi cuối tuần\" deleted successfully"
+}
+```
+- **Error Responses:**
+  - **403 Forbidden:** Không phải Store Manager hoặc promo không thuộc cửa hàng
+  - **404 Not Found:** Không tìm thấy promo
+  - **400 Bad Request:** Không có cửa hàng được gán cho user
+
+---
+
+## 6B. Admin - Quản lý Khuyến mãi Toàn Hệ thống
+
+### 6B.1 Danh sách khuyến mãi hệ thống (Admin)
+- **GET** `/api/promotions/admin/`
+- **Headers:** `Authorization: Bearer {admin_token}`
+- **Permission:** Chỉ Admin (role_id = 2)
+- **Mô tả:** Lấy danh sách khuyến mãi TOÀN HỆ THỐNG (store_id = 0, scope = GLOBAL)
+- **Response:**
+```json
+[
+  {
+    "id": 10,
+    "name": "Giảm 100k đơn từ 500k",
+    "scope": "GLOBAL",
+    "discount_type": "AMOUNT",
+    "discount_value": "100000.00",
+    "start_date": "2025-11-01T00:00:00Z",
+    "end_date": "2025-11-30T23:59:59Z",
+    "minimum_pay": "500000.00",
+    "max_discount_amount": null,
+    "store_id": 0,
+    "store": {
+      "id": 0,
+      "store_name": "System-Wide Promotions"
+    },
+    "is_active": true,
+    "category": "AMOUNT"
+  }
+]
+```
+**Lưu ý:** Endpoint này CHỈ trả về các promo có `store_id = 0` (GLOBAL scope)
+
+### 6B.2 Tạo khuyến mãi toàn hệ thống (Admin)
+- **POST** `/api/promotions/admin/create/`
+- **Headers:** `Authorization: Bearer {admin_token}`
+- **Permission:** Chỉ Admin (role_id = 2)
+- **Mô tả:** Tạo khuyến mãi áp dụng cho TẤT CẢ cửa hàng (store_id = 0, scope = GLOBAL)
+- **Request Body:**
+```json
+{
+  "name": "Khuyến mãi Black Friday",
+  "discount_type": "PERCENT",
+  "discount_value": "30.00",
+  "start_date": "2025-11-24T00:00:00Z",
+  "end_date": "2025-11-26T23:59:59Z",
+  "minimum_pay": "300000.00",
+  "max_discount_amount": "150000.00",
+  "is_active": true
+}
+```
+**Lưu ý:** 
+- KHÔNG truyền field `store` trong body
+- Hệ thống tự động tạo/sử dụng store với id = 0 (placeholder cho system-wide)
+- `scope` tự động được set thành `GLOBAL`
+
+- **Response:**
+```json
+{
+  "id": 11,
+  "name": "Khuyến mãi Black Friday",
+  "scope": "GLOBAL",
+  "discount_type": "PERCENT",
+  "discount_value": "30.00",
+  "start_date": "2025-11-24T00:00:00Z",
+  "end_date": "2025-11-26T23:59:59Z",
+  "minimum_pay": "300000.00",
+  "max_discount_amount": "150000.00",
+  "store_id": 0,
+  "store": {
+    "id": 0,
+    "store_name": "System-Wide Promotions"
+  },
+  "is_active": true,
+  "category": "PERCENT"
+}
+```
+
+### 6B.3 Chi tiết khuyến mãi (Admin)
+- **GET** `/api/promotions/admin/{promo_id}/`
+- **Headers:** `Authorization: Bearer {admin_token}`
+- **Permission:** Chỉ Admin (role_id = 2)
+- **Response:** Tương tự item trong danh sách
+
+### 6B.4 Cập nhật khuyến mãi toàn hệ thống (Admin)
+- **PUT/PATCH** `/api/promotions/admin/{promo_id}/update/`
+- **Headers:** `Authorization: Bearer {admin_token}`
+- **Permission:** Chỉ Admin (role_id = 2)
+- **Request Body:**
+```json
+{
+  "discount_value": "35.00",
+  "end_date": "2025-11-27T23:59:59Z",
+  "is_active": false
+}
+```
+**Lưu ý:** 
+- Hỗ trợ partial update
+- KHÔNG truyền field `store` (luôn giữ store_id = 0)
+- `scope` luôn là `GLOBAL`
+
+- **Response:** Tương tự response tạo khuyến mãi
+
+### 6B.5 Xóa khuyến mãi toàn hệ thống (Admin)
+- **DELETE** `/api/promotions/admin/{promo_id}/delete/`
+- **Headers:** `Authorization: Bearer {admin_token}`
+- **Permission:** Chỉ Admin (role_id = 2)
+- **Response:**
+```json
+{
+  "success": true,
+  "message": "Promotion \"Khuyến mãi Black Friday\" deleted successfully"
+}
+```
+- **Error Responses:**
+  - **403 Forbidden:** Không phải Admin
+  - **404 Not Found:** Không tìm thấy promo
+  - **500 Internal Server Error:** Lỗi server
+
+---
+
+## 6C. Tóm tắt Phân quyền Promotions API
+
+| Endpoint | Public (User) | Store Manager | Admin | Mô tả |
+|----------|---------------|---------------|-------|-------|
+| `GET /api/promotions/` | ✅ (Chỉ active) | ✅ (Tất cả của store) | ✅ (Xem được mọi promo) | Danh sách khuyến mãi |
+| `POST /api/promotions/validate/` | ✅ | ✅ | ✅ | Validate mã khuyến mãi |
+| `POST /api/promotions/create/` | ❌ | ✅ (Cho store) | ❌ | Tạo promo cửa hàng |
+| `GET /api/promotions/{id}/` | ❌ | ✅ (Chỉ của store) | ❌ | Chi tiết promo store |
+| `PUT /api/promotions/{id}/update/` | ❌ | ✅ (Chỉ của store) | ❌ | Cập nhật promo store |
+| `DELETE /api/promotions/{id}/delete/` | ❌ | ✅ (Chỉ của store) | ❌ | Xóa promo store |
+| `GET /api/promotions/admin/` | ❌ | ❌ | ✅ | Danh sách promo hệ thống |
+| `POST /api/promotions/admin/create/` | ❌ | ❌ | ✅ | Tạo promo hệ thống |
+| `GET /api/promotions/admin/{id}/` | ❌ | ❌ | ✅ | Chi tiết promo hệ thống |
+| `PUT /api/promotions/admin/{id}/update/` | ❌ | ❌ | ✅ | Cập nhật promo hệ thống |
+| `DELETE /api/promotions/admin/{id}/delete/` | ❌ | ❌ | ✅ | Xóa promo hệ thống |
+
+**Ghi chú:**
+- **role_id = 2:** Admin (Quản lý)
+- **role_id = 3:** Store Manager (Cửa hàng)
+- **Public/User:** Không đăng nhập hoặc user thường (không có role đặc biệt)
+- **Store Manager** chỉ quản lý được promo có `store_id = cửa hàng của mình`
+- **Admin** chỉ quản lý được promo có `store_id = 0` (GLOBAL)
+- Promo **GLOBAL** (store_id=0) áp dụng cho tất cả cửa hàng
+- Promo **STORE** (store_id>0) chỉ áp dụng cho cửa hàng cụ thể
+- **Shipper** không có quyền quản lý promotions, chỉ có thể xem (public access)
+
+### 6.4 Validate nhiều khuyến mãi (Deprecated)
 - **POST** `/api/promotions/validate-multiple/`
 - **Headers:** `Authorization: Bearer {access_token}`
 - **Mô tả:** Validate nhiều mã khuyến mãi cùng lúc
@@ -2880,3 +3132,679 @@ image_file: [File]
 - Endpoint `/api/orders/admin/` tự động lọc đơn hàng theo cửa hàng của Store Manager
 
 ---
+
+## 14. Chatbot API (Chi tiết)
+
+### 14.1 Chat Endpoint
+- **POST** `/api/chatbot/chat/`
+- **Permission:** AllowAny (không yêu cầu authentication)
+- **Mô tả:** API chính để giao tiếp với chatbot, hỗ trợ đặt món bằng ngôn ngữ tự nhiên
+- **Công nghệ:** Tích hợp Gemini AI (Google) cho xử lý ngôn ngữ tự nhiên
+- **Request Body:**
+```json
+{
+  "session_id": "unique-session-id-123",
+  "message": "cho tôi 2 hamburger size L"
+}
+```
+- **Response:**
+```json
+{
+  "reply": "✅ Đã thêm 2 Big Mac (L) - 120,000đ vào giỏ hàng!",
+  "intent": "add_to_cart"
+}
+```
+
+**Các loại intent được hỗ trợ:**
+- `order`: Đặt món cụ thể
+- `menu_query`: Xem menu/danh sách món
+- `recommendation`: Gợi ý món
+- `greeting`: Chào hỏi
+- `clarify`: Cần làm rõ yêu cầu (nhiều món trùng tên)
+- `ask_size`: Hỏi size món (khi món có nhiều size)
+- `add_to_cart`: Xác nhận đã thêm vào giỏ
+- `unknown`: Không hiểu yêu cầu
+
+**Ví dụ các câu lệnh:**
+- "Cho tôi 3 hamburger" → Thêm món vào giỏ
+- "Các món gà" → Hiển thị danh sách món gà
+- "Món bán chạy" → Hiển thị món bán chạy
+- "Gợi ý món ngon" → Gợi ý món đánh giá cao
+
+### 14.2 Get Chatbot Cart
+- **GET** `/api/chatbot/cart/`
+- **Query Parameters:**
+  - `session_id`: ID của session chat (bắt buộc)
+- **Response:**
+```json
+{
+  "cart": [
+    {
+      "id": 1,
+      "food": {
+        "id": 1,
+        "title": "Big Mac",
+        "price": "55000.00",
+        "store_name": "McDonald's Hai Bà Trưng",
+        "image_url": "http://localhost:8000/media/assets/bigmac.jpg"
+      },
+      "food_size": {
+        "id": 2,
+        "size_name": "L",
+        "price": "60000.00"
+      },
+      "quantity": 2,
+      "total_price": "120000.00"
+    }
+  ],
+  "total": "120000.00",
+  "count": 1
+}
+```
+
+### 14.3 Clear Chatbot Cart
+- **POST** `/api/chatbot/cart/clear/`
+- **Request Body:**
+```json
+{
+  "session_id": "unique-session-id-123"
+}
+```
+- **Response:**
+```json
+{
+  "message": "Cart cleared successfully"
+}
+```
+
+### 14.4 Get Full Menu
+- **GET** `/api/chatbot/menu/`
+- **Mô tả:** Lấy toàn bộ menu để chatbot có thể tìm kiếm và gợi ý
+- **Response:**
+```json
+{
+  "menu": [
+    {
+      "id": 1,
+      "name": "Big Mac",
+      "price": 55000.0,
+      "description": "Hamburger đặc biệt với 2 lớp thịt bò",
+      "store_id": 1,
+      "store_name": "McDonald's Hai Bà Trưng",
+      "category": "Hamburger",
+      "sizes": [
+        {
+          "name": "S",
+          "price": 45000.0
+        },
+        {
+          "name": "M",
+          "price": 55000.0
+        },
+        {
+          "name": "L",
+          "price": 60000.0
+        }
+      ]
+    }
+  ]
+}
+```
+
+**Tính năng đặc biệt của Chatbot:**
+1. **Xử lý ngôn ngữ tự nhiên:** Hiểu được các câu hỏi/yêu cầu bằng tiếng Việt tự nhiên
+2. **Tìm kiếm thông minh:** Tìm món ăn dựa trên từ khóa, scoring theo mức độ liên quan
+3. **Hỗ trợ size:** Tự động hỏi size khi món ăn có nhiều lựa chọn
+4. **Gợi ý món:** Dựa trên độ phổ biến, rating và thuật toán recommend
+5. **Session-based:** Mỗi session độc lập, lưu trạng thái và giỏ hàng riêng
+6. **Fallback logic:** Hoạt động ngay cả khi không có Gemini AI
+
+---
+
+## 15. Shipper ViewSet (CRUD đầy đủ)
+
+### 15.1 List Shippers
+- **GET** `/api/shipper/shippers/`
+- **Headers:** `Authorization: Bearer {admin_token}`
+- **Query Parameters:**
+  - `search`: Tìm kiếm theo tên, email, SĐT
+  - `role`: Lọc theo role
+  - `page`: Số trang (mặc định: 1)
+  - `per_page`: Số items/trang (mặc định: 10, max: 100)
+- **Response:**
+```json
+{
+  "count": 50,
+  "next": "http://localhost:8000/api/shipper/shippers/?page=2",
+  "previous": null,
+  "results": [
+    {
+      "id": 1,
+      "user": {
+        "id": 5,
+        "username": "shipper1",
+        "fullname": "Nguyễn Văn A",
+        "email": "shipper1@example.com",
+        "phone_number": "0912345678",
+        "address": "123 Street, District, City"
+      },
+      "created_date": "2025-01-01T10:00:00Z"
+    }
+  ]
+}
+```
+
+### 15.2 Create Shipper (từ User có sẵn)
+- **POST** `/api/shipper/shippers/`
+- **Headers:** `Authorization: Bearer {admin_token}`
+- **Request Body:**
+```json
+{
+  "user_id": 5
+}
+```
+- **Response:** Tương tự item trong list shippers
+
+### 15.3 Retrieve Shipper Detail
+- **GET** `/api/shipper/shippers/{id}/`
+- **Headers:** `Authorization: Bearer {admin_token}`
+- **Response:** Tương tự item trong list shippers
+
+### 15.4 Update Shipper
+- **PUT/PATCH** `/api/shipper/shippers/{id}/`
+- **Headers:** `Authorization: Bearer {admin_token}`
+- **Mô tả:** Cập nhật thông tin shipper (và user liên kết)
+- **Request Body:**
+```json
+{
+  "fullname": "Nguyễn Văn A Updated",
+  "phone": "0987654321",
+  "email": "updated@example.com",
+  "address": "456 New Street, New District"
+}
+```
+- **Lưu ý:** Tự động cập nhật cả thông tin User liên kết
+- **Response:** Tương tự item trong list shippers
+
+### 15.5 Delete Shipper
+- **DELETE** `/api/shipper/shippers/{id}/`
+- **Headers:** `Authorization: Bearer {admin_token}`
+- **Response:**
+```json
+{
+  "message": "Đã xóa shipper thành công"
+}
+```
+
+### 15.6 Create Shipper with User (Custom Action)
+- **POST** `/api/shipper/shippers/create_with_user/`
+- **Headers:** `Authorization: Bearer {admin_token}`
+- **Mô tả:** Tạo cả User và Shipper trong một request
+- **Request Body:**
+```json
+{
+  "email": "newshipper@example.com",
+  "password": "password123",
+  "fullname": "Nguyễn Văn B",
+  "phone_number": "0911111111",
+  "address": "789 Street"
+}
+```
+- **Response:** Tương tự item trong list shippers
+
+### 15.7 Get Shipper by User ID
+- **GET** `/api/shipper/shippers/by_user/?user_id={user_id}`
+- **Headers:** `Authorization: Bearer {admin_token}`
+- **Response:** Tương tự item trong list shippers
+
+### 15.8 Get Available Users for Shipper Role
+- **GET** `/api/shipper/shippers/available_users/`
+- **Headers:** `Authorization: Bearer {admin_token}`
+- **Mô tả:** Lấy danh sách User có role Shipper nhưng chưa có profile Shipper
+- **Response:**
+```json
+{
+  "available_users": [
+    {
+      "id": 10,
+      "fullname": "Trần Văn C",
+      "email": "tranvanc@example.com",
+      "phone_number": "0922222222",
+      "address": "111 Street"
+    }
+  ]
+}
+```
+
+### 15.9 Get Shipper Statistics
+- **GET** `/api/shipper/shippers/statistics/`
+- **Headers:** `Authorization: Bearer {admin_token}`
+- **Response:**
+```json
+{
+  "total_shippers": 25,
+  "total_users_with_shipper_role": 30,
+  "available_users": 5
+}
+```
+
+---
+
+## 16. Promotions - Validate Multiple
+
+### 16.1 Validate Multiple Promos
+- **POST** `/api/promotions/validate-multiple/`
+- **Headers:** `Authorization: Bearer {access_token}` (optional cho public)
+- **Mô tả:** Validate nhiều mã khuyến mãi cùng lúc và tính tổng discount
+- **Request Body:**
+```json
+{
+  "promo_ids": [1, 2, 3],
+  "total_amount": 500000,
+  "store_id": 1
+}
+```
+- **Response:**
+```json
+{
+  "valid": true,
+  "total_discount": "125000.00",
+  "final_amount": "375000.00",
+  "promos": [
+    {
+      "id": 1,
+      "name": "Giảm 10%",
+      "discount_amount": "50000.00",
+      "valid": true
+    },
+    {
+      "id": 2,
+      "name": "Giảm 50k",
+      "discount_amount": "50000.00",
+      "valid": true
+    },
+    {
+      "id": 3,
+      "name": "Giảm 25k",
+      "discount_amount": "25000.00",
+      "valid": true
+    }
+  ]
+}
+```
+
+---
+
+## 17. Orders - Create with Multiple Promos
+
+### 17.1 Create Order with Multiple Promos (New Version)
+- **POST** `/api/orders/create-with-multiple-promos/`
+- **Headers:** `Authorization: Bearer {access_token}`
+- **Mô tả:** API mới hỗ trợ tạo đơn hàng với nhiều khuyến mãi được áp dụng đồng thời
+- **Request Body:**
+```json
+{
+  "receiver_name": "John Doe",
+  "phone_number": "0123456789",
+  "ship_address": "123 Main St, Hà Nội",
+  "note": "Gọi trước khi giao",
+  "payment_method": "COD",
+  "promo_ids": [1, 2, 3],
+  "discount_amount": 125000,
+  "promo_details": [
+    {
+      "promo_id": 1,
+      "promo_name": "Giảm 10%",
+      "discount_amount": 50000
+    },
+    {
+      "promo_id": 2,
+      "promo_name": "Giảm 50k",
+      "discount_amount": 50000
+    },
+    {
+      "promo_id": 3,
+      "promo_name": "Giảm 25k",
+      "discount_amount": 25000
+    }
+  ]
+}
+```
+- **Response:**
+```json
+{
+  "message": "Đã tạo 2 đơn hàng cho 2 cửa hàng",
+  "orders": [
+    {
+      "id": 1,
+      "store": {
+        "id": 1,
+        "store_name": "KFC Trần Phú"
+      },
+      "total_money": "231000.00",
+      "applied_promos": [1, 2, 3],
+      "discount_amount": "75000.00",
+      "items": [...]
+    },
+    {
+      "id": 2,
+      "store": {
+        "id": 2,
+        "store_name": "McDonald's Nguyễn Huệ"
+      },
+      "total_money": "144000.00",
+      "applied_promos": [1, 2, 3],
+      "discount_amount": "50000.00",
+      "items": [...]
+    }
+  ]
+}
+```
+
+**Lưu ý:**
+- Hệ thống tự động phân bổ discount tỷ lệ theo giá trị đơn hàng của mỗi cửa hàng
+- Hỗ trợ bảng `order_promo` để lưu chi tiết các khuyến mãi áp dụng
+- Validate tổng discount không vượt quá giới hạn cho phép (10 triệu VND)
+
+---
+
+## 18. Admin - Quản lý Đơn hàng
+
+### 18.1 Admin - List All Orders
+- **GET** `/api/orders/admin/`
+- **Headers:** `Authorization: Bearer {admin_token}`
+- **Query Parameters:**
+  - `status`: Lọc theo order_status
+  - `store_id`: Lọc theo cửa hàng
+  - `shipper_id`: Lọc theo shipper
+  - `search`: Tìm kiếm theo tên, địa chỉ, SĐT
+  - `page`: Số trang
+- **Response:** Tương tự danh sách đơn hàng user
+
+**Lưu ý cho Store Manager:**
+- Khi Store Manager gọi endpoint này, hệ thống TỰ ĐỘNG lọc chỉ hiển thị đơn hàng của cửa hàng họ quản lý
+- Không cần truyền `store_id` trong query params
+
+### 18.2 Admin - Order Detail
+- **GET** `/api/orders/admin/{order_id}/`
+- **Headers:** `Authorization: Bearer {admin_token}`
+- **Response:** Tương tự chi tiết đơn hàng user
+
+### 18.3 Admin - Assign Shipper
+- **POST** `/api/orders/admin/{order_id}/assign-shipper/`
+- **Headers:** `Authorization: Bearer {admin_token}`
+- **Request Body:**
+```json
+{
+  "shipper_id": 1
+}
+```
+- **Response:**
+```json
+{
+  "message": "Shipper assigned successfully",
+  "order": {
+    "id": 1,
+    "shipper": {
+      "id": 1,
+      "user": {
+        "id": 5,
+        "fullname": "Nguyễn Văn A",
+        "phone_number": "0912345678"
+      }
+    },
+    "order_status": "Đã xác nhận",
+    "delivery_status": "Chờ lấy hàng"
+  }
+}
+```
+
+### 18.4 Admin - Update Order Status
+- **PATCH** `/api/orders/admin/{order_id}/status/`
+- **Headers:** `Authorization: Bearer {admin_token}`
+- **Request Body:**
+```json
+{
+  "order_status": "Đang chuẩn bị"
+}
+```
+- **Response:** Tương tự chi tiết đơn hàng
+
+### 18.5 Shipper - Get Available Orders
+- **GET** `/api/orders/?shipper__isnull=true&delivery_status=Chờ lấy hàng`
+- **Headers:** `Authorization: Bearer {shipper_token}`
+- **Mô tả:** Lấy danh sách đơn hàng chưa có shipper nhận (available)
+- **Response:** Danh sách orders chưa có shipper
+
+### 18.6 Shipper - Get My Orders
+- **GET** `/api/orders/shipper/{shipper_id}/orders/`
+- **Headers:** `Authorization: Bearer {shipper_token}`
+- **Query Parameters:**
+  - `delivery_status`: Lọc theo trạng thái giao hàng
+- **Response:** Danh sách orders được gán cho shipper
+
+### 18.7 Shipper - Accept Order
+- **POST** `/api/orders/shipper/{order_id}/accept/`
+- **Headers:** `Authorization: Bearer {shipper_token}`
+- **Response:**
+```json
+{
+  "message": "Order accepted successfully",
+  "order": {
+    "id": 1,
+    "delivery_status": "Đã lấy hàng",
+    "shipper": {
+      "id": 1,
+      "user": {
+        "fullname": "Nguyễn Văn A"
+      }
+    }
+  }
+}
+```
+
+### 18.8 Shipper - Update Delivery Status
+- **PATCH** `/api/orders/shipper/{order_id}/status/`
+- **Headers:** `Authorization: Bearer {shipper_token}`
+- **Request Body:**
+```json
+{
+  "delivery_status": "Đang giao"
+}
+```
+- **Response:** Tương tự chi tiết đơn hàng
+
+---
+
+## 19. Ratings - Full CRUD
+
+### 19.1 List & Create Ratings
+- **GET** `/api/ratings/`
+- **POST** `/api/ratings/`
+- **Query Parameters (GET):**
+  - `food`: Filter by food_id
+  - `order`: Filter by order_id
+- **Request Body (POST):**
+```json
+{
+  "food_id": 1,
+  "order_id": 5,
+  "rating": 5,
+  "content": "Rất ngon và giao hàng nhanh!"
+}
+```
+- **Response (GET):**
+```json
+[
+  {
+    "username": "user123",
+    "rating": 5,
+    "content": "Rất ngon và giao hàng nhanh!"
+  }
+]
+```
+
+### 19.2 Rating Detail
+- **GET** `/api/ratings/{id}/`
+- **PUT** `/api/ratings/{id}/`
+- **DELETE** `/api/ratings/{id}/`
+- **Headers:** `Authorization: Bearer {access_token}` (PUT/DELETE)
+- **Request Body (PUT):**
+```json
+{
+  "rating": 4,
+  "content": "Cập nhật: Ngon nhưng hơi mặn"
+}
+```
+- **Response (GET/PUT):**
+```json
+{
+  "id": 1,
+  "food_id": 1,
+  "user_id": 3,
+  "rating": 4,
+  "content": "Cập nhật: Ngon nhưng hơi mặn",
+  "created_date": "2025-01-01T12:00:00Z"
+}
+```
+- **Response (DELETE):** HTTP 204 No Content
+
+**Quyền hạn:**
+- GET: AllowAny (công khai)
+- POST: IsAuthenticated
+- PUT/DELETE: Chỉ user sở hữu rating mới có thể cập nhật/xóa
+
+---
+
+## 20. API Root
+
+### 20.1 Root Endpoint
+- **GET** `/`
+- **Mô tả:** API root, hiển thị danh sách các endpoints có sẵn
+- **Response:**
+```json
+{
+  "message": "Welcome to FastFood API",
+  "version": "1.0",
+  "endpoints": {
+    "authentication": "/api/auth/",
+    "menu": "/api/menu/",
+    "cart": "/api/cart/",
+    "orders": "/api/orders/",
+    "payments": "/api/payments/",
+    "promotions": "/api/promotions/",
+    "ratings": "/api/ratings/",
+    "stores": "/api/stores/",
+    "shipper": "/api/shipper/",
+    "chatbot": "/api/chatbot/",
+    "admin": "/admin/"
+  }
+}
+```
+
+---
+
+## Phụ lục: Cấu trúc Database Models
+
+### User Model
+- `id`: Primary Key
+- `email`: Unique, Email
+- `username`: Unique, String
+- `password`: Hashed password
+- `fullname`: String
+- `phone_number`: String
+- `address`: Text
+- `avatar`: ImageField
+- `role`: ForeignKey to Role
+- `is_shipper_registered`: Boolean
+- `is_store_registered`: Boolean
+- `groups`: ManyToMany (Django default)
+- `user_permissions`: ManyToMany (Django default)
+- `created_date`: DateTime
+
+### Food Model
+- `id`: Primary Key
+- `title`: String
+- `description`: Text
+- `price`: Decimal
+- `image`: String (path)
+- `category`: ForeignKey to Category
+- `store`: ForeignKey to Store
+- `availability`: String
+
+### FoodSize Model
+- `id`: Primary Key
+- `food`: ForeignKey to Food
+- `size_name`: String (S, M, L, XL)
+- `price`: Decimal
+
+### Order Model
+- `id`: Primary Key
+- `user`: ForeignKey to User
+- `group_id`: String (để nhóm các order từ cùng 1 giỏ hàng)
+- `shipper`: ForeignKey to Shipper (nullable)
+- `promo`: ForeignKey to Promo (nullable)
+- `receiver_name`: String
+- `phone_number`: String
+- `ship_address`: Text
+- `note`: Text
+- `total_money`: Decimal
+- `shipping_fee`: Decimal
+- `order_status`: String
+- `delivery_status`: String
+- `payment_method`: String
+- `cancel_reason`: Text (nullable)
+- `cancelled_by_role`: String (nullable)
+- `cancelled_date`: DateTime (nullable)
+- `created_date`: DateTime
+
+### OrderDetail Model
+- `id`: Primary Key
+- `order`: ForeignKey to Order
+- `food`: ForeignKey to Food
+- `food_size`: ForeignKey to FoodSize (nullable)
+- `quantity`: Integer
+- `food_price`: Decimal (giá tại thời điểm đặt)
+- `item_note`: Text
+
+### ChatSession Model
+- `id`: Primary Key
+- `session_id`: Unique String
+- `state`: JSONField (lưu trạng thái conversation)
+- `created_date`: DateTime
+
+### ChatMessage Model
+- `id`: Primary Key
+- `session`: ForeignKey to ChatSession
+- `message`: Text
+- `is_user`: Boolean
+- `intent`: String (nullable)
+- `created_date`: DateTime
+
+### ChatCart Model
+- `id`: Primary Key
+- `session`: ForeignKey to ChatSession
+- `food`: ForeignKey to Food
+- `food_size`: ForeignKey to FoodSize (nullable)
+- `quantity`: Integer
+- `created_date`: DateTime
+
+---
+
+**Tài liệu này bao gồm:**
+- ✅ 20 nhóm API chính
+- ✅ Authentication & Authorization
+- ✅ Menu Management (Public & Admin & Store Manager)
+- ✅ Cart & Orders
+- ✅ Payments
+- ✅ Promotions (Single & Multiple)
+- ✅ Ratings (Full CRUD)
+- ✅ Stores Management
+- ✅ Shipper Management (Full CRUD)
+- ✅ Chatbot với AI Integration
+- ✅ Admin Management
+- ✅ Database Schema
+
+**Phiên bản:** 2.0  
+**Cập nhật:** 05/11/2025  
+**Tác giả:** FastFood Development Team
