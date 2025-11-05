@@ -308,7 +308,7 @@ const StoreManager: React.FC = () => {
       alert(`Lỗi khi cập nhật cửa hàng: ${error}`);
     }
   };
-  // *** KẾT THÚC PHẦN THÊM MỚI ***
+
 
 
   // --- Order Functions ---
@@ -320,10 +320,20 @@ const StoreManager: React.FC = () => {
         page: String(page),
         status: orderStatusFilter,
       }).toString();
+      
       const res = await API.get(`/stores/${storeInfo.id}/orders/?${params}`);
-      setOrders(res.results || []);
-      setTotalOrderPages(res.num_pages || 1);
-      setOrderPage(res.current_page || 1);
+      
+      // [SỬA Ở ĐÂY]
+      // Response `res` mà API trả về chính là mảng đơn hàng.
+      setOrders(res || []); 
+
+      // [CẢNH BÁO VỀ PHÂN TRANG]
+      // Vì response chỉ là một mảng, nó không chứa thông tin phân trang 
+      // (như total_pages, current_page).
+      // Do đó, chúng ta phải tạm thời set phân trang về 1.
+      setTotalOrderPages(1); 
+      setOrderPage(1);
+
     } catch (error) {
       console.error('Error loading orders:', error);
       alert('Không thể tải danh sách đơn hàng');
@@ -334,7 +344,7 @@ const StoreManager: React.FC = () => {
 
   const viewOrderDetail = async (orderId: number) => {
     try {
-      const res = await API.get(`/api/orders/${orderId}/`); // Assuming generic endpoint works
+      const res = await API.get(`/orders/store/${orderId}/`); // <-- Sửa (Dành cho Admin/Manager)
       setSelectedOrder(res);
       setShowOrderModal(true);
     } catch (error) {
@@ -345,7 +355,7 @@ const StoreManager: React.FC = () => {
 
   const updateOrderStatus = async (orderId: number, status: string) => {
     try {
-      await API.patch(`/api/orders/${orderId}/status/`, { order_status: status });
+      await API.patch(`/orders/store/${orderId}/status/`, { order_status: status });
       alert('Cập nhật trạng thái thành công!');
       if (selectedOrder) {
         setSelectedOrder({ ...selectedOrder, order_status: status });
@@ -373,14 +383,14 @@ const StoreManager: React.FC = () => {
     'Đã hủy': 'bg-red-100 text-red-800'
   }[status] || 'bg-gray-100 text-gray-800');
 
-  // *** BẮT ĐẦU PHẦN THÊM MỚI ***
+
   const sectionTitles: { [key: string]: string } = {
     dashboard: 'Dashboard',
     foods: 'Món ăn',
     orders: 'Đơn hàng',
     'my-store': 'Cửa hàng của tôi'
   };
-  // *** KẾT THÚC PHẦN THÊM MỚI ***
+
 
   if (loading && !storeInfo) {
     return <div className="text-center p-10">Đang tải thông tin cửa hàng...</div>;
@@ -684,7 +694,7 @@ const StoreManager: React.FC = () => {
         </div>
       )}
 
-      {/* *** BẮT ĐẦU PHẦN THÊM MỚI *** */}
+
       {/* Edit Store Modal */}
       {showEditStoreModal && editableStoreInfo && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
@@ -719,7 +729,7 @@ const StoreManager: React.FC = () => {
           </div>
         </div>
       )}
-      {/* *** KẾT THÚC PHẦN THÊM MỚI *** */}
+
 
     </div>
   );

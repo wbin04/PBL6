@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import { API, getImageUrl, type Food, type Category } from "@/lib/api";
+import { API, getImageUrl } from "@/lib/api";
+import type { Food, Category } from "@/types/index-ngu";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 
