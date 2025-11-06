@@ -46,10 +46,35 @@ interface StoreApplication {
   created_date: string;
 }
 
+// *** START: Thêm interface cho Khuyến mãi (Admin) ***
+interface AdminPromotion {
+  id: number;
+  name: string;
+  scope: string; // "GLOBAL"
+  discount_type: "PERCENT" | "AMOUNT";
+  discount_value: string;
+  start_date: string; // ISO format (e.g., 2025-11-01T00:00:00Z)
+  end_date: string; // ISO format
+  minimum_pay: string | null;
+  max_discount_amount: string | null;
+  store_id: number; // 0
+  store: {
+    id: number;
+    store_name: string;
+  };
+  is_active: boolean;
+  category: string; // "AMOUNT" or "PERCENT"
+}
+// *** END: Thêm interface cho Khuyến mãi (Admin) ***
+
+
 const Admin: React.FC = () => {
   const [activeSection, setActiveSection] = useState<string>(() => {
     return localStorage.getItem('admin_active_section') || 'dashboard';
   });
+  
+  const [openDropdown, setOpenDropdown] = useState<string | null>(null);
+
   const [stats, setStats] = useState({
     totalCustomers: 0,
     totalFoods: 0,
@@ -136,6 +161,25 @@ const Admin: React.FC = () => {
     limit: '10', // Mặc định là 10 theo API doc
   });
   const [popularFoodsLoading, setPopularFoodsLoading] = useState(false);
+  
+  // *** START: Thêm state cho Khuyến mãi ***
+  const [promotions, setPromotions] = useState<AdminPromotion[]>([]);
+  const [promoLoading, setPromoLoading] = useState(false);
+  const [showAddPromoModal, setShowAddPromoModal] = useState(false);
+  const [showEditPromoModal, setShowEditPromoModal] = useState(false);
+  const [newPromo, setNewPromo] = useState({
+    name: '',
+    discount_type: 'PERCENT' as 'PERCENT' | 'AMOUNT',
+    discount_value: '',
+    start_date: '', // Sẽ dùng YYYY-MM-DD
+    end_date: '', // Sẽ dùng YYYY-MM-DD
+    minimum_pay: '',
+    max_discount_amount: '',
+    is_active: true,
+  });
+  const [selectedPromo, setSelectedPromo] = useState<AdminPromotion | null>(null);
+  // *** END: Thêm state cho Khuyến mãi ***
+  
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -175,6 +219,11 @@ const Admin: React.FC = () => {
         setStoreViewMode('list'); 
         loadStores();
         break;
+      // *** START: Thêm case cho Khuyến mãi ***
+      case 'promotions':
+        loadPromotions();
+        break;
+      // *** END: Thêm case cho Khuyến mãi ***
       case 'revenueReport':
         // Tải danh sách cửa hàng nếu chưa có để dùng cho bộ lọc
         if (stores.length === 0) {
@@ -206,7 +255,7 @@ const Admin: React.FC = () => {
 
   const changeSection = (section: string) => {
     setActiveSection(section);
-    
+    setOpenDropdown(null); // Tự động đóng dropdown khi chọn
   };
 
   const loadDashboard = async () => {
@@ -552,6 +601,128 @@ const Admin: React.FC = () => {
     }
   };
 
+  // *** START: Thêm hàm CRUD cho Khuyến mãi ***
+  const loadPromotions = async () => {
+    setPromoLoading(true);
+    try {
+      // API doc: GET /api/promotions/admin/
+      const res = await API.get<AdminPromotion[]>('/promotions/admin/');
+      setPromotions(res || []);
+    } catch (error) {
+      console.error('Error loading promotions:', error);
+      alert('Không thể tải danh sách khuyến mãi');
+    } finally {
+      setPromoLoading(false);
+    }
+  };
+
+  const handleNewPromoChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
+    const { name, value, type } = e.target;
+    
+    if (type === 'checkbox') {
+      setNewPromo(prev => ({ ...prev, [name]: (e.target as HTMLInputElement).checked }));
+    } else {
+      setNewPromo(prev => ({ ...prev, [name]: value }));
+    }
+  };
+
+  const handleAddPromo = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      // API doc: POST /api/promotions/admin/create/
+      await API.post('/promotions/admin/create/', {
+        ...newPromo,
+        minimum_pay: newPromo.minimum_pay || null, // Chuyển chuỗi rỗng thành null
+        max_discount_amount: newPromo.max_discount_amount || null, // Chuyển chuỗi rỗng thành null
+      });
+      alert('Thêm khuyến mãi thành công');
+      setShowAddPromoModal(false);
+      setNewPromo({ // Reset form
+        name: '',
+        discount_type: 'PERCENT',
+        discount_value: '',
+        start_date: '',
+        end_date: '',
+        minimum_pay: '',
+        max_discount_amount: '',
+        is_active: true,
+      });
+      loadPromotions(); // Tải lại danh sách
+    } catch (error) {
+      console.error('Error adding promotion:', error);
+      alert(`Lỗi khi thêm khuyến mãi: ${error}`);
+    }
+  };
+
+  const openEditPromoModal = (promo: AdminPromotion) => {
+    // API trả về kiểu "2025-11-01T00:00:00Z"
+    // Input type="date" cần "YYYY-MM-DD"
+    const formatForDateInput = (dateStr: string) => {
+      if (!dateStr) return '';
+      return dateStr.split('T')[0];
+    };
+
+    setSelectedPromo({
+      ...promo,
+      start_date: formatForDateInput(promo.start_date),
+      end_date: formatForDateInput(promo.end_date),
+      minimum_pay: promo.minimum_pay || '', // Chuyển null thành chuỗi rỗng
+      max_discount_amount: promo.max_discount_amount || '', // Chuyển null thành chuỗi rỗng
+    });
+    setShowEditPromoModal(true);
+  };
+
+  const handleEditPromoChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
+    if (!selectedPromo) return;
+    const { name, value, type } = e.target;
+    
+    if (type === 'checkbox') {
+      setSelectedPromo(prev => ({ ...prev!, [name]: (e.target as HTMLInputElement).checked }));
+    } else {
+      setSelectedPromo(prev => ({ ...prev!, [name]: value }));
+    }
+  };
+
+  const handleUpdatePromo = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedPromo) return;
+
+    try {
+      // API doc: PUT/PATCH /api/promotions/admin/{promo_id}/update/
+      await API.put(`/promotions/admin/${selectedPromo.id}/update/`, {
+        name: selectedPromo.name,
+        discount_type: selectedPromo.discount_type,
+        discount_value: selectedPromo.discount_value,
+        start_date: selectedPromo.start_date, // Đã là YYYY-MM-DD
+        end_date: selectedPromo.end_date, // Đã là YYYY-MM-DD
+        minimum_pay: selectedPromo.minimum_pay || null, // Chuyển chuỗi rỗng thành null
+        max_discount_amount: selectedPromo.max_discount_amount || null, // Chuyển chuỗi rỗng thành null
+        is_active: selectedPromo.is_active,
+      });
+      alert('Cập nhật khuyến mãi thành công');
+      setShowEditPromoModal(false);
+      setSelectedPromo(null);
+      loadPromotions(); // Tải lại danh sách
+    } catch (error) {
+      console.error('Error updating promotion:', error);
+      alert(`Lỗi khi cập nhật: ${error}`);
+    }
+  };
+
+  const deletePromo = async (promoId: number) => {
+    if (!window.confirm('Bạn có chắc muốn xóa khuyến mãi này?')) return;
+    try {
+      // API doc: DELETE /api/promotions/admin/{promo_id}/delete/
+      await API.delete(`/promotions/admin/${promoId}/delete/`);
+      alert('Xóa khuyến mãi thành công');
+      loadPromotions(); // Tải lại danh sách
+    } catch (error) {
+      console.error('Error deleting promotion:', error);
+      alert(`Lỗi khi xóa: ${error}`);
+    }
+  };
+  // *** END: Thêm hàm CRUD cho Khuyến mãi ***
+
   const handleFilterChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
     setReportFilters(prev => ({ ...prev, [name]: value }));
@@ -632,6 +803,12 @@ const Admin: React.FC = () => {
       currency: 'VND'
     }).format(Number(amount));
   };
+  
+  // Helper format ngày cho bảng khuyến mãi
+  const formatPromoDate = (dateString: string) => {
+    if (!dateString) return 'N/A';
+    return new Date(dateString).toLocaleDateString('vi-VN');
+  };
 
   const logout = () => {
     localStorage.removeItem('access_token');
@@ -651,6 +828,12 @@ const Admin: React.FC = () => {
     );
   }
 
+  // Helper consts để kiểm tra active section cho dropdown
+  // *** START: Cập nhật isManagementActive ***
+  const isManagementActive = ['stores', 'customers', 'foods', 'orders', 'promotions'].includes(activeSection);
+  // *** END: Cập nhật isManagementActive ***
+  const isReportsActive = ['revenueReport', 'popularFoodsReport'].includes(activeSection);
+
   return (
     <div className="max-w-7xl mx-auto p-6">
       {/* Header */}
@@ -660,56 +843,107 @@ const Admin: React.FC = () => {
             <div>
               <h1 className="text-2xl font-bold text-gray-900">🍔 Admin Panel</h1>
             </div>
-            <nav className="flex space-x-6">
+            
+            
+            <nav className="flex space-x-4">
+              {/* Dashboard */}
               <button
                 className={`px-4 py-2 rounded transition-colors ${activeSection === 'dashboard' ? 'bg-blue-500 text-white' : 'text-gray-600 hover:text-blue-500'
                   }`}
-                onClick={() => {
-                  changeSection('dashboard');
-                }}
+                onClick={() => changeSection('dashboard')}
               >
                 Dashboard
               </button>
 
-              <button
-                className={`px-4 py-2 rounded transition-colors ${activeSection === 'stores'
-                  ? 'bg-blue-500 text-white'
-                  : 'text-gray-600 hover:text-blue-500'
+              {/* Dropdown Quản lý */}
+              <div className="relative">
+                <button
+                  className={`px-4 py-2 rounded transition-colors flex items-center gap-1 ${
+                    isManagementActive
+                      ? 'bg-blue-500 text-white'
+                      : 'text-gray-600 hover:text-blue-500'
                   }`}
-                onClick={() => changeSection('stores')}
+                  onClick={() => setOpenDropdown(openDropdown === 'management' ? null : 'management')}
+                >
+                  Quản lý
+                  <span className={`text-xs transition-transform ${openDropdown === 'management' ? 'rotate-180' : 'rotate-0'}`}>▼</span>
+                </button>
+                {openDropdown === 'management' && (
+                  <div className="absolute top-full left-0 mt-2 w-48 bg-white rounded-md shadow-lg z-10 border py-1">
+                    <button
+                      className="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
+                      onClick={() => changeSection('stores')}
+                    >
+                      Cửa hàng
+                    </button>
+                    <button
+                      className="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
+                      onClick={() => changeSection('customers')}
+                    >
+                      Khách hàng
+                    </button>
+                    <button
+                      className="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
+                      onClick={() => changeSection('foods')}
+                    >
+                      Món ăn
+                    </button>
+                    <button
+                      className="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
+                      onClick={() => changeSection('orders')}
+                    >
+                      Đơn hàng
+                    </button>
+                    {/* *** START: Thêm nút Khuyến mãi *** */}
+                    <button
+                      className="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
+                      onClick={() => changeSection('promotions')}
+                    >
+                      Khuyến mãi
+                    </button>
+                    {/* *** END: Thêm nút Khuyến mãi *** */}
+                  </div>
+                )}
+              </div>
+
+              {/* Dropdown Báo cáo */}
+              <div className="relative">
+                <button
+                  className={`px-4 py-2 rounded transition-colors flex items-center gap-1 ${
+                    isReportsActive
+                      ? 'bg-blue-500 text-white'
+                      : 'text-gray-600 hover:text-blue-500'
+                  }`}
+                  onClick={() => setOpenDropdown(openDropdown === 'reports' ? null : 'reports')}
+                >
+                  Báo cáo
+                  <span className={`text-xs transition-transform ${openDropdown === 'reports' ? 'rotate-180' : 'rotate-0'}`}>▼</span>
+                </button>
+                {openDropdown === 'reports' && (
+                  <div className="absolute top-full left-0 mt-2 w-52 bg-white rounded-md shadow-lg z-10 border py-1">
+                    <button
+                      className="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
+                      onClick={() => changeSection('revenueReport')}
+                    >
+                      Báo cáo Doanh thu
+                    </button>
+                    <button
+                      className="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
+                      onClick={() => changeSection('popularFoodsReport')}
+                    >
+                      BC Món ăn bán chạy
+                    </button>
+                  </div>
+                )}
+              </div>
+              
+              <button
+                className="px-4 py-2 text-gray-600 hover:text-green-600 transition-colors"
+                onClick={() => navigate('/')}
               >
-                Cửa hàng
+                Trang Khách Hàng
               </button>
 
-
-              <button
-                className={`px-4 py-2 rounded transition-colors ${activeSection === 'customers' ? 'bg-blue-500 text-white' : 'text-gray-600 hover:text-blue-500'
-                  }`}
-                onClick={() => changeSection('customers')}
-              >
-                Khách hàng
-              </button>
-              <button
-                className={`px-4 py-2 rounded transition-colors ${activeSection === 'foods' ? 'bg-blue-500 text-white' : 'text-gray-600 hover:text-blue-500'
-                  }`}
-                onClick={() => changeSection('foods')}
-              >
-                Món ăn
-              </button>
-              <button
-                className={`px-4 py-2 rounded transition-colors ${activeSection === 'orders' ? 'bg-blue-500 text-white' : 'text-gray-600 hover:text-blue-500'
-                  }`}
-                onClick={() => changeSection('orders')}
-              >
-                Đơn hàng
-              </button>
-              <button
-                className={`px-3 py-2 rounded transition-colors text-sm md:text-base ${activeSection === 'revenueReport' ? 'bg-blue-500 text-white' : 'text-gray-600 hover:text-blue-500'}`}
-                onClick={() => changeSection('revenueReport')}
-              >
-                Báo cáo
-              </button>
-              <button className={`px-3 py-2 rounded transition-colors text-sm md:text-base ${activeSection === 'popularFoodsReport' ? 'bg-blue-500 text-white' : 'text-gray-600 hover:text-blue-500'}`} onClick={() => changeSection('popularFoodsReport')}>BC Món ăn</button>
               <button
                 className="px-4 py-2 text-gray-600 hover:text-red-500 transition-colors"
                 onClick={logout}
@@ -717,6 +951,8 @@ const Admin: React.FC = () => {
                 Đăng xuất
               </button>
             </nav>
+            {/* *** KẾT THÚC THAY ĐỔI 3 *** */}
+
           </div>
         </div>
       </div>
@@ -1398,6 +1634,79 @@ const Admin: React.FC = () => {
         </div>
       )}
 
+      {/* *** START: Thêm mục Khuyến mãi *** */}
+      {activeSection === 'promotions' && (
+        <div>
+          <div className="flex justify-between items-center mb-6">
+            <h2 className="text-xl font-semibold">Quản lý Khuyến mãi (Toàn Hệ thống)</h2>
+            <Button onClick={() => setShowAddPromoModal(true)}>+ Thêm khuyến mãi</Button>
+          </div>
+
+          <Card>
+            <CardContent className="p-0">
+              <div className="overflow-x-auto">
+                <table className="w-full">
+                  <thead className="bg-gray-50">
+                    <tr>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">ID</th>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Tên</th>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Loại</th>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Giá trị</th>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Ngày BĐ</th>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Ngày KT</th>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Trạng thái</th>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Thao tác</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-200">
+                    {promotions.length === 0 ? (
+                      <tr>
+                        <td colSpan={8} className="px-4 py-8 text-center text-gray-500">
+                          {promoLoading ? 'Đang tải...' : 'Không có khuyến mãi nào'}
+                        </td>
+                      </tr>
+                    ) : (
+                      promotions.map(promo => (
+                        <tr key={promo.id}>
+                          <td className="px-4 py-4 text-sm">{promo.id}</td>
+                          <td className="px-4 py-4 text-sm font-medium">{promo.name}</td>
+                          <td className="px-4 py-4 text-sm">
+                            {promo.discount_type === 'PERCENT' ? 'Phần trăm' : 'Số tiền'}
+                          </td>
+                          <td className="px-4 py-4 text-sm">
+                            {promo.discount_type === 'PERCENT'
+                              ? `${promo.discount_value}%`
+                              : formatCurrency(promo.discount_value)}
+                          </td>
+                          <td className="px-4 py-4 text-sm">{formatPromoDate(promo.start_date)}</td>
+                          <td className="px-4 py-4 text-sm">{formatPromoDate(promo.end_date)}</td>
+                          <td className="px-4 py-4">
+                            <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
+                                promo.is_active
+                                ? 'bg-green-100 text-green-800'
+                                : 'bg-red-100 text-red-800'
+                              }`}>
+                              {promo.is_active ? 'Hoạt động' : 'Tạm dừng'}
+                            </span>
+                          </td>
+                          <td className="px-4 py-4 flex gap-2">
+                            <Button size="sm" variant="outline" onClick={() => openEditPromoModal(promo)}>✏️ Sửa</Button>
+                            <Button size="sm" variant="destructive" onClick={() => deletePromo(promo.id)}>🗑️ Xóa</Button>
+                          </td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </CardContent>
+          </Card>
+          {/* Không có phân trang cho khuyến mãi theo API doc */}
+        </div>
+      )}
+      {/* *** END: Thêm mục Khuyến mãi *** */}
+
+
       {/* Revenue Report Section */}
       {activeSection === 'revenueReport' && (
         <div>
@@ -1763,6 +2072,129 @@ const Admin: React.FC = () => {
           </div>
         </div>
       )}
+
+      {/* *** START: Thêm Modals cho Khuyến mãi *** */}
+      {/* Add Promotion Modal */}
+      {showAddPromoModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <form onSubmit={handleAddPromo} className="bg-white rounded-lg max-w-lg w-full p-6 space-y-4 max-h-[90vh] overflow-y-auto">
+            <h2 className="text-xl font-bold mb-4">Thêm Khuyến mãi Hệ thống</h2>
+            
+            <div>
+              <label className="block text-sm font-medium">Tên khuyến mãi</label>
+              <input required name="name" value={newPromo.name} onChange={handleNewPromoChange} className="w-full p-2 border rounded" />
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium">Loại giảm giá</label>
+                <select required name="discount_type" value={newPromo.discount_type} onChange={handleNewPromoChange} className="w-full p-2 border rounded">
+                  <option value="PERCENT">Phần trăm (%)</option>
+                  <option value="AMOUNT">Số tiền (VND)</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm font-medium">Giá trị giảm</label>
+                <input required type="number" name="discount_value" value={newPromo.discount_value} onChange={handleNewPromoChange} className="w-full p-2 border rounded" />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium">Ngày bắt đầu</label>
+                <input required type="date" name="start_date" value={newPromo.start_date} onChange={handleNewPromoChange} className="w-full p-2 border rounded" />
+              </div>
+              <div>
+                <label className="block text-sm font-medium">Ngày kết thúc</label>
+                <input required type="date" name="end_date" value={newPromo.end_date} onChange={handleNewPromoChange} className="w-full p-2 border rounded" />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium">Giá trị đơn tối thiểu (VND)</label>
+                <input type="number" name="minimum_pay" value={newPromo.minimum_pay} onChange={handleNewPromoChange} className="w-full p-2 border rounded" placeholder="Bỏ trống nếu không áp dụng" />
+              </div>
+              <div>
+                <label className="block text-sm font-medium">Giảm tối đa (VND)</label>
+                <input type="number" name="max_discount_amount" value={newPromo.max_discount_amount} onChange={handleNewPromoChange} className="w-full p-2 border rounded" placeholder="Chỉ áp dụng cho loại %" />
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <input type="checkbox" name="is_active" checked={newPromo.is_active} onChange={handleNewPromoChange} id="is_active_add" className="h-4 w-4" />
+              <label htmlFor="is_active_add" className="text-sm font-medium">Kích hoạt</label>
+            </div>
+
+            <div className="flex justify-end gap-2 pt-4">
+              <Button type="button" variant="outline" onClick={() => setShowAddPromoModal(false)}>Hủy</Button>
+              <Button type="submit">Thêm</Button>
+            </div>
+          </form>
+        </div>
+      )}
+
+      {/* Edit Promotion Modal */}
+      {showEditPromoModal && selectedPromo && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <form onSubmit={handleUpdatePromo} className="bg-white rounded-lg max-w-lg w-full p-6 space-y-4 max-h-[90vh] overflow-y-auto">
+            <h2 className="text-xl font-bold mb-4">Sửa Khuyến mãi Hệ thống</h2>
+            
+            <div>
+              <label className="block text-sm font-medium">Tên khuyến mãi</label>
+              <input required name="name" value={selectedPromo.name} onChange={handleEditPromoChange} className="w-full p-2 border rounded" />
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium">Loại giảm giá</label>
+                <select required name="discount_type" value={selectedPromo.discount_type} onChange={handleEditPromoChange} className="w-full p-2 border rounded">
+                  <option value="PERCENT">Phần trăm (%)</option>
+                  <option value="AMOUNT">Số tiền (VND)</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm font-medium">Giá trị giảm</label>
+                <input required type="number" name="discount_value" value={selectedPromo.discount_value} onChange={handleEditPromoChange} className="w-full p-2 border rounded" />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium">Ngày bắt đầu</label>
+                <input required type="date" name="start_date" value={selectedPromo.start_date} onChange={handleEditPromoChange} className="w-full p-2 border rounded" />
+              </div>
+              <div>
+                <label className="block text-sm font-medium">Ngày kết thúc</label>
+                <input required type="date" name="end_date" value={selectedPromo.end_date} onChange={handleEditPromoChange} className="w-full p-2 border rounded" />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium">Giá trị đơn tối thiểu (VND)</label>
+                <input type="number" name="minimum_pay" value={selectedPromo.minimum_pay || ''} onChange={handleEditPromoChange} className="w-full p-2 border rounded" placeholder="Bỏ trống nếu không áp dụng" />
+              </div>
+              <div>
+                <label className="block text-sm font-medium">Giảm tối đa (VND)</label>
+                <input type="number" name="max_discount_amount" value={selectedPromo.max_discount_amount || ''} onChange={handleEditPromoChange} className="w-full p-2 border rounded" placeholder="Chỉ áp dụng cho loại %" />
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <input type="checkbox" name="is_active" checked={selectedPromo.is_active} onChange={handleEditPromoChange} id="is_active_edit" className="h-4 w-4" />
+              <label htmlFor="is_active_edit" className="text-sm font-medium">Kích hoạt</label>
+            </div>
+
+            <div className="flex justify-end gap-2 pt-4">
+              <Button type="button" variant="outline" onClick={() => setShowEditPromoModal(false)}>Hủy</Button>
+              <Button type="submit">Lưu thay đổi</Button>
+            </div>
+          </form>
+        </div>
+      )}
+      {/* *** END: Thêm Modals cho Khuyến mãi *** */}
+
     </div>
   );
 };
