@@ -5,13 +5,19 @@ from rest_framework import status
 from django.shortcuts import get_object_or_404
 from django.core.paginator import Paginator
 from django.db.models import Q
-from decimal import Decimal
+from decimal import Decimal, ROUND_HALF_UP
 from .models import Order, OrderDetail
 from .serializers import OrderSerializer, OrderDetailSerializer
 from apps.menu.models import Food
 from apps.cart.models import Cart, Item
 from apps.promotions.models import Promo
 from django.db import connection
+from apps.stores.models import Store
+from apps.utils.shipping import (
+    driving_distance_km,
+    calculate_shipping_fee,
+    normalize_coordinate,
+)
 
 
 @api_view(['GET', 'POST'])
@@ -79,6 +85,9 @@ def order_list_create(request):
                 if store_id not in items_by_store:
                     items_by_store[store_id] = []
                 items_by_store[store_id].append((food_id, quantity, item_note, food_option_id))
+
+            store_ids = [store_id for store_id in items_by_store.keys() if store_id is not None]
+            stores_cache = {store.id: store for store in Store.objects.filter(id__in=store_ids)}
             
             # Get food prices for calculating totals
             food_ids = [food_id for food_id, _, _, _, _ in cart_rows]
@@ -91,21 +100,27 @@ def order_list_create(request):
                 from apps.menu.models import FoodSize
                 food_options = {fs.id: fs for fs in FoodSize.objects.filter(id__in=food_option_ids)}
             
-            # Base order data - use Decimal for shipping_fee
-            from decimal import Decimal
-            shipping_fee = 15000  # Fixed shipping fee per store
+            # Determine drop-off coordinates (prefer request payload, fallback to profile)
+            customer_latitude = normalize_coordinate(request.data.get('ship_latitude'))
+            customer_longitude = normalize_coordinate(request.data.get('ship_longitude'))
+
+            if customer_latitude is None or customer_longitude is None:
+                customer_latitude = normalize_coordinate(getattr(request.user, 'latitude', None))
+                customer_longitude = normalize_coordinate(getattr(request.user, 'longitude', None))
+
+            # Base order data
             base_order_data = {
                 'user_id': request.user.id,
                 'receiver_name': request.data.get('receiver_name'),
                 'phone_number': request.data.get('phone_number'),
                 'ship_address': request.data.get('ship_address'),
+                'ship_latitude': customer_latitude,
+                'ship_longitude': customer_longitude,
                 'note': request.data.get('note', ''),
                 'payment_method': request.data.get('payment_method', 'COD'),
-                'shipping_fee': Decimal(str(shipping_fee))
             }
             
             # Apply promo if provided
-            from decimal import Decimal
             promo_discount = Decimal('0')
             applied_promos = []
             
@@ -187,11 +202,23 @@ def order_list_create(request):
             for store_id, store_items in items_by_store.items():
                 store_subtotal = store_subtotals[store_id]
                 
-                # Calculate total = subtotal + shipping fee - use Decimal
-                shipping_fee_decimal = Decimal(str(shipping_fee))
+                store_obj = stores_cache.get(store_id)
+                distance_km = None
+                route_polyline = None
+                if store_obj:
+                    route_info = driving_distance_km(
+                        getattr(store_obj, 'latitude', None),
+                        getattr(store_obj, 'longitude', None),
+                        customer_latitude,
+                        customer_longitude,
+                    )
+                    distance_km = route_info.distance_km
+                    route_polyline = route_info.polyline
+
+                shipping_fee_decimal = calculate_shipping_fee(distance_km)
                 store_total_before_discount = store_subtotal + shipping_fee_decimal
                 
-                print(f"Store {store_id}: subtotal={store_subtotal}, shipping={shipping_fee_decimal}, before_discount={store_total_before_discount}")
+                print(f"Store {store_id}: subtotal={store_subtotal}, distance_km={distance_km}, shipping={shipping_fee_decimal}, before_discount={store_total_before_discount}")
                 
                 # Apply promo discount proportionally based on store subtotal
                 store_discount = Decimal('0')
@@ -209,10 +236,10 @@ def order_list_create(request):
                     # Apply discount but ensure total >= shipping_fee
                     store_total = max(shipping_fee_decimal, store_total_before_discount - store_discount)
                     # Round to 3 decimal places
-                    store_total = store_total.quantize(Decimal('0.001'), rounding='ROUND_HALF_UP')
+                    store_total = store_total.quantize(Decimal('0.001'), rounding=ROUND_HALF_UP)
                     print(f"Store {store_id}: final total after discount={store_total}")
                 else:
-                    store_total = store_total_before_discount.quantize(Decimal('0.001'), rounding='ROUND_HALF_UP')
+                    store_total = store_total_before_discount.quantize(Decimal('0.001'), rounding=ROUND_HALF_UP)
                     print(f"Store {store_id}: no discount applied, final total={store_total}")
                 
                 # Validate total_money is reasonable  
@@ -224,14 +251,14 @@ def order_list_create(request):
                         'error': f'Calculated total for store {store_id} is too large: {store_total}. Subtotal: {store_subtotal}, Shipping: {shipping_fee_decimal}, Discount: {store_discount}'
                     }, status=status.HTTP_400_BAD_REQUEST)
                 
-                # Round to 3 decimal places
-                store_total = round(store_total, 3)
-                
                 # Create order data for this store
                 order_data = base_order_data.copy()
                 # total_money should be FOOD ONLY (no shipping, no discount applied)
                 order_data['total_money'] = float(store_subtotal)
                 order_data['store_id'] = store_id
+                order_data['shipping_fee'] = shipping_fee_decimal
+                if route_polyline:
+                    order_data['route_polyline'] = route_polyline
                 
                 # Only set promo on the first order (for database storage)
                 if len(created_orders) > 0:
@@ -246,6 +273,8 @@ def order_list_create(request):
                         first_order_id = order.id
                     
                     order.group_id = first_order_id
+                    if route_polyline and not order.route_polyline:
+                        order.route_polyline = route_polyline
                     
                     # Update financial fields if they exist
                     if hasattr(order, 'total_before_discount'):

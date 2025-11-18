@@ -18,7 +18,7 @@ import {
   X,
   Check,
 } from "lucide-react-native";
-import React, { useEffect, useMemo, useState, useCallback } from "react";
+import React, { useEffect, useMemo, useState, useCallback, useRef } from "react";
 import {
   FlatList,
   Image,
@@ -40,7 +40,7 @@ import { IMAGE_MAP, type ImageName } from "@/assets/imageMap";
 import { Fonts } from "@/constants/Fonts";
 import { API_CONFIG, ENDPOINTS, STORAGE_KEYS } from "@/constants";
 import { CartItem as APICartItem, Promotion, AppliedPromo } from "@/types";
-import { authService, cartService, ordersService, promotionsService } from "@/services";
+import { authService, cartService, ordersService, promotionsService, locationService } from "@/services";
 
 // User profile interface
 interface UserProfile {
@@ -50,6 +50,8 @@ interface UserProfile {
   fullname?: string;
   phone_number?: string;
   address?: string;
+  latitude?: number | string | null;
+  longitude?: number | string | null;
 }
 
 // Enhanced API CartItem interface to match actual API response
@@ -68,6 +70,9 @@ interface APICartItemWithSize {
     store: {
       id: number;
       store_name: string;
+      address?: string | null;
+      latitude?: number | string | null;
+      longitude?: number | string | null;
     };
   };
   size?: {
@@ -90,6 +95,24 @@ type CartItem = {
   toppings: string[];
   totalPrice: number;
   note: string;
+  storeId?: number;
+  storeAddress?: string | null;
+  storeLatitude?: number | null;
+  storeLongitude?: number | null;
+};
+
+type StoreDeliveryInfo = {
+  id: number;
+  name: string;
+  address?: string | null;
+  latitude?: number | null;
+  longitude?: number | null;
+};
+
+type StoreDeliveryMetrics = {
+  distanceKm: number | null;
+  fee: number;
+  store: StoreDeliveryInfo;
 };
 
 type GroupedItems = {
@@ -124,6 +147,46 @@ type Voucher = {
   eligible?: boolean;
   isExpiringSoon?: boolean;
   category: "FREESHIP" | "RESTAURANT" | "APP";
+};
+
+const SHIPPING_BASE_FEE = 15000;
+const SHIPPING_FEE_PER_KM = 4000;
+const EARTH_RADIUS_KM = 6371;
+
+const parseCoordinate = (value: unknown): number | null => {
+  if (value === null || value === undefined || value === "") {
+    return null;
+  }
+
+  const numericValue = typeof value === 'string' ? parseFloat(value) : Number(value);
+  return Number.isFinite(numericValue) ? numericValue : null;
+};
+
+const haversineDistanceKm = (
+  originLat: number,
+  originLng: number,
+  destLat: number,
+  destLng: number,
+): number => {
+  const dLat = ((destLat - originLat) * Math.PI) / 180;
+  const dLon = ((destLng - originLng) * Math.PI) / 180;
+
+  const a =
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos((originLat * Math.PI) / 180) *
+      Math.cos((destLat * Math.PI) / 180) *
+      Math.sin(dLon / 2) * Math.sin(dLon / 2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+
+  return EARTH_RADIUS_KM * c;
+};
+
+const formatDistanceLabel = (distanceKm: number | null) => {
+  console.log("distance: ", distanceKm);
+  if (distanceKm == null || Number.isNaN(distanceKm)) {
+    return "Chưa xác định";
+  }
+  return `${distanceKm.toFixed(2)} km`;
 };
 
 type SelectedVouchers = {
@@ -205,10 +268,15 @@ export default function CheckoutScreen() {
   const [selectedItems, setSelectedItems] = useState<CartItem[]>([]);
   const [itemNotes, setItemNotes] = useState<{[key: string]: string}>({});
   const [foodIdMap, setFoodIdMap] = useState<{[key: string]: number}>({});
-  const [storeInfoMap, setStoreInfoMap] = useState<{[storeName: string]: { id: number; name: string }}>({});
+  const [storeInfoMap, setStoreInfoMap] = useState<{[storeName: string]: StoreDeliveryInfo}>({});
+  const [customerCoordinates, setCustomerCoordinates] = useState<{ latitude: number | null; longitude: number | null }>({
+    latitude: null,
+    longitude: null,
+  });
+  const [storeDeliveryDetails, setStoreDeliveryDetails] = useState<{ [storeName: string]: StoreDeliveryMetrics }>({});
   const [isLoadingProfile, setIsLoadingProfile] = useState(true);
+  const geocodeCacheRef = useRef<{ [address: string]: { latitude: number; longitude: number } }>({});
 
-  const deliveryFeePerStore = 15000; // Phí ship mỗi cửa hàng
   const [tax] = useState<number>(0);
   
   // Promo state
@@ -252,6 +320,11 @@ export default function CheckoutScreen() {
         address: userData.address || '',
         note: '',
       });
+
+      setCustomerCoordinates({
+        latitude: parseCoordinate(userData.latitude),
+        longitude: parseCoordinate(userData.longitude),
+      });
     } catch (error) {
       console.error('Error fetching user profile:', error);
     } finally {
@@ -272,13 +345,19 @@ export default function CheckoutScreen() {
       console.log('CheckoutScreen - Converting', paramSelectedCartItems.length, 'items to checkout format');
 
       // Build store info map from cart items
-      const storeMap: {[storeName: string]: { id: number; name: string }} = {};
+      const storeMap: {[storeName: string]: StoreDeliveryInfo} = {};
       paramSelectedCartItems.forEach((item: APICartItemWithSize) => {
         const storeName = item.food.store?.store_name || 'Unknown Restaurant';
+        const storeLatitude = parseCoordinate(item.food.store?.latitude ?? null);
+        const storeLongitude = parseCoordinate(item.food.store?.longitude ?? null);
+
         if (!storeMap[storeName]) {
           storeMap[storeName] = {
-            id: item.food.store.id,
-            name: storeName
+            id: item.food.store?.id || 0,
+            name: storeName,
+            address: item.food.store?.address || null,
+            latitude: storeLatitude,
+            longitude: storeLongitude,
           };
         }
       });
@@ -287,6 +366,8 @@ export default function CheckoutScreen() {
 
       const checkoutItems: CartItem[] = paramSelectedCartItems.map((item: APICartItemWithSize) => {
         console.log('CheckoutScreen - Processing item image:', item.food.image);
+        const storeLatitude = parseCoordinate(item.food.store?.latitude ?? null);
+        const storeLongitude = parseCoordinate(item.food.store?.longitude ?? null);
         return {
           id: item.id,
           food_id: item.food_id, // Store food_id for API calls
@@ -299,6 +380,10 @@ export default function CheckoutScreen() {
           toppings: [],
           totalPrice: item.subtotal,
           note: item.item_note || '',
+          storeId: item.food.store?.id ?? undefined,
+          storeAddress: item.food.store?.address || null,
+          storeLatitude,
+          storeLongitude,
         };
       });
 
@@ -403,13 +488,159 @@ export default function CheckoutScreen() {
     [appliedPromos]
   );
 
+  const calculateDeliveryFee = useCallback((distanceKm: number | null) => {
+    if (distanceKm == null || Number.isNaN(distanceKm)) {
+      return SHIPPING_BASE_FEE;
+    }
+    const fee = SHIPPING_BASE_FEE + distanceKm * SHIPPING_FEE_PER_KM;
+    return Math.max(SHIPPING_BASE_FEE, Math.round(fee));
+  }, []);
+
+  useEffect(() => {
+    let isCancelled = false;
+
+    const loadDrivingDistances = async () => {
+      if (Object.keys(groupedItems).length === 0) {
+        if (!isCancelled) {
+          setStoreDeliveryDetails({});
+        }
+        return;
+      }
+
+      const customerLat = customerCoordinates.latitude;
+      const customerLon = customerCoordinates.longitude;
+
+      const storeEntries = await Promise.all(
+        Object.entries(groupedItems).map(async ([storeName, items]) => {
+          if (!items || items.length === 0) {
+            return null;
+          }
+
+          const storeInfo = storeInfoMap[storeName];
+          let storeLatitude = parseCoordinate(storeInfo?.latitude ?? items[0]?.storeLatitude ?? null);
+          let storeLongitude = parseCoordinate(storeInfo?.longitude ?? items[0]?.storeLongitude ?? null);
+
+          if (storeLatitude == null || storeLongitude == null) {
+            const lookupCandidates = [
+              storeInfo?.address,
+              items[0]?.storeAddress,
+              storeInfo?.name ? `${storeInfo.name}, Việt Nam` : null,
+            ]
+              .map((candidate) => (candidate ? candidate.trim() : ''))
+              .filter((candidate) => candidate.length > 0);
+
+            for (const candidate of lookupCandidates) {
+              const cached = geocodeCacheRef.current[candidate];
+              if (cached) {
+                storeLatitude = cached.latitude;
+                storeLongitude = cached.longitude;
+                break;
+              }
+
+              try {
+                const geocoded = await locationService.geocodeAddress(candidate);
+                storeLatitude = geocoded.latitude;
+                storeLongitude = geocoded.longitude;
+                geocodeCacheRef.current[candidate] = {
+                  latitude: storeLatitude,
+                  longitude: storeLongitude,
+                };
+                break;
+              } catch (error) {
+                console.warn('Không thể tìm toạ độ cho cửa hàng', storeInfo?.id ?? storeName, 'với chuỗi', candidate, error);
+              }
+            }
+          }
+
+          let distanceKm: number | null = null;
+          const hasAllCoordinates =
+            storeLatitude != null &&
+            storeLongitude != null &&
+            customerLat != null &&
+            customerLon != null;
+
+          if (hasAllCoordinates) {
+            const fallbackDistance = parseFloat(
+              haversineDistanceKm(storeLatitude!, storeLongitude!, customerLat!, customerLon!).toFixed(2)
+            );
+            distanceKm = fallbackDistance;
+
+            try {
+              const drivingDistance = await locationService.getDrivingDistanceKm(
+                { latitude: storeLatitude!, longitude: storeLongitude! },
+                { latitude: customerLat!, longitude: customerLon! }
+              );
+              if (typeof drivingDistance === 'number' && !Number.isNaN(drivingDistance)) {
+                distanceKm = parseFloat(drivingDistance.toFixed(2));
+              }
+            } catch (error) {
+              console.warn('Không thể lấy khoảng cách di chuyển thực tế cho cửa hàng', storeInfo?.id ?? storeName, error);
+            }
+          }
+
+          const normalizedStoreInfo: StoreDeliveryInfo = {
+            id: storeInfo?.id ?? items[0]?.storeId ?? 0,
+            name: storeInfo?.name ?? storeName,
+            address: storeInfo?.address ?? items[0]?.storeAddress ?? null,
+            latitude: storeLatitude,
+            longitude: storeLongitude,
+          };
+
+          const metrics: StoreDeliveryMetrics = {
+            distanceKm,
+            fee: calculateDeliveryFee(distanceKm),
+            store: normalizedStoreInfo,
+          };
+
+          return [storeName, metrics] as const;
+        })
+      );
+
+      if (isCancelled) {
+        return;
+      }
+
+      const nextDetails: { [storeName: string]: StoreDeliveryMetrics } = {};
+      storeEntries.forEach((entry) => {
+        if (!entry) {
+          return;
+        }
+        const [storeName, metrics] = entry;
+        nextDetails[storeName] = metrics;
+      });
+
+      setStoreDeliveryDetails(nextDetails);
+    };
+
+    loadDrivingDistances();
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [
+    groupedItems,
+    storeInfoMap,
+    customerCoordinates.latitude,
+    customerCoordinates.longitude,
+    calculateDeliveryFee,
+  ]);
+
   // Calculate total delivery fee based on number of stores
   const getTotalDeliveryFee = useMemo(
     () => () => {
-      const numberOfStores = Object.keys(groupedItems).length;
-      return numberOfStores * deliveryFeePerStore;
+      const storeNames = Object.keys(groupedItems);
+      if (storeNames.length === 0) {
+        return 0;
+      }
+
+      const totalFee = storeNames.reduce((sum, storeName) => {
+        const storeFee = storeDeliveryDetails[storeName]?.fee ?? SHIPPING_BASE_FEE;
+        return sum + storeFee;
+      }, 0);
+
+      return parseFloat(totalFee.toFixed(3));
     },
-    [groupedItems, deliveryFeePerStore]
+    [groupedItems, storeDeliveryDetails]
   );
 
   const getFinalTotal = useMemo(
@@ -668,6 +899,8 @@ export default function CheckoutScreen() {
         receiver_name: customerInfo.name,
         phone_number: customerInfo.phone,
         ship_address: customerInfo.address,
+        ship_latitude: customerCoordinates.latitude,
+        ship_longitude: customerCoordinates.longitude,
         note: customerInfo.note || '',
         payment_method: paymentMethodMap[selectedPayment],
         total_money: getFinalTotal(),
@@ -799,6 +1032,8 @@ export default function CheckoutScreen() {
               receiver_name: customerInfo.name,
               phone_number: customerInfo.phone,
               ship_address: customerInfo.address,
+              ship_latitude: customerCoordinates.latitude,
+              ship_longitude: customerCoordinates.longitude,
               note: customerInfo.note || '',
               payment_method: paymentMethodMap['bank'],
               total_money: getFinalTotal(),
@@ -884,7 +1119,10 @@ export default function CheckoutScreen() {
 
   const renderStoreGroup = (storeName: string, items: CartItem[]) => {
     const storeSubtotal = parseFloat((items.reduce((sum, item) => sum + item.totalPrice, 0)).toFixed(3));
-    
+    const deliveryInfo = storeDeliveryDetails[storeName];
+    const storeFee = deliveryInfo?.fee ?? SHIPPING_BASE_FEE;
+    const distanceLabel = formatDistanceLabel(deliveryInfo?.distanceKm ?? null);
+
     // Calculate discount for this store
     let storeDiscount = 0;
     const totalCartAmount = getSubtotal();
@@ -908,8 +1146,6 @@ export default function CheckoutScreen() {
         }
       });
     }
-    
-    const storeFee = 15000; // Phí ship mỗi cửa hàng
     const storeTotal = storeSubtotal - storeDiscount + storeFee;
 
     return (
@@ -967,6 +1203,14 @@ export default function CheckoutScreen() {
               <Text style={[styles.storeSummaryLabel, { color: '#16a34a' }]}>Giảm giá:</Text>
               <Text style={[styles.storeSummaryValue, { color: '#16a34a' }]}>-{formatPriceWithCurrency(storeDiscount)}</Text>
             </View>
+          )}
+
+          <View style={styles.storeSummaryRow}>
+            <Text style={styles.storeSummaryLabel}>Khoảng cách:</Text>
+            <Text style={styles.storeSummaryValue}>{distanceLabel}</Text>
+          </View>
+          {deliveryInfo && deliveryInfo.distanceKm == null && (
+            <Text style={styles.storeSummaryHint}>Chưa có vị trí chính xác, áp dụng phí mặc định.</Text>
           )}
           
           <View style={styles.storeSummaryRow}>
@@ -1064,9 +1308,37 @@ export default function CheckoutScreen() {
             <Text style={styles.sectionTitle}>Chi phí & khuyến mãi</Text>
 
             <View style={{ gap: 12 }}>
-              <Row label="Tạm tính" value={`${getSubtotal().toLocaleString()}đ`} />
-              <Row label="Phí giao hàng" value={`${getTotalDeliveryFee().toLocaleString()}đ`} />
-              {tax > 0 && <Row label="Thuế" value={`${tax.toLocaleString()}đ`} />}
+              <Row label="Tạm tính" value={formatPriceWithCurrency(getSubtotal())} />
+              <Row label="Phí giao hàng" value={formatPriceWithCurrency(getTotalDeliveryFee())} />
+              {tax > 0 && <Row label="Thuế" value={formatPriceWithCurrency(tax)} />}
+
+              {Object.keys(storeDeliveryDetails).length > 0 && (
+                <View style={styles.deliveryBreakdown}>
+                  {Object.entries(storeDeliveryDetails).map(([storeName, detail]) => (
+                    <View key={storeName} style={styles.deliveryBreakdownRow}>
+                      <View style={{ flex: 1 }}>
+                        <Text style={styles.deliveryStoreName}>{storeName}</Text>
+                        {detail.store.address && (
+                          <Text style={styles.deliveryStoreAddress}>{detail.store.address}</Text>
+                        )}
+                        <Text style={styles.deliveryDistance}>Khoảng cách: {formatDistanceLabel(detail.distanceKm)}</Text>
+                      </View>
+                      <View style={styles.deliveryFeeColumn}>
+                        <Text style={styles.deliveryFeeValue}>{formatPriceWithCurrency(detail.fee)}</Text>
+                        {detail.distanceKm == null && (
+                          <Text style={styles.deliveryFeeNote}>Tạm tính</Text>
+                        )}
+                      </View>
+                    </View>
+                  ))}
+
+                  {(customerCoordinates.latitude == null || customerCoordinates.longitude == null) && (
+                    <Text style={styles.deliverySummaryNote}>
+                      Cập nhật vị trí chính xác trong Profile để tính phí dựa trên khoảng cách thực tế.
+                    </Text>
+                  )}
+                </View>
+              )}
 
               <View style={styles.divider} />
               
@@ -1464,6 +1736,12 @@ const styles = StyleSheet.create({
     alignItems: "center",
     marginBottom: 6,
   },
+  storeSummaryHint: {
+    color: "#9ca3af",
+    fontFamily: Fonts.LeagueSpartanRegular,
+    fontSize: 12,
+    marginBottom: 6,
+  },
   storeSummaryLabel: {
     color: "#6b7280",
     fontFamily: Fonts.LeagueSpartanRegular,
@@ -1533,6 +1811,55 @@ const styles = StyleSheet.create({
   row: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
   rowLabel: { color: "#6b7280", fontFamily: Fonts.LeagueSpartanRegular },
   rowValue: { color: BROWN, fontFamily: Fonts.LeagueSpartanSemiBold },
+
+  deliveryBreakdown: {
+    borderWidth: 1,
+    borderColor: "#e5e7eb",
+    borderRadius: 12,
+    padding: 12,
+    gap: 12,
+    backgroundColor: "#f9fafb",
+  },
+  deliveryBreakdownRow: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 12,
+  },
+  deliveryStoreName: {
+    color: BROWN,
+    fontFamily: Fonts.LeagueSpartanSemiBold,
+    fontSize: 13,
+  },
+  deliveryStoreAddress: {
+    color: "#6b7280",
+    fontFamily: Fonts.LeagueSpartanRegular,
+    fontSize: 12,
+    marginTop: 2,
+  },
+  deliveryDistance: {
+    color: "#6b7280",
+    fontFamily: Fonts.LeagueSpartanRegular,
+    fontSize: 12,
+    marginTop: 2,
+  },
+  deliveryFeeColumn: {
+    alignItems: "flex-end",
+  },
+  deliveryFeeValue: {
+    color: ACCENT,
+    fontFamily: Fonts.LeagueSpartanBold,
+    fontSize: 13,
+  },
+  deliveryFeeNote: {
+    color: "#9ca3af",
+    fontFamily: Fonts.LeagueSpartanRegular,
+    fontSize: 11,
+  },
+  deliverySummaryNote: {
+    color: "#9ca3af",
+    fontFamily: Fonts.LeagueSpartanRegular,
+    fontSize: 12,
+  },
 
   divider: { height: 1, backgroundColor: "#e5e7eb", marginTop: 8, marginBottom: 8 },
 

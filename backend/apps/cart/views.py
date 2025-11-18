@@ -46,6 +46,9 @@ def get_cart(request):
                     f.store_id,
                     s.id as store_id,
                     s.store_name,
+                    s.address as store_address,
+                    s.latitude as store_latitude,
+                    s.longitude as store_longitude,
                     s.description as store_description,
                     s.image as store_image,
                     fs.id as size_id,
@@ -97,6 +100,9 @@ def get_cart(request):
                     'store': {
                         'id': item['store_id'],
                         'store_name': item['store_name'],
+                        'address': item.get('store_address'),
+                        'latitude': item.get('store_latitude'),
+                        'longitude': item.get('store_longitude'),
                         'description': item['store_description'],
                         'image': item['store_image']
                     }

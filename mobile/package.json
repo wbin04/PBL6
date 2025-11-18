@@ -16,6 +16,7 @@
     "@expo/metro-runtime": "~6.1.2",
     "@expo/vector-icons": "^15.0.2",
     "@gorhom/bottom-sheet": "^5.2.6",
+    "@mapbox/polyline": "^1.2.1",
     "@react-native-async-storage/async-storage": "2.2.0",
     "@react-native-community/datetimepicker": "^8.4.5",
     "@react-native-picker/picker": "2.11.1",
@@ -65,10 +66,12 @@
   },
   "devDependencies": {
     "@babel/core": "^7.20.0",
+    "@types/node": "^24.10.1",
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",
     "@types/uuid": "^10.0.0",
     "babel-plugin-module-resolver": "^5.0.2",
+    "expo-module-scripts": "^5.0.7",
     "typescript": "^5.9.2"
   },
   "overrides": {

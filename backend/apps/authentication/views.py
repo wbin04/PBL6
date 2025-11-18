@@ -455,6 +455,9 @@ def approve_store_application(request, user_id):
                     store_name=user.fullname or f"Cửa hàng {user.username}",
                     image="assets/store-icon.png",
                     description=user.address or "Chưa cập nhật địa chỉ",
+                    address=user.address or "",
+                    latitude=getattr(user, 'latitude', None),
+                    longitude=getattr(user, 'longitude', None),
                     manager=user
                 )
             

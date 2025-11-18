@@ -8,6 +8,8 @@ export interface User {
   role_id?: number; // Role ID from backend (1=Khách hàng, 2=Quản lý, 3=Chủ cửa hàng, 4=Người vận chuyển)
   phone_number?: string;
   address?: string;
+  latitude?: number;
+  longitude?: number;
   created_date: string;
   is_active?: boolean;
   is_shipper_registered?: boolean;
@@ -32,6 +34,8 @@ export interface RegisterRequest {
   username: string;
   phone_number?: string;
   address?: string;
+  latitude?: number;
+  longitude?: number;
 }
 
 export interface LoginResponse {
@@ -54,6 +58,9 @@ export interface Store {
   store_name: string;
   image: string;
   description: string;
+  address?: string;
+  latitude?: number;
+  longitude?: number;
   manager?: User;
   // Store stats
   average_rating?: number;

@@ -1,6 +1,7 @@
 import os
 from pathlib import Path
 from datetime import timedelta
+from decimal import Decimal
 from decouple import config
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
@@ -132,6 +133,11 @@ REST_FRAMEWORK = {
     # Tự động convert datetime sang múi giờ Việt Nam khi serialize
     'DATETIME_FORMAT': '%Y-%m-%d %H:%M:%S',  # Format không có timezone suffix
 }
+
+# Shipping configuration
+SHIPPING_BASE_FEE = Decimal(config('SHIPPING_BASE_FEE', default='15000'))
+SHIPPING_FEE_PER_KM = Decimal(config('SHIPPING_FEE_PER_KM', default='4000'))
+GOOGLE_MAPS_API_KEY = config('GOOGLE_MAPS_API_KEY', default='')
 
 # JWT Configuration
 SIMPLE_JWT = {

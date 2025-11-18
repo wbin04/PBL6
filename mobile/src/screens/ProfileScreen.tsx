@@ -11,28 +11,41 @@ import {
   Alert,
   ActivityIndicator,
 } from 'react-native';
-import { ChevronLeft, Camera } from 'lucide-react-native';
+import { ChevronLeft, Camera, MapPin } from 'lucide-react-native';
 import { useNavigation } from '@react-navigation/native';
 import { useDispatch, useSelector } from 'react-redux';
 import { Fonts } from '@/constants/Fonts';
 import { RootState, AppDispatch } from '@/store';
 import { updateProfile, clearError } from '@/store/slices/authSlice';
 import { User } from '@/types';
+import { AddressPickerModal } from '@/components';
 
 type Nav = any;
+
+type ProfileFormData = {
+  fullname: string;
+  email: string;
+  phone_number: string;
+  address: string;
+  latitude: number | null;
+  longitude: number | null;
+};
 
 export const ProfileScreen: React.FC = () => {
   const navigation = useNavigation<Nav>();
   const dispatch = useDispatch<AppDispatch>();
   const { user, loading, error } = useSelector((state: RootState) => state.auth);
   
-  const [profileData, setProfileData] = useState({
+  const [profileData, setProfileData] = useState<ProfileFormData>({
     fullname: '',
     email: '',
     phone_number: '',
     address: '',
+    latitude: null,
+    longitude: null,
   });
   const [isUpdating, setIsUpdating] = useState(false);
+  const [isAddressPickerVisible, setAddressPickerVisible] = useState(false);
 
   // Load user data when component mounts
   useEffect(() => {
@@ -42,6 +55,8 @@ export const ProfileScreen: React.FC = () => {
         email: user.email || '',
         phone_number: user.phone_number || '',
         address: user.address || '',
+        latitude: user.latitude ?? null,
+        longitude: user.longitude ?? null,
       });
     }
   }, [user]);
@@ -66,7 +81,13 @@ export const ProfileScreen: React.FC = () => {
 
     setIsUpdating(true);
     try {
-      await dispatch(updateProfile(profileData)).unwrap();
+      const payload: Partial<User> = {
+        ...profileData,
+        latitude: profileData.latitude ?? undefined,
+        longitude: profileData.longitude ?? undefined,
+      };
+
+      await dispatch(updateProfile(payload)).unwrap();
       Alert.alert(
         'Thành công',
         'Cập nhật thông tin cá nhân thành công!',
@@ -84,11 +105,24 @@ export const ProfileScreen: React.FC = () => {
     }
   };
 
-  const handleInputChange = (field: keyof typeof profileData, value: string) => {
+  const handleInputChange = (
+    field: keyof Omit<ProfileFormData, 'latitude' | 'longitude'>,
+    value: string,
+  ) => {
     setProfileData(prev => ({
       ...prev,
       [field]: value,
     }));
+  };
+
+  const handleLocationSelected = (data: { address: string; latitude: number; longitude: number }) => {
+    setProfileData(prev => ({
+      ...prev,
+      address: data.address,
+      latitude: data.latitude,
+      longitude: data.longitude,
+    }));
+    setAddressPickerVisible(false);
   };
 
   return (
@@ -167,7 +201,16 @@ export const ProfileScreen: React.FC = () => {
 
           {/* Address */}
           <View style={styles.fieldContainer}>
-            <Text style={styles.fieldLabel}>Địa chỉ</Text>
+            <View style={styles.fieldLabelRow}>
+              <Text style={[styles.fieldLabel, styles.fieldLabelTight]}>Địa chỉ</Text>
+              <TouchableOpacity
+                style={styles.mapPickerButton}
+                onPress={() => setAddressPickerVisible(true)}
+              >
+                <MapPin size={16} color="#e95322" />
+                <Text style={styles.mapPickerButtonText}>Chọn trên bản đồ</Text>
+              </TouchableOpacity>
+            </View>
             <TextInput
               style={styles.textInput}
               value={profileData.address}
@@ -177,6 +220,11 @@ export const ProfileScreen: React.FC = () => {
               multiline
               numberOfLines={2}
             />
+            {profileData.latitude !== null && profileData.longitude !== null && (
+              <Text style={styles.locationMeta}>
+                {`Vĩ độ: ${profileData.latitude.toFixed(5)} | Kinh độ: ${profileData.longitude.toFixed(5)}`}
+              </Text>
+            )}
           </View>
         </View>
 
@@ -202,6 +250,18 @@ export const ProfileScreen: React.FC = () => {
           </TouchableOpacity>
         </View>
       </ScrollView>
+
+      <AddressPickerModal
+        visible={isAddressPickerVisible}
+        onClose={() => setAddressPickerVisible(false)}
+        onSelect={handleLocationSelected}
+        initialAddress={profileData.address}
+        initialCoords={
+          profileData.latitude !== null && profileData.longitude !== null
+            ? { latitude: profileData.latitude, longitude: profileData.longitude }
+            : undefined
+        }
+      />
     </View>
   );
 };
@@ -279,11 +339,31 @@ const styles = StyleSheet.create({
   fieldContainer: {
     marginBottom: 24,
   },
+  fieldLabelRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 12,
+    marginBottom: 8,
+  },
   fieldLabel: {
     fontSize: 16,
     fontFamily: Fonts.LeagueSpartanSemiBold,
     color: '#333',
     marginBottom: 8,
+  },
+  fieldLabelTight: {
+    marginBottom: 0,
+  },
+  mapPickerButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  mapPickerButtonText: {
+    fontSize: 14,
+    fontFamily: Fonts.LeagueSpartanMedium,
+    color: '#e95322',
   },
   textInput: {
     backgroundColor: '#f5cb58',
@@ -294,6 +374,12 @@ const styles = StyleSheet.create({
     fontFamily: Fonts.LeagueSpartanRegular,
     color: '#333',
     opacity: 0.8,
+  },
+  locationMeta: {
+    marginTop: 8,
+    fontSize: 13,
+    fontFamily: Fonts.LeagueSpartanRegular,
+    color: '#666',
   },
   buttonContainer: {
     paddingHorizontal: 24,

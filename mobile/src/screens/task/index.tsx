@@ -6,7 +6,6 @@ import {
   TouchableOpacity,
   ScrollView,
   StyleSheet,
-  Linking,
   Alert,
   RefreshControl,
   Modal,
@@ -31,6 +30,9 @@ import {
 import Sidebar from "@/components/sidebar";
 import { Fonts } from "@/constants/Fonts";
 import { shipperService, type ShipperOrder } from "@/services/shipperService";
+import MapView, { Marker, Polyline, PROVIDER_GOOGLE, LatLng } from "react-native-maps";
+import { Linking } from "react-native";
+import polyline from "@mapbox/polyline";
 
 type UITabStatus = "new" | "accepted" | "delivering" | "delivered" | "cancelled";
 
@@ -50,6 +52,28 @@ type UIOrder = {
   order_status: string;
   delivery_status: string;
   raw: ShipperOrder;
+  routePolyline?: string | null;
+  storeCoordinates?: {
+    latitude: number | string | null;
+    longitude: number | string | null;
+    address?: string | null;
+  };
+  customerCoordinates?: {
+    latitude: number | string | null;
+    longitude: number | string | null;
+    address?: string | null;
+  };
+};
+
+type Coordinate = {
+  latitude: number;
+  longitude: number;
+};
+
+type ActiveRouteState = {
+  restaurant: Coordinate;
+  customer: Coordinate;
+  path?: Coordinate[];
 };
 
 // Backend delivery_status -> Tab UI mapping
@@ -84,6 +108,25 @@ const mapDeliveryStatusToTab = (delivery_status: string, order_status: string): 
 const vnd = (n: number) =>
   n.toLocaleString("vi-VN", { style: "currency", currency: "VND", maximumFractionDigits: 0 });
 
+const parseCoordinateValue = (value: number | string | null | undefined): number | null => {
+  if (value === null || value === undefined || value === '') return null;
+  if (typeof value === 'number') return Number.isFinite(value) ? value : null;
+  const parsed = parseFloat(value);
+  return Number.isFinite(parsed) ? parsed : null;
+};
+
+const decodePolylineToCoordinates = (encoded?: string | null): Coordinate[] | null => {
+  if (!encoded) return null;
+  try {
+    const decoded = polyline.decode(encoded);
+    if (!Array.isArray(decoded) || decoded.length === 0) return null;
+    return decoded.map(([lat, lng]: [number, number]) => ({ latitude: lat, longitude: lng }));
+  } catch (error) {
+    console.warn('Failed to decode route polyline', error);
+    return null;
+  }
+};
+
 // Get status badge colors
 const getStatusBadgeStyle = (status: string) => {
   switch (status) {
@@ -109,6 +152,16 @@ type LocalState = Record<
   {
     callCount?: number;
     arrived?: boolean;
+    route?: {
+      restaurant?: {
+        latitude: number;
+        longitude: number;
+      };
+      customer?: {
+        latitude: number;
+        longitude: number;
+      };
+    };
   }
 >;
 
@@ -124,6 +177,9 @@ export default function ShipperOrdersScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [selectedOrder, setSelectedOrder] = useState<UIOrder | null>(null);
   const [showOrderDetails, setShowOrderDetails] = useState(false);
+  const [showMapModal, setShowMapModal] = useState(false);
+  const [mapTargetOrder, setMapTargetOrder] = useState<UIOrder | null>(null);
+  const [activeRoute, setActiveRoute] = useState<ActiveRouteState | null>(null);
 
   // Fetch orders based on current tab
   const fetchOrders = useCallback(async () => {
@@ -298,6 +354,17 @@ export default function ShipperOrdersScreen() {
         arrived: !!local.arrived,
         order_status: order.order_status || '',
         delivery_status: order.delivery_status || '',
+        routePolyline: order.route_polyline || null,
+        storeCoordinates: {
+          latitude: parseCoordinateValue(order.store_latitude ?? order.store?.latitude ?? null),
+          longitude: parseCoordinateValue(order.store_longitude ?? order.store?.longitude ?? null),
+          address: order.store_address ?? order.store?.address ?? order.store_name ?? '',
+        },
+        customerCoordinates: {
+          latitude: parseCoordinateValue(order.ship_latitude ?? null),
+          longitude: parseCoordinateValue(order.ship_longitude ?? null),
+          address: order.ship_address ?? '',
+        },
         raw: order,
       };
     }).filter(Boolean) as UIOrder[]; // Filter out null values and cast type
@@ -456,6 +523,29 @@ export default function ShipperOrdersScreen() {
   const closeOrderDetails = () => {
     setShowOrderDetails(false);
     setSelectedOrder(null);
+  };
+
+  const handleOpenMap = (order: UIOrder) => {
+    const storeLat = parseCoordinateValue(order.raw.store_latitude ?? order.raw.store?.latitude ?? null);
+    const storeLng = parseCoordinateValue(order.raw.store_longitude ?? order.raw.store?.longitude ?? null);
+    const customerLat = parseCoordinateValue(order.raw.ship_latitude ?? null);
+    const customerLng = parseCoordinateValue(order.raw.ship_longitude ?? null);
+    const encodedRoute = order.routePolyline || order.raw.route_polyline || null;
+
+    if (!storeLat || !storeLng || !customerLat || !customerLng) {
+      Alert.alert('Thiếu toạ độ', 'Không thể hiển thị bản đồ vì thiếu thông tin vị trí.');
+      return;
+    }
+
+    const decodedRoute = decodePolylineToCoordinates(encodedRoute);
+
+    setActiveRoute({
+      restaurant: { latitude: storeLat, longitude: storeLng },
+      customer: { latitude: customerLat, longitude: customerLng },
+      path: decodedRoute || undefined,
+    });
+    setMapTargetOrder(order);
+    setShowMapModal(true);
   };
 
   return (
@@ -651,7 +741,7 @@ export default function ShipperOrdersScreen() {
 
                         <TouchableOpacity
                           style={styles.iconBtnOutline}
-                          // onPress={() => {Navigation.navigate("MapScreen", { address: order.address })}}
+                          onPress={() => handleOpenMap(order)}
                         >
                           <MapPin size={20} color="#4b5563" />
                         </TouchableOpacity>
@@ -672,7 +762,7 @@ export default function ShipperOrdersScreen() {
 
                         <TouchableOpacity
                           style={styles.iconBtnOutline}
-                          // onPress={() => {Navigation.navigate("MapScreen", { address: order.address })}}
+                          onPress={() => handleOpenMap(order)}
                         >
                           <MapPin size={20} color="#4b5563" />
                         </TouchableOpacity>
@@ -693,7 +783,7 @@ export default function ShipperOrdersScreen() {
 
                         <TouchableOpacity
                           style={styles.iconBtnOutline}
-                          // onPress={() => {Navigation.navigate("MapScreen", { address: order.address })}}
+                          onPress={() => handleOpenMap(order)}
                         >
                           <MapPin size={20} color="#4b5563" />
                         </TouchableOpacity>
@@ -852,6 +942,96 @@ export default function ShipperOrdersScreen() {
           )}
         </SafeAreaView>
       </Modal>
+
+      <Modal
+        visible={showMapModal}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowMapModal(false)}
+      >
+        <View style={styles.mapOverlay}>
+          <Pressable style={styles.mapBackdrop} onPress={() => setShowMapModal(false)} />
+          <View style={styles.mapModalSheet}>
+            <View style={styles.mapModalHeader}>
+              <Text style={styles.mapModalTitle}>Hướng dẫn lộ trình</Text>
+              <TouchableOpacity onPress={() => setShowMapModal(false)}>
+                <X size={22} color="#6b7280" />
+              </TouchableOpacity>
+            </View>
+            {mapTargetOrder && activeRoute ? (
+              <>
+                <View style={styles.mapInfoRow}>
+                  <View style={styles.mapInfoDot} />
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.mapInfoLabel}>Điểm lấy hàng</Text>
+                    <Text style={styles.mapInfoValue}>{mapTargetOrder.restaurant}</Text>
+                    <Text style={styles.mapInfoAddress}>{mapTargetOrder.raw.store_address || mapTargetOrder.raw.store?.address || 'Chưa cập nhật'}</Text>
+                  </View>
+                  <TouchableOpacity onPress={() => openExternalMap(activeRoute.restaurant, activeRoute.customer)}>
+                    <Navigation size={20} color="#e95322" />
+                  </TouchableOpacity>
+                </View>
+                <View style={styles.mapInfoRow}>
+                  <View style={[styles.mapInfoDot, { backgroundColor: '#22c55e' }]} />
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.mapInfoLabel}>Điểm giao hàng</Text>
+                    <Text style={styles.mapInfoValue}>{mapTargetOrder.customer}</Text>
+                    <Text style={styles.mapInfoAddress}>{mapTargetOrder.address || 'Chưa cập nhật'}</Text>
+                  </View>
+                </View>
+                <View style={styles.mapContainer}>
+                  <MapView
+                    style={{ flex: 1 }}
+                    provider={PROVIDER_GOOGLE}
+                    initialRegion={{
+                      latitude: activeRoute.restaurant.latitude,
+                      longitude: activeRoute.restaurant.longitude,
+                      latitudeDelta: 0.05,
+                      longitudeDelta: 0.05,
+                    }}
+                  >
+                    {activeRoute.restaurant && (
+                      <Marker
+                        coordinate={activeRoute.restaurant}
+                        title={mapTargetOrder.restaurant}
+                        description={mapTargetOrder.raw.store_address || mapTargetOrder.raw.store?.address || undefined}
+                        pinColor="#e95322"
+                      />
+                    )}
+                    {activeRoute.customer && (
+                      <Marker
+                        coordinate={activeRoute.customer}
+                        title={mapTargetOrder.customer}
+                        description={mapTargetOrder.address || undefined}
+                      />
+                    )}
+                    {activeRoute.path && activeRoute.path.length > 1 ? (
+                      <Polyline
+                        coordinates={activeRoute.path}
+                        strokeWidth={4}
+                        strokeColor="#e95322"
+                      />
+                    ) : (
+                      activeRoute.customer && activeRoute.restaurant && (
+                        <Polyline
+                          coordinates={[activeRoute.restaurant, activeRoute.customer]}
+                          strokeWidth={4}
+                          strokeColor="#e95322"
+                        />
+                      )
+                    )}
+                  </MapView>
+                </View>
+                <TouchableOpacity style={styles.mapPrimaryBtn} onPress={() => openExternalMap(activeRoute.restaurant, activeRoute.customer)}>
+                  <Text style={styles.mapPrimaryBtnText}>Mở Google Maps</Text>
+                </TouchableOpacity>
+              </>
+            ) : (
+              <Text style={styles.emptySub}>Không tìm thấy dữ liệu bản đồ</Text>
+            )}
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -891,6 +1071,21 @@ function PrimaryBtn({ title, onPress }: { title: string; onPress: () => void }) 
 function IconBtn({ children }: { children: React.ReactNode }) {
   return <View style={styles.iconBtnOutline}>{children}</View>;
 }
+
+const openExternalMap = (origin?: LatLng, destination?: LatLng) => {
+  if (!origin || !destination) {
+    Alert.alert('Không thể mở bản đồ', 'Thiếu thông tin vị trí.');
+    return;
+  }
+
+  const originParam = `${origin.latitude},${origin.longitude}`;
+  const destinationParam = `${destination.latitude},${destination.longitude}`;
+  const googleUrl = `https://www.google.com/maps/dir/?api=1&origin=${originParam}&destination=${destinationParam}&travelmode=driving`;
+
+  Linking.openURL(googleUrl).catch(() => {
+    Alert.alert('Không thể mở Google Maps');
+  });
+};
 
 const styles = StyleSheet.create({
   headerWrap: {
@@ -1266,5 +1461,79 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontFamily: Fonts.LeagueSpartanBold,
     color: "#e95322",
+  },
+  mapOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.4)",
+    justifyContent: "center",
+    padding: 16,
+  },
+  mapBackdrop: {
+    position: "absolute",
+    top: 0,
+    bottom: 0,
+    left: 0,
+    right: 0,
+  },
+  mapModalSheet: {
+    backgroundColor: "#fff",
+    borderRadius: 20,
+    padding: 20,
+    gap: 16,
+  },
+  mapModalHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+  mapModalTitle: {
+    fontSize: 18,
+    fontFamily: Fonts.LeagueSpartanBold,
+    color: "#111827",
+  },
+  mapInfoRow: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 12,
+    paddingVertical: 8,
+  },
+  mapInfoDot: {
+    width: 12,
+    height: 12,
+    borderRadius: 999,
+    backgroundColor: "#e95322",
+    marginTop: 6,
+  },
+  mapInfoLabel: {
+    fontSize: 12,
+    fontFamily: Fonts.LeagueSpartanRegular,
+    color: "#6b7280",
+  },
+  mapInfoValue: {
+    fontSize: 16,
+    fontFamily: Fonts.LeagueSpartanBold,
+    color: "#111827",
+  },
+  mapInfoAddress: {
+    fontSize: 13,
+    fontFamily: Fonts.LeagueSpartanRegular,
+    color: "#4b5563",
+    marginTop: 2,
+  },
+  mapContainer: {
+    height: 220,
+    borderRadius: 16,
+    overflow: "hidden",
+  },
+  mapPrimaryBtn: {
+    backgroundColor: "#e95322",
+    borderRadius: 12,
+    paddingVertical: 12,
+    alignItems: "center",
+  },
+  mapPrimaryBtnText: {
+    color: "#fff",
+    fontFamily: Fonts.LeagueSpartanBold,
+    fontSize: 15,
   },
 });

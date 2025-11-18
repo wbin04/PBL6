@@ -74,6 +74,10 @@ class OrderSerializer(serializers.ModelSerializer):
     store_id = serializers.IntegerField(write_only=True, required=False, allow_null=True)
     store_info_id = serializers.IntegerField(source='store.id', read_only=True)
     store_image = serializers.CharField(source='store.image', read_only=True)
+    store_address = serializers.CharField(source='store.address', read_only=True, allow_null=True)
+    store_latitude = serializers.SerializerMethodField()
+    store_longitude = serializers.SerializerMethodField()
+    route_polyline = serializers.CharField(required=False, allow_blank=True, allow_null=True)
     # Sử dụng VietnamDateTimeField để tự động convert sang múi giờ Việt Nam
     created_date = VietnamDateTimeField(read_only=True)
     cancelled_date = VietnamDateTimeField(read_only=True, required=False, allow_null=True)
@@ -86,9 +90,9 @@ class OrderSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'user', 'user_id', 'order_status', 'delivery_status', 'total_money',
             'payment_method', 'receiver_name', 'phone_number',
-            'ship_address', 'note', 'promo', 'shipper', 'shipper_id', 
+            'ship_address', 'ship_latitude', 'ship_longitude', 'route_polyline', 'note', 'promo', 'shipper', 'shipper_id', 
             'shipping_fee', 'group_id', 'cancel_reason', 'cancelled_date', 'cancelled_by_role', 'store_id',
-            'store_name', 'store_info_id', 'store_image', 'items', 'is_rated', 
+            'store_name', 'store_info_id', 'store_image', 'store_address', 'store_latitude', 'store_longitude', 'items', 'is_rated', 
             'created_date', 'promo_discount', 'applied_promos',
             'total_before_discount', 'total_discount', 'total_after_discount'
         ]
@@ -211,6 +215,12 @@ class OrderSerializer(serializers.ModelSerializer):
         
         order_promos = OrderPromo.objects.filter(order=obj).select_related('promo')
         return OrderPromoSerializer(order_promos, many=True).data
+
+    def get_store_latitude(self, obj):
+        return float(obj.store.latitude) if obj.store and obj.store.latitude is not None else None
+
+    def get_store_longitude(self, obj):
+        return float(obj.store.longitude) if obj.store and obj.store.longitude is not None else None
 
 
 class OrderListSerializer(serializers.ModelSerializer):

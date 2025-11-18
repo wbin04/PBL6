@@ -213,6 +213,7 @@ export const ENDPOINTS = {
   STORE_DETAIL: (id: number) => `/stores/${id}/`,
   STORE_FOODS: (id: number) => `/stores/${id}/foods/`,
   STORE_STATS: (id: number) => `/stores/${id}/stats/`,
+  STORE_MY: '/stores/my_store/',
   
   // Cart
   CART: '/cart/',

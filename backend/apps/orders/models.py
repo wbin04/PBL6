@@ -56,6 +56,9 @@ class Order(models.Model):
     payment_method = models.CharField(max_length=20, default='COD')
     receiver_name = models.CharField(max_length=50)
     ship_address = models.CharField(max_length=100)
+    ship_latitude = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True)
+    ship_longitude = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True)
+    route_polyline = models.TextField(null=True, blank=True)
     phone_number = models.CharField(max_length=10)
     
     # Legacy promo field - will be removed after migration

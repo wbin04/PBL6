@@ -23,6 +23,8 @@ import {
 
 export { ratingService } from './ratingService';
 export { shipperService } from './shipperService';
+export { locationService } from './locationService';
+export type { PlaceSuggestion, PlaceDetailsResult } from './locationService';
 
 // Authentication Service
 export const authService = {
@@ -84,6 +86,15 @@ export const menuService = {
   },
 };
 
+export type StoreUpdatePayload = {
+  store_name?: string;
+  description?: string;
+  address?: string;
+  latitude?: number | null;
+  longitude?: number | null;
+  image?: string;
+};
+
 // Stores Service
 export const storesService = {
   async getStores(): Promise<Store[]> {
@@ -92,6 +103,10 @@ export const storesService = {
 
   async getStoreDetail(id: number): Promise<Store> {
     return apiClient.get(ENDPOINTS.STORE_DETAIL(id));
+  },
+
+  async getMyStore(): Promise<Store> {
+    return apiClient.get(ENDPOINTS.STORE_MY);
   },
 
   async getStoreFoods(storeId: number, page = 1): Promise<PaginatedResponse<Food>> {
@@ -135,6 +150,10 @@ export const storesService = {
       console.error('storesService.getStoreStats - API error:', error);
       throw error;
     }
+  },
+
+  async updateStore(storeId: number, data: StoreUpdatePayload): Promise<Store> {
+    return apiClient.patch(ENDPOINTS.STORE_DETAIL(storeId), data);
   },
 };
 
