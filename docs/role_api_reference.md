@@ -16,6 +16,8 @@ Tài liệu này liệt kê toàn bộ endpoint backend hiện có, được nh�
 | POST | `/api/auth/registration/store/` | Gửi/ngừng đăng ký mở cửa hàng. | Xem “Response mẫu – Cờ đăng ký cửa hàng”. |
 | GET | `/api/auth/registration/status/` | Kiểm tra trạng thái đăng ký shipper/store. | Xem “Response mẫu – Trạng thái đăng ký”. |
 
+> **Lưu ý tọa độ:** Các endpoint đăng ký (`/register/`) và cập nhật hồ sơ (`/profile/update/`) chấp nhận `latitude` và `longitude` dạng số/thập phân và tự động làm tròn 6 chữ số thập phân. Nếu người dùng không gửi tọa độ khi tạo đơn hàng, hệ thống sẽ dùng giá trị đã lưu trong hồ sơ.
+
 #### Response mẫu – Authentication
 
 - Đăng nhập/đăng ký thành công (`POST /api/auth/login/`, `POST /api/auth/register/`):
@@ -30,6 +32,8 @@ Tài liệu này liệt kê toàn bộ endpoint backend hiện có, được nh�
 		"fullname": "Nguyễn Văn A",
 		"phone_number": "0900000000",
 		"address": "123 Lê Lợi, Quận 1, TP.HCM",
+		"latitude": 10.776523,
+		"longitude": 106.700981,
 		"created_date": "2025-09-25T14:20:00+07:00",
 		"role": "Khách hàng",
 		"role_id": 1,
@@ -70,6 +74,8 @@ Tài liệu này liệt kê toàn bộ endpoint backend hiện có, được nh�
 	"fullname": "Nguyễn Văn A",
 	"phone_number": "0900000000",
 	"address": "123 Lê Lợi, Quận 1, TP.HCM",
+	"latitude": 10.776523,
+	"longitude": 106.700981,
 	"created_date": "2025-09-25T14:20:00+07:00",
 	"role": "Khách hàng",
 	"role_id": 1,
@@ -181,6 +187,8 @@ Tài liệu này liệt kê toàn bộ endpoint backend hiện có, được nh�
 		}
 	]
 }
+
+> Các store trả về đầy đủ `address`, `latitude`, `longitude` để phía client hiển thị vị trí chính xác hoặc dùng cho phép đo quãng đường.
 ```
 
 - `POST /api/cart/add/`
@@ -284,6 +292,9 @@ Tài liệu này liệt kê toàn bộ endpoint backend hiện có, được nh�
 			"store_name": "FastFood ABC",
 			"image": "assets/store-icon.png",
 			"description": "Chuỗi đồ ăn nhanh",
+			"address": "12 Nguyễn Huệ, Quận 1",
+			"latitude": 10.773281,
+			"longitude": 106.704147,
 			"manager": "storemanager01"
 		}
 	]
@@ -417,6 +428,27 @@ Tài liệu này liệt kê toàn bộ endpoint backend hiện có, được nh�
 | PUT | `/api/orders/<id>/status/` | Khách tự hủy đơn (`{"order_status":"Đã huỷ","cancel_reason":"..."}`). | Xem “Response mẫu – Hủy đơn”. |
 | POST | `/api/orders/<id>/cancel-group/` | Hủy nhóm đơn (group_id). | Xem “Response mẫu – Hủy nhóm đơn”. |
 
+> **Yêu cầu tọa độ & phí ship:** Payload `POST /api/orders/` bắt buộc truyền `ship_latitude` và `ship_longitude` (float hoặc chuỗi số). Nếu không gửi, backend sẽ dùng tọa độ đã lưu trong hồ sơ khách hàng. Mỗi cửa hàng được tạo thành một order riêng, hệ thống gọi Google Directions (fallback Haversine) để tính `distance_km`, lưu `route_polyline` và tính `shipping_fee = SHIPPING_BASE_FEE + SHIPPING_FEE_PER_KM * distance_km` (giá trị cấu hình trong `settings.py`, mặc định 15,000đ + 4,000đ/km).
+
+#### Payload mẫu – `POST /api/orders/`
+```json
+{
+	"receiver_name": "Nguyễn Văn A",
+	"phone_number": "0900000000",
+	"ship_address": "123 Lê Lợi, Quận 1",
+	"ship_latitude": 10.777102,
+	"ship_longitude": 106.698542,
+	"note": "Giao giờ trưa",
+	"payment_method": "COD",
+	"promo_ids": [3, 12],
+	"promo_details": [
+		{ "promo_id": 3, "store_id": 0, "discount": 15000 },
+		{ "promo_id": 12, "store_id": 3, "discount": 5000 }
+	],
+	"discount_amount": 20000
+}
+```
+
 #### Response mẫu – Đơn hàng
 
 - `GET /api/orders/`
@@ -461,6 +493,8 @@ Tài liệu này liệt kê toàn bộ endpoint backend hiện có, được nh�
 				"phone_number": "0900000000",
 				"email": "customer@example.com",
 				"address": "123 Lê Lợi, Quận 1, TP.HCM",
+				"latitude": 10.776523,
+				"longitude": 106.700981,
 				"created_date": "2025-09-25T14:20:00+07:00",
 				"role": "Khách hàng",
 				"role_id": 1,
@@ -475,11 +509,14 @@ Tài liệu này liệt kê toàn bộ endpoint backend hiện có, được nh�
 			"receiver_name": "Nguyễn Văn A",
 			"phone_number": "0900000000",
 			"ship_address": "123 Lê Lợi, Quận 1",
+			"ship_latitude": 10.777102,
+			"ship_longitude": 106.698542,
 			"note": "Giao giờ trưa",
 			"promo": 3,
 			"shipper": null,
 			"shipper_id": null,
 			"shipping_fee": 15000.0,
+			"route_polyline": "mfp_IvnthS_@d@qA|@qDnBkF",
 			"group_id": 150,
 			"cancel_reason": null,
 			"cancelled_date": null,
@@ -488,6 +525,9 @@ Tài liệu này liệt kê toàn bộ endpoint backend hiện có, được nh�
 			"store_name": "FastFood ABC",
 			"store_info_id": 3,
 			"store_image": "assets/store-icon.png",
+			"store_address": "12 Nguyễn Huệ, Quận 1",
+			"store_latitude": 10.773281,
+			"store_longitude": 106.704147,
 			"items": [
 				{
 					"id": "150_11_0",
@@ -549,6 +589,8 @@ Tài liệu này liệt kê toàn bộ endpoint backend hiện có, được nh�
 		"phone_number": "0900000000",
 		"email": "customer@example.com",
 		"address": "123 Lê Lợi, Quận 1, TP.HCM",
+		"latitude": 10.776523,
+		"longitude": 106.700981,
 		"created_date": "2025-09-25T14:20:00+07:00",
 		"role": "Khách hàng",
 		"role_id": 1,
@@ -563,11 +605,14 @@ Tài liệu này liệt kê toàn bộ endpoint backend hiện có, được nh�
 	"receiver_name": "Nguyễn Văn A",
 	"phone_number": "0900000000",
 	"ship_address": "123 Lê Lợi, Quận 1",
+	"ship_latitude": 10.777102,
+	"ship_longitude": 106.698542,
 	"note": "Giao giờ trưa",
 	"promo": 3,
 	"shipper": null,
 	"shipper_id": null,
 	"shipping_fee": 15000.0,
+	"route_polyline": "mfp_IvnthS_@d@qA|@qDnBkF",
 	"group_id": 150,
 	"cancel_reason": null,
 	"cancelled_date": null,
@@ -576,6 +621,9 @@ Tài liệu này liệt kê toàn bộ endpoint backend hiện có, được nh�
 	"store_name": "FastFood ABC",
 	"store_info_id": 3,
 	"store_image": "assets/store-icon.png",
+	"store_address": "12 Nguyễn Huệ, Quận 1",
+	"store_latitude": 10.773281,
+	"store_longitude": 106.704147,
 	"items": [
 		{
 			"id": "150_11_0",
@@ -661,6 +709,12 @@ Tài liệu này liệt kê toàn bộ endpoint backend hiện có, được nh�
 	"cancelled_orders": [150, 151]
 }
 ```
+
+> **Thông tin vận chuyển trong response:**
+> - `ship_latitude`/`ship_longitude`: Tọa độ giao hàng cuối cùng mà backend đã dùng để tính phí ship.
+> - `store_latitude`/`store_longitude`: Tọa độ cửa hàng lấy hàng, phục vụ hiển thị bản đồ và tính quãng đường thực tế.
+> - `route_polyline`: Chuỗi polyline Google Directions (khi có API key) để FE/ứng dụng shipper vẽ đường đi giống thực tế; tự động rỗng khi chỉ có khoảng cách Haversine.
+> - `total_before_discount`, `total_discount`, `total_after_discount`: Cho biết tổng tiền từng đơn đã cộng phí ship và mức giảm theo từng store; chi tiết từng voucher nằm trong `applied_promos`.
 
 ### Đánh giá món (`apps/ratings/views.py`)
 | Phương thức | Endpoint | Mục đích | Response |
