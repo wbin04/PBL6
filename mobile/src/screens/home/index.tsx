@@ -37,6 +37,7 @@ import { API_CONFIG } from "@/constants";
 import { formatPriceWithCurrency } from "@/utils/priceUtils";
 import Sidebar from "@/components/sidebar";
 import db from "@/assets/database.json";
+import { CopilotIcon } from "@/assets/images/CopilotIcon";
 
 const { width } = Dimensions.get("window");
 const SESSION_KEY = "auth.session";
@@ -834,6 +835,15 @@ export default function HomeScreen() {
           }
         }}
       />
+      {/* Floating Copilot button - positioned above bottom nav */}
+      <TouchableOpacity
+        accessibilityLabel="Copilot"
+        onPress={() => navigation.navigate('Chatbot' as never)}
+        activeOpacity={0.85}
+        style={styles.copilotButton}
+      >
+        <CopilotIcon size={28} color="#ffffff" />
+      </TouchableOpacity>
     </View>
   );
 }
@@ -985,5 +995,22 @@ const styles = StyleSheet.create({
     color: "#fff",
     fontSize: 12,
     fontFamily: Fonts.LeagueSpartanBold,
+  },
+  copilotButton: {
+    position: 'absolute',
+    right: 16,
+    bottom: 72, // sits above typical bottom nav (adjust if your nav is taller)
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: '#e95322',
+    justifyContent: 'center',
+    alignItems: 'center',
+    elevation: 8,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 6,
+    zIndex: 1000,
   },
 });

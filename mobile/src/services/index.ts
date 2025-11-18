@@ -1,5 +1,5 @@
 import { apiClient } from './api';
-import { ENDPOINTS } from '@/constants';
+import { ENDPOINTS, API_CONFIG } from '@/constants';
 import {
   LoginRequest,
   RegisterRequest,
@@ -324,6 +324,38 @@ export const paymentsService = {
     return apiClient.post(ENDPOINTS.CREATE_PAYMENT, {
       order_id: orderId,
       payment_method: paymentMethod,
+    });
+  },
+};
+
+// PayOS Service - for bank transfer payments
+export const payosService = {
+  async createPaymentLink(data: {
+    user_id: number;
+    order_id: number;
+    amount: number;
+    message?: string;
+  }): Promise<{
+    checkoutUrl: string;
+    status: string;
+    orderCode: number;
+  }> {
+    // Call Django backend PayOS endpoint with extended timeout
+    console.log('Creating PayOS payment link via Django API:', data);
+    
+    // Use longer timeout for PayOS API (30 seconds)
+    return apiClient.post('/payments/payos/create-link/', data, {
+      timeout: 30000, // 30 seconds
+    });
+  },
+
+  async checkPaymentStatus(orderCode: number): Promise<{
+    orderCode: number;
+    status: string;
+    paid: boolean;
+  }> {
+    return apiClient.post('/payments/payos/check-status/', { orderCode }, {
+      timeout: 15000, // 15 seconds
     });
   },
 };

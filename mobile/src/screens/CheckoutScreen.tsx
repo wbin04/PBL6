@@ -1,5 +1,6 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as SecureStore from 'expo-secure-store';
+import * as WebBrowser from 'expo-web-browser';
 import { formatPriceWithCurrency } from "@/utils/priceUtils";
 import { useNavigation, useRoute, useFocusEffect } from "@react-navigation/native";
 import {
@@ -644,9 +645,15 @@ export default function CheckoutScreen() {
       const notesUpdated = await updateItemNotesInCart();
       if (!notesUpdated) {
         console.error('Failed to update some item notes, but continuing with order creation');
-        // Continue anyway - we'll display a toast later
       }
 
+      // If payment method is bank, create payment link first WITHOUT creating order
+      if (selectedPayment === 'bank') {
+        await handleBankPayment();
+        return; // Exit here - order will be created after successful payment
+      }
+
+      // For COD and card payment methods, create order immediately
       setShowOrderNotification(true);
 
       // Map frontend payment method to backend values
@@ -691,6 +698,7 @@ export default function CheckoutScreen() {
       const order = await ordersService.createOrder(orderData);
       console.log('Order created successfully:', order);
       
+      // For COD and card, proceed as normal
       setTimeout(async () => {
         setShowOrderNotification(false);
         if (!notesUpdated) {
@@ -710,6 +718,165 @@ export default function CheckoutScreen() {
       Alert.alert(
         'Lỗi',
         'Đã xảy ra lỗi khi đặt hàng. Vui lòng thử lại.',
+        [{ text: 'OK' }]
+      );
+    }
+  };
+
+  const handleBankPayment = async () => {
+    try {
+      setShowOrderNotification(true);
+
+      // Get user_id from stored user data
+      const userDataStr = await SecureStore.getItemAsync(STORAGE_KEYS.USER);
+      if (!userDataStr) {
+        throw new Error('User data not found');
+      }
+      const userData = JSON.parse(userDataStr);
+      const user_id = userData.id;
+
+      // Use a temporary order_id (timestamp) for PayOS
+      const temp_order_id = Date.now();
+      
+      // Get amount (final total)
+      const amount = Math.round(getFinalTotal());
+      
+      // Create message
+      const message = `${user_id} TTDH ${temp_order_id}`;
+
+      console.log('Creating PayOS payment link with:', {
+        user_id,
+        order_id: temp_order_id,
+        amount,
+        message
+      });
+
+      // Import payosService
+      const { payosService } = require('@/services');
+      
+      setShowOrderNotification(false);
+      
+      // Create payment link via Django backend (NO order created yet)
+      const paymentResponse = await payosService.createPaymentLink({
+        user_id,
+        order_id: temp_order_id,
+        amount,
+        message
+      });
+
+      console.log('PayOS payment link created:', paymentResponse);
+
+      // Open payment link in WebBrowser
+      const result = await WebBrowser.openBrowserAsync(paymentResponse.checkoutUrl, {
+        presentationStyle: WebBrowser.WebBrowserPresentationStyle.PAGE_SHEET,
+        controlsColor: '#e95322',
+        toolbarColor: '#ffffff',
+      });
+
+      console.log('WebBrowser result:', result);
+
+      // After browser closes, check payment status
+      if (result.type === 'cancel' || result.type === 'dismiss') {
+        // User closed browser - check payment status
+        try {
+          const statusResponse = await payosService.checkPaymentStatus(paymentResponse.orderCode);
+          
+          if (statusResponse.paid) {
+            // Payment successful - NOW create the order
+            console.log('Payment successful! Creating order...');
+            
+            setShowOrderNotification(true);
+            
+            // Map frontend payment method to backend values
+            const paymentMethodMap: Record<string, 'cash' | 'vnpay' | 'momo'> = {
+              'cod': 'cash',
+              'card': 'vnpay',
+              'bank': 'momo'
+            };
+
+            // Send order data
+            const orderData: any = {
+              receiver_name: customerInfo.name,
+              phone_number: customerInfo.phone,
+              ship_address: customerInfo.address,
+              note: customerInfo.note || '',
+              payment_method: paymentMethodMap['bank'],
+              total_money: getFinalTotal(),
+              shipping_fee: getTotalDeliveryFee()
+            };
+
+            // Add promo data if promos are applied
+            if (appliedPromos && appliedPromos.length > 0) {
+              orderData.promo_ids = appliedPromos.map(ap => ap.promo.id);
+              orderData.discount_amount = getTotalDiscount();
+              
+              orderData.promo_details = appliedPromos.map(ap => ({
+                promo_id: ap.promo.id,
+                store_id: ap.promo.store,
+                discount: ap.discount
+              }));
+            }
+
+            console.log('Creating order after successful payment:', orderData);
+
+            const order = await ordersService.createOrder(orderData);
+            console.log('Order created successfully:', order);
+            
+            setShowOrderNotification(false);
+            
+            // Payment successful - show success and navigate
+            Alert.alert(
+              'Thanh toán thành công!',
+              'Đơn hàng của bạn đã được thanh toán và đang được xử lý.',
+              [
+                {
+                  text: 'Xem đơn hàng',
+                  onPress: () => navigation.navigate("MainTabs", { screen: "Orders" })
+                }
+              ]
+            );
+          } else {
+            // Payment not completed or cancelled - DO NOT create order
+            setShowOrderNotification(false);
+            Alert.alert(
+              'Thanh toán chưa hoàn tất',
+              'Bạn chưa hoàn tất thanh toán. Đơn hàng chưa được tạo. Vui lòng thử lại nếu muốn đặt hàng.',
+              [
+                {
+                  text: 'Thử lại',
+                  onPress: () => {
+                    // Stay on checkout screen
+                  }
+                },
+                {
+                  text: 'Hủy',
+                  style: 'cancel'
+                }
+              ]
+            );
+          }
+        } catch (statusError) {
+          console.error('Error checking payment status:', statusError);
+          setShowOrderNotification(false);
+          // Fallback message - DON'T create order if can't verify payment
+          Alert.alert(
+            'Không thể xác minh thanh toán',
+            'Không thể kiểm tra trạng thái thanh toán. Vui lòng kiểm tra lại sau hoặc liên hệ hỗ trợ.',
+            [
+              {
+                text: 'Đóng',
+                style: 'cancel'
+              }
+            ]
+          );
+        }
+      }
+    } catch (error) {
+      console.error('Error processing bank payment:', error);
+      setShowOrderNotification(false);
+      Alert.alert(
+        'Lỗi thanh toán',
+        'Không thể tạo liên kết thanh toán. Vui lòng thử lại hoặc chọn phương thức thanh toán khác.',
         [{ text: 'OK' }]
       );
     }

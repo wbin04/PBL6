@@ -54,6 +54,7 @@ import CancelDetailScreen from "@/screens/CancelDetailScreen";
 import AddressPickerScreen from "@/screens/address/AddressPickerScreen";
 import { ProfileScreen } from "@/screens/ProfileScreen";
 import RatingScreen from "@/screens/RatingScreen";
+import ChatbotScreen from "@/screens/ChatbotScreen";
 
 // Redux
 import { Provider, useSelector, useDispatch } from "react-redux";
@@ -312,6 +313,7 @@ function AppNavigator() {
                 <Stack.Screen name="Review" component={ReviewScreen} />
                 <Stack.Screen name="CancelDetail" component={CancelDetailScreen} />
                 <Stack.Screen name="Profile" component={ProfileScreen} />
+                <Stack.Screen name="Chatbot" component={ChatbotScreen} />
                 <Stack.Screen name="FoodDetailPopup" component={require('./src/screens/FoodDetailPopup').default} />
                 <Stack.Screen name="VoucherManagementScreen" component={require('./src/screens/VoucherManagementScreen').default} />
                 <Stack.Screen name="VoucherEditScreen" component={require('./src/screens/VoucherEditScreen').default} />

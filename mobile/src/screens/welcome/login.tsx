@@ -93,7 +93,7 @@ export default function LoginScreen() {
   
   const [showPassword, setShowPassword] = useState(false);
   const [email, setEmail] = useState("bin@gmail.com"); // Test data
-  const [password, setPassword] = useState("123"); // Test data
+  const [password, setPassword] = useState("123456"); // Test data
 
   const validateForm = () => {
     if (!email.trim()) {

@@ -13,7 +13,7 @@ app = Flask(__name__)
 app.config['JSON_AS_ASCII'] = False
 
 # --- Database ---
-app.config['SQLALCHEMY_DATABASE_URI'] = 'postgresql://postgres@localhost/fastfood_db'
+app.config['SQLALCHEMY_DATABASE_URI'] = 'postgresql://postgres@localhost/fastfood_data'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
 db = SQLAlchemy(app)
