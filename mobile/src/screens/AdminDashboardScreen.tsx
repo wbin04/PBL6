@@ -1,12 +1,14 @@
-import React, { useState } from 'react';
-import { Modal, View, Text, TouchableOpacity, Dimensions, StyleSheet, StatusBar, SafeAreaView } from 'react-native';
-import { useNavigation } from '@react-navigation/native';
+import React, { useCallback, useState } from 'react';
+import { ActivityIndicator, Modal, View, Text, TouchableOpacity, Dimensions, StyleSheet, StatusBar, SafeAreaView, ScrollView, RefreshControl } from 'react-native';
+import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { BarChart3, Package, Users, ShoppingBag, Star, TrendingUp, Settings, Menu, X, Bell, Search, DollarSign } from 'lucide-react-native';
 import OrderListScreen from './OrderListScreen';
 import CustomerListScreen from './CustomerListScreen';
 import StoreListScreen from './StoreListScreen';
 import ShipperListScreen from './ShipperListScreen';
 import { LineChart } from 'react-native-chart-kit';
+import { dashboardApi } from '@/services/api';
+import { ApiError } from '@/types';
 
 const screenWidth = Dimensions.get('window').width;
 
@@ -22,40 +24,140 @@ const menuItems = [
 
 type Section = 'dashboard' | 'buy' | 'customers' | 'stores' | 'orders' | 'shippers' | 'promotions' | 'analytics' | 'settings';
 
-const revenueData = {
-  labels: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'],
+const MONTH_LABELS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+const createZeroSeries = () => Array.from({ length: 12 }, () => 0);
+const storeEmojis = ['🍜', '🍕', '🥗', '🍛', '🍱', '🍔', '🥪'];
+
+type DashboardStats = {
+  total_customers: number;
+  orders_today: number;
+  system_revenue: number | string;
+  active_stores: number;
+};
+
+type RevenueTrend = {
+  labels: string[];
+  current_year: Array<number | string>;
+  previous_year: Array<number | string>;
+};
+
+type DashboardStore = {
+  store_id: number;
+  store_name: string;
+  orders: number;
+  revenue: number | string;
+  avg_rating: number | null;
+};
+
+type DashboardResponse = {
+  stats: DashboardStats;
+  revenue_trend: RevenueTrend;
+  top_stores: DashboardStore[];
+  generated_at: string;
+};
+
+const emptyTrend: RevenueTrend = {
+  labels: MONTH_LABELS,
+  current_year: createZeroSeries(),
+  previous_year: createZeroSeries(),
+};
+
+const normalizeNumber = (value: number | string | null | undefined): number => {
+  if (value === null || value === undefined) {
+    return 0;
+  }
+  const parsed = typeof value === 'string' ? parseFloat(value) : value;
+  return Number.isFinite(parsed) ? parsed : 0;
+};
+
+const formatNumber = (value: number | string | null | undefined): string => {
+  return normalizeNumber(value).toLocaleString('vi-VN');
+};
+
+const formatCurrency = (value: number | string | null | undefined): string => {
+  return `${formatNumber(value)} ₫`;
+};
+
+const buildChartData = (trend: RevenueTrend, currentLabel: string, previousLabel: string) => ({
+  labels: trend?.labels?.length ? trend.labels : MONTH_LABELS,
   datasets: [
     {
-      data: [12000, 15000, 18000, 22000, 26000, 30000, 28000, 32000, 35000, 37000, 40000, 42000],
-      color: (opacity = 1) => `rgba(233, 83, 34, ${opacity})`, // màu cam
+      data: (trend?.current_year || createZeroSeries()).map((item) => normalizeNumber(item)),
+      color: (opacity = 1) => `rgba(233, 83, 34, ${opacity})`,
       strokeWidth: 2,
     },
     {
-      data: [10000, 13000, 16000, 20000, 24000, 27000, 25000, 29000, 31000, 33000, 36000, 38000],
-      color: (opacity = 1) => `rgba(60, 120, 216, ${opacity})`, // màu xanh
+      data: (trend?.previous_year || createZeroSeries()).map((item) => normalizeNumber(item)),
+      color: (opacity = 1) => `rgba(60, 120, 216, ${opacity})`,
       strokeWidth: 2,
     },
   ],
-  legend: ['2025', '2024'],
-};
+  legend: [currentLabel, previousLabel],
+});
 
 function AdminDashboardScreen() {
   const navigation = useNavigation<any>();
   const [sidebarVisible, setSidebarVisible] = useState(false);
   const [activeSection, setActiveSection] = useState<Section>('dashboard');
   const [showChart, setShowChart] = useState(false);
+  const currentYear = new Date().getFullYear();
+  const [stats, setStats] = useState<DashboardStats | null>(null);
+  const [chartData, setChartData] = useState(() =>
+    buildChartData(emptyTrend, currentYear.toString(), (currentYear - 1).toString())
+  );
+  const [topStores, setTopStores] = useState<DashboardStore[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
-  const stats = [
-    { title: 'Tổng khách hàng', value: '1,245', icon: Users, color: '#ea580c', bgColor: '#fed7aa', change: '+15%' },
-    { title: 'Đơn hàng hôm nay', value: '357', icon: Package, color: '#f59e0b', bgColor: '#fffbeb', change: '+12%' },
-    { title: 'Doanh thu hệ thống', value: '2.8B ₫', icon: DollarSign, color: '#ea580c', bgColor: '#fed7aa', change: '+23%' },
-    { title: 'Cửa hàng hoạt động', value: '89', icon: ShoppingBag, color: '#10b981', bgColor: '#f0fdf4', change: '+5%' },
-  ];
+  const fetchDashboard = useCallback(async (isRefresh = false) => {
+    if (isRefresh) {
+      setRefreshing(true);
+    } else {
+      setLoading(true);
+    }
 
-  const topStores = [
-    { name: 'Quán Phở Hà Nội', orders: 245, rating: 4.8, revenue: '125,000,000 ₫', emoji: '🍜' },
-    { name: 'Pizza Palace', orders: 189, rating: 4.6, revenue: '89,000,000 ₫', emoji: '🍕' },
-    { name: 'Bánh Mì Sài Gòn', orders: 156, rating: 4.5, revenue: '67,000,000 ₫', emoji: '🥖' },
+    try {
+      const data = (await dashboardApi.getAdminMetrics()) as DashboardResponse;
+      setStats(data.stats);
+
+      const generatedYear = data.generated_at ? new Date(data.generated_at).getFullYear() : new Date().getFullYear();
+      setChartData(
+        buildChartData(
+          data.revenue_trend,
+          generatedYear.toString(),
+          (generatedYear - 1).toString()
+        )
+      );
+
+      setTopStores(data.top_stores || []);
+      setErrorMessage(null);
+    } catch (error) {
+      const apiError = error as ApiError;
+      setErrorMessage(apiError?.message || 'Không thể tải dữ liệu dashboard');
+    } finally {
+      if (isRefresh) {
+        setRefreshing(false);
+      }
+      setLoading(false);
+    }
+  }, []);
+
+  useFocusEffect(
+    useCallback(() => {
+      fetchDashboard();
+    }, [fetchDashboard])
+  );
+
+  const handleRefresh = useCallback(() => {
+    fetchDashboard(true);
+  }, [fetchDashboard]);
+
+  const statCards = [
+    { title: 'Tổng khách hàng', value: stats ? formatNumber(stats.total_customers) : '—', icon: Users, color: '#ea580c', bgColor: '#fed7aa', helper: 'Toàn hệ thống', helperColor: '#6b7280' },
+    { title: 'Đơn hàng hôm nay', value: stats ? formatNumber(stats.orders_today) : '—', icon: Package, color: '#f59e0b', bgColor: '#fffbeb', helper: 'Trong 24h qua', helperColor: '#f59e0b' },
+    { title: 'Doanh thu hệ thống', value: stats ? formatCurrency(stats.system_revenue) : '—', icon: DollarSign, color: '#ea580c', bgColor: '#fed7aa', helper: 'Tổng doanh thu', helperColor: '#ea580c' },
+    { title: 'Cửa hàng hoạt động', value: stats ? formatNumber(stats.active_stores) : '—', icon: ShoppingBag, color: '#10b981', bgColor: '#f0fdf4', helper: 'Có quản lý', helperColor: '#10b981' },
   ];
 
   return (
@@ -153,9 +255,35 @@ function AdminDashboardScreen() {
           {/* Content Section */}
           <View style={{ flex: 1 }}>
             {activeSection === 'dashboard' && (
-              <View style={{ flex: 1, padding: 16 }}>
+              <ScrollView
+                style={{ flex: 1 }}
+                contentContainerStyle={{ padding: 16, paddingBottom: 32 }}
+                refreshControl={
+                  <RefreshControl
+                    refreshing={refreshing}
+                    onRefresh={handleRefresh}
+                    tintColor="#ea580c"
+                  />
+                }
+              >
+                {errorMessage && (
+                  <View style={styles.errorBanner}>
+                    <Text style={styles.errorText}>{errorMessage}</Text>
+                    <TouchableOpacity style={styles.retryButton} onPress={() => fetchDashboard()}>
+                      <Text style={styles.retryButtonText}>Thử lại</Text>
+                    </TouchableOpacity>
+                  </View>
+                )}
+
+                {loading && !refreshing && (
+                  <View style={styles.loadingContainer}>
+                    <ActivityIndicator size="large" color="#ea580c" />
+                    <Text style={styles.loadingText}>Đang tải dữ liệu...</Text>
+                  </View>
+                )}
+
                 <View style={{ flexDirection: 'row', gap: 12, marginBottom: 16 }}>
-                  {stats.map((stat, index) => {
+                  {statCards.map((stat, index) => {
                     const IconComponent = stat.icon;
                     return (
                       <View key={index} style={{ flex: 1, backgroundColor: '#fff', borderRadius: 8, padding: 16, alignItems: 'center', borderWidth: 1, borderColor: '#e5e7eb' }}>
@@ -164,7 +292,11 @@ function AdminDashboardScreen() {
                         </View>
                         <Text style={{ fontSize: 18, fontWeight: 'bold', color: '#1f2937', marginBottom: 2 }}>{stat.value}</Text>
                         <Text style={{ fontSize: 10, color: '#6b7280', textAlign: 'center', marginBottom: 2 }}>{stat.title}</Text>
-                        <Text style={{ fontSize: 10, fontWeight: '600', marginTop: 2, color: stat.color }}>{stat.change}</Text>
+                        {stat.helper && (
+                          <Text style={{ fontSize: 10, fontWeight: '600', marginTop: 2, color: stat.helperColor }}>
+                            {stat.helper}
+                          </Text>
+                        )}
                       </View>
                     );
                   })}
@@ -174,7 +306,7 @@ function AdminDashboardScreen() {
                   <Text style={{ fontSize: 16, fontWeight: 'bold', color: '#1f2937', marginBottom: 12 }}>Biểu đồ doanh thu</Text>
                   <View style={{ backgroundColor: '#fff', borderRadius: 8, padding: 10, borderWidth: 1, borderColor: '#e5e7eb', alignItems: 'center' }}>
                     <LineChart
-                      data={revenueData}
+                      data={chartData}
                       width={screenWidth * 0.9}
                       height={220}
                       chartConfig={{
@@ -196,49 +328,41 @@ function AdminDashboardScreen() {
                 {/* Các cửa hàng hàng đầu */}
                 <View style={{ marginBottom: 20 }}>
                   <Text style={{ fontSize: 16, fontWeight: 'bold', color: '#ea580c', marginBottom: 12 }}>Các cửa hàng hàng đầu</Text>
-                  {topStores.map((store, idx) => (
-                    <TouchableOpacity
-                      key={idx}
-                      activeOpacity={0.8}
-                      style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: '#fff', borderRadius: 10, padding: 14, marginBottom: 10, borderWidth: 1, borderColor: '#fed7aa', shadowColor: '#ea580c', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.07, shadowRadius: 6, elevation: 2 }}
-                      onPress={() => {
-                        // Chuyển tới StoreDetailScreen, truyền thông tin cửa hàng
-                        const images = [
-                          require('../assets/images/assorted-sushi.png'),
-                          require('../assets/images/burger-palace.png'),
-                          require('../assets/images/fresh-bowl-salad.png'),
-                        ];
-                        const foods = [
-                          { id: 'f1', name: 'Phở bò', price: '50,000 ₫', rating: 4.9, image: images[0] },
-                          { id: 'f2', name: 'Pizza hải sản', price: '120,000 ₫', rating: 4.8, image: images[1] },
-                          { id: 'f3', name: 'Bánh mì đặc biệt', price: '35,000 ₫', rating: 4.7, image: images[2] },
-                        ];
-                        navigation.navigate('StoreDetailScreenV2', {
-                          storeId: (idx+1).toString(),
-                          name: store.name,
-                          address: 'Địa chỉ mẫu',
-                          image: images[idx % images.length],
-                          foods: [foods[idx]],
-                          rating: store.rating,
-                          delivery: 'Miễn phí',
-                          time: '20 phút',
-                          vouchers: [
-                            { id: 'v1', percent: 20, minOrder: '200.000 VND', code: 'SAVE20', desc: 'Giảm 20% cho đơn hàng từ 200.000 VND' },
-                          ],
-                        });
-                      }}
-                    >
-                      <Text style={{ fontSize: 28, marginRight: 14 }}>{store.emoji}</Text>
-                      <View style={{ flex: 1 }}>
-                        <Text style={{ fontSize: 15, fontWeight: 'bold', color: '#1f2937' }}>{store.name}</Text>
-                        <Text style={{ fontSize: 12, color: '#6b7280' }}>Đơn hàng: <Text style={{ color: '#ea580c', fontWeight: 'bold' }}>{store.orders}</Text> · Doanh thu: <Text style={{ color: '#10b981', fontWeight: 'bold' }}>{store.revenue}</Text></Text>
-                      </View>
-                      <View style={{ flexDirection: 'row', alignItems: 'center', marginLeft: 10 }}>
-                        <Star size={16} color="#f59e0b" />
-                        <Text style={{ fontWeight: 'bold', color: '#f59e0b', marginLeft: 4 }}>{store.rating}</Text>
-                      </View>
-                    </TouchableOpacity>
-                  ))}
+                  {topStores.length === 0 ? (
+                    <View style={styles.emptyState}>
+                      <Text style={styles.emptyStateText}>Chưa có dữ liệu xếp hạng</Text>
+                    </View>
+                  ) : (
+                    topStores.map((store, idx) => {
+                      const emoji = storeEmojis[idx % storeEmojis.length];
+                      const ratingValue = store.avg_rating !== null && store.avg_rating !== undefined
+                        ? store.avg_rating.toFixed(1)
+                        : '—';
+                      return (
+                        <TouchableOpacity
+                          key={store.store_id ?? idx}
+                          activeOpacity={0.8}
+                          style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: '#fff', borderRadius: 10, padding: 14, marginBottom: 10, borderWidth: 1, borderColor: '#fed7aa', shadowColor: '#ea580c', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.07, shadowRadius: 6, elevation: 2 }}
+                          onPress={() => navigation.navigate('StoreDetailScreenV2', {
+                            storeId: store.store_id?.toString() || `${idx + 1}`,
+                            name: store.store_name,
+                          })}
+                        >
+                          <Text style={{ fontSize: 28, marginRight: 14 }}>{emoji}</Text>
+                          <View style={{ flex: 1 }}>
+                            <Text style={{ fontSize: 15, fontWeight: 'bold', color: '#1f2937' }}>{store.store_name}</Text>
+                            <Text style={{ fontSize: 12, color: '#6b7280' }}>
+                              Đơn hàng: <Text style={{ color: '#ea580c', fontWeight: 'bold' }}>{formatNumber(store.orders)}</Text> · Doanh thu: <Text style={{ color: '#10b981', fontWeight: 'bold' }}>{formatCurrency(store.revenue)}</Text>
+                            </Text>
+                          </View>
+                          <View style={{ flexDirection: 'row', alignItems: 'center', marginLeft: 10 }}>
+                            <Star size={16} color="#f59e0b" />
+                            <Text style={{ fontWeight: 'bold', color: '#f59e0b', marginLeft: 4 }}>{ratingValue}</Text>
+                          </View>
+                        </TouchableOpacity>
+                      );
+                    })
+                  )}
                 </View>
 
                 <TouchableOpacity
@@ -253,7 +377,7 @@ function AdminDashboardScreen() {
                     <View style={styles.modalContent}>
                       <Text style={styles.modalTitle}>Biểu đồ doanh thu</Text>
                       <LineChart
-                        data={revenueData}
+                        data={chartData}
                         width={screenWidth * 0.85}
                         height={220}
                         chartConfig={{
@@ -278,7 +402,7 @@ function AdminDashboardScreen() {
                     </View>
                   </View>
                 </Modal>
-              </View>
+              </ScrollView>
             )}
 
             {activeSection === 'orders' && <OrderListScreen />}
@@ -336,6 +460,52 @@ const styles = StyleSheet.create({
     fontSize: 18,
     color: '#e95322',
     fontWeight: 'bold',
+  },
+  errorBanner: {
+    backgroundColor: '#fef2f2',
+    borderWidth: 1,
+    borderColor: '#fecaca',
+    padding: 12,
+    borderRadius: 8,
+    marginBottom: 16,
+  },
+  errorText: {
+    color: '#b91c1c',
+    fontSize: 12,
+    marginBottom: 8,
+  },
+  retryButton: {
+    alignSelf: 'flex-start',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    backgroundColor: '#b91c1c',
+    borderRadius: 6,
+  },
+  retryButtonText: {
+    color: '#fff',
+    fontSize: 12,
+    fontWeight: 'bold',
+  },
+  loadingContainer: {
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  loadingText: {
+    marginTop: 8,
+    color: '#6b7280',
+    fontSize: 12,
+  },
+  emptyState: {
+    padding: 16,
+    borderWidth: 1,
+    borderColor: '#fed7aa',
+    borderRadius: 8,
+    backgroundColor: '#fff7ed',
+    alignItems: 'center',
+  },
+  emptyStateText: {
+    color: '#ea580c',
+    fontWeight: '600',
   },
   modalOverlay: {
     flex: 1,

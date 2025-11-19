@@ -37,6 +37,7 @@ urlpatterns = [
     path('api/stores/', include('apps.stores.urls')),
     path('api/shipper/', include('apps.shipper.urls')),
     path('api/chatbot/', include('apps.chatbot.urls')),
+    path('api/dashboard/', include('apps.dashboard.urls')),
 ]
 
 if settings.DEBUG:

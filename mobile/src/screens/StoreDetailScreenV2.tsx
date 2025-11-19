@@ -7,6 +7,8 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Star, Clock, BadgePercent } from 'lucide-react-native';
 import { API_CONFIG } from "@/constants";
 import { apiClient } from '@/services/api';
+import { storesService } from '@/services';
+import { Store } from '@/types';
 
 const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
 
@@ -62,6 +64,14 @@ export const StoreDetailScreenV2 = () => {
   const [foods, setFoods] = useState<Food[]>(routeFoods || []);
   const [loading, setLoading] = useState(false);
   const [categories, setCategories] = useState<any[]>([]);
+  const [storeInfo, setStoreInfo] = useState<Store | null>(null);
+  const [storeStats, setStoreStats] = useState<{
+    total_foods: number;
+    total_orders: number;
+    total_revenue: number;
+    average_rating: number;
+    total_ratings: number;
+  } | null>(null);
 
   // Function to create image source URL
   const getImageSource = (imageValue: any) => {
@@ -96,6 +106,41 @@ export const StoreDetailScreenV2 = () => {
   const formatPrice = (price: number) => {
     return `${price.toLocaleString('vi-VN')}₫`;
   };
+
+    const fetchStoreInfo = async () => {
+      if (!storeId) {
+        return;
+      }
+      const numericId = Number(storeId);
+      if (Number.isNaN(numericId)) {
+        console.warn('Invalid storeId:', storeId);
+        return;
+      }
+
+      try {
+        const detail = await storesService.getStoreDetail(numericId);
+        setStoreInfo(detail);
+      } catch (error) {
+        console.error('Error fetching store detail:', error);
+      }
+    };
+
+    const fetchStoreStats = async () => {
+      if (!storeId) {
+        return;
+      }
+      const numericId = Number(storeId);
+      if (Number.isNaN(numericId)) {
+        return;
+      }
+
+      try {
+        const stats = await storesService.getStoreStats(numericId);
+        setStoreStats(stats);
+      } catch (error) {
+        console.error('Error fetching store stats:', error);
+      }
+    };
 
   // Fetch categories from API
   const fetchCategories = async () => {
@@ -302,6 +347,8 @@ export const StoreDetailScreenV2 = () => {
   useEffect(() => {
     // Always fetch categories
     fetchCategories();
+    fetchStoreInfo();
+    fetchStoreStats();
     
     // Fetch foods if not provided in route params
     if (storeId && (!routeFoods || routeFoods.length === 0)) {
@@ -333,20 +380,32 @@ export const StoreDetailScreenV2 = () => {
   }, [foods, categories, tab, filteredFoods]);
 
   // Nếu có truyền params thì ưu tiên dùng
+  const fallbackRatingCount = foods.reduce((total, food) => total + (food.rating_count || 0), 0);
+  const computedRating = storeStats?.average_rating ?? rating ?? 0;
+  const computedRatingCount = storeStats?.total_ratings ?? fallbackRatingCount;
+
   const store = {
     id: storeId,
-    name: name ?? '',
-    address: address ?? '',
-    headerImage: image ?? null,
+    name: storeInfo?.store_name ?? name ?? '',
+    address: storeInfo?.address ?? address ?? '',
+    headerImage: storeInfo?.image ?? image ?? null,
     foods: foods, // Use state foods instead of route params
-    rating: rating ?? 0,
+    rating: computedRating,
+    ratingCount: computedRatingCount,
     delivery: delivery ?? '',
     time: time ?? '',
     vouchers: vouchers ?? [],
   };
 
+  const storeRatingDisplay = (store.rating ?? 0) > 0 ? Number(store.rating).toFixed(1) : 'Chưa có';
+  const storeRatingCountDisplay = store.ratingCount || 0;
+
   // Render food item
-  const renderFoodItem = ({ item }: { item: Food }) => (
+  const renderFoodItem = ({ item }: { item: Food }) => {
+    const numericRating = Number(item.rating ?? item.avg_rating ?? 0);
+    const formattedRating = numericRating > 0 ? numericRating.toFixed(1) : '0.0';
+
+    return (
     <TouchableOpacity
       style={styles.foodCard}
       onPress={() => {
@@ -380,13 +439,14 @@ export const StoreDetailScreenV2 = () => {
           <Text style={styles.foodPrice}>{formatPrice(item.price)}</Text>
           <View style={styles.ratingContainer}>
             <Star color="#f59e0b" size={14} />
-            <Text style={styles.foodRating}>{item.rating || item.avg_rating || 0}</Text>
+            <Text style={styles.foodRating}>{formattedRating}</Text>
             <Text style={styles.ratingCount}>({item.rating_count || 0})</Text>
           </View>
         </View>
       </View>
     </TouchableOpacity>
   );
+  };
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -413,10 +473,10 @@ export const StoreDetailScreenV2 = () => {
           <View style={styles.rowCenter}>
             <Star color="#f59e0b" size={18} />
             <Text style={styles.ratingText}>
-              {store.rating > 0 ? store.rating.toFixed(1) : 'Chưa có'}
+              {storeRatingDisplay}
             </Text>
             <Text style={styles.reviewCount}>
-              ({foods.reduce((total, food) => total + (food.rating_count || 0), 0)} đánh giá)
+              ({storeRatingCountDisplay} đánh giá)
             </Text>
             <Text style={styles.dot}>·</Text>
             <Text style={styles.delivery}>{store.delivery}</Text>

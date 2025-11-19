@@ -1,48 +1,119 @@
-import React, { useState } from 'react';
-import { View, ScrollView, Text, StyleSheet, TouchableOpacity } from 'react-native';
-import { LineChart } from 'react-native-chart-kit';
-import { BarChart } from 'react-native-chart-kit';
+import React, { useCallback, useMemo, useState } from 'react';
+import { ActivityIndicator, RefreshControl, View, ScrollView, Text, StyleSheet, TouchableOpacity } from 'react-native';
+import { LineChart, BarChart } from 'react-native-chart-kit';
 import { Dimensions } from 'react-native';
 import { MapPin, Star, Menu, X, ShoppingBag } from 'react-native-feather';
-import AddFoodScreen from './AddFoodScreen';
+import { useFocusEffect } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import { dashboardApi } from '@/services/api';
+import { storesService } from '@/services';
+import { ApiError } from '@/types';
 
-// Dummy data for demonstration
-const storeInfo = {
-  image: '🍔',
-  name: 'Burger Palace',
-  address: '123 Main St',
-  rating: 4.8,
+type StoreCardInfo = {
+  id: number;
+  name: string;
+  address?: string | null;
+  image?: string | null;
+  average_rating: number;
+  total_ratings: number;
+  is_open: boolean;
 };
 
-const stats = [
-  { title: 'Đơn hàng hôm nay', value: 32 },
-  { title: 'Đang xử lý', value: 5 },
-  { title: 'Đã giao', value: 27 },
-];
-
-const orders = [
-  { id: '1', customer: 'Nguyen Van A', status: 'delivered', total: '120,000₫' },
-  { id: '2', customer: 'Tran Thi B', status: 'processing', total: '80,000₫' },
-  { id: '3', customer: 'Le Minh C', status: 'delivered', total: '75,000₫' },
-  { id: '4', customer: 'Pham Thu D', status: 'processing', total: '135,000₫' },
-  { id: '5', customer: 'Hoang Van E', status: 'delivered', total: '210,000₫' },
-  { id: '6', customer: 'Nguyen Thi F', status: 'processing', total: '60,000₫' },
-];
-
-const getOrderStatusColor = (status: string) => {
-  switch (status) {
-    case 'delivered': return '#10b981';
-    case 'processing': return '#f59e0b';
-    default: return '#6b7280';
-  }
+type StoreDashboardStats = {
+  revenue_today: number | string;
+  orders_today: number;
+  processing_orders: number;
+  delivered_orders: number;
+  customers_30_days: number;
+  average_rating: number;
 };
-const getOrderStatusText = (status: string) => {
-  switch (status) {
-    case 'delivered': return 'Đã giao';
-    case 'processing': return 'Đang xử lý';
-    default: return 'Khác';
+
+type RevenueTrend = {
+  labels: string[];
+  data: number[];
+};
+
+type TopFood = {
+  food_id: number;
+  food_name: string;
+  quantity: number;
+};
+
+type RecentOrder = {
+  order_id: number;
+  code: string;
+  customer: string;
+  status: string;
+  total: number;
+  created_at: string;
+  items: string;
+};
+
+type StoreDashboardResponse = {
+  store: StoreCardInfo;
+  stats: StoreDashboardStats;
+  revenue_trend: RevenueTrend;
+  top_foods: TopFood[];
+  recent_orders: RecentOrder[];
+  generated_at: string;
+};
+
+const FALLBACK_STORE_EMOJI = '🍔';
+
+const ORDER_STATUS_META: Record<string, { label: string; color: string }> = {
+  'Chờ xác nhận': { label: 'Chờ xác nhận', color: '#f59e0b' },
+  'Đã xác nhận': { label: 'Đã xác nhận', color: '#0ea5e9' },
+  'Đang chuẩn bị': { label: 'Đang chuẩn bị', color: '#3b82f6' },
+  'Sẵn sàng': { label: 'Sẵn sàng', color: '#6366f1' },
+  'Đang giao': { label: 'Đang giao', color: '#a855f7' },
+  'Đã giao': { label: 'Đã giao', color: '#10b981' },
+  'Đã hủy': { label: 'Đã hủy', color: '#ef4444' },
+  'Đã huỷ': { label: 'Đã huỷ', color: '#ef4444' },
+};
+
+const normalizeNumber = (value: number | string | null | undefined): number => {
+  if (value === null || value === undefined) {
+    return 0;
   }
+  const parsed = typeof value === 'string' ? parseFloat(value) : value;
+  return Number.isFinite(parsed) ? parsed : 0;
+};
+
+const formatNumber = (value: number | string | null | undefined): string => {
+  return normalizeNumber(value).toLocaleString('vi-VN');
+};
+
+const formatCurrency = (value: number | string | null | undefined): string => {
+  return `${formatNumber(value)} ₫`;
+};
+
+const resolveStoreIcon = (image?: string | null) => {
+  if (!image) {
+    return FALLBACK_STORE_EMOJI;
+  }
+  const trimmed = image.trim();
+  if (!trimmed || trimmed.startsWith('http') || trimmed.includes('/') || trimmed.length > 4) {
+    return FALLBACK_STORE_EMOJI;
+  }
+  return trimmed;
+};
+
+const getOrderStatusMeta = (status?: string) => {
+  if (!status) {
+    return { label: 'Khác', color: '#6b7280' };
+  }
+  return ORDER_STATUS_META[status] || { label: status, color: '#6b7280' };
+};
+
+const formatOrderTime = (timestamp?: string) => {
+  if (!timestamp) {
+    return '';
+  }
+  const parsed = new Date(timestamp);
+  if (Number.isNaN(parsed.getTime())) {
+    return '';
+  }
+  return parsed.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' });
 };
 
 const screenWidth = Dimensions.get('window').width;
@@ -61,38 +132,169 @@ type SellerDashboardScreenProps = {
 };
 
 const SellerDashboardScreen: React.FC<SellerDashboardScreenProps> = ({ navigation }) => {
-  // Dummy bar chart data
-  const barData = {
-    labels: ['Pizza', 'Burger', 'Sushi', 'Salad', 'Phở'],
-    datasets: [
-      {
-        data: [40, 25, 20, 15, 30],
-      },
-    ],
-  };
   const [sidebarVisible, setSidebarVisible] = useState(false);
   const [activeSection, setActiveSection] = useState('dashboard');
+  const [storeId, setStoreId] = useState<number | null>(null);
+  const [storeInfo, setStoreInfo] = useState<StoreCardInfo | null>(null);
+  const [stats, setStats] = useState<StoreDashboardStats | null>(null);
+  const [revenueTrend, setRevenueTrend] = useState<RevenueTrend>({ labels: ['—'], data: [0] });
+  const [topFoods, setTopFoods] = useState<TopFood[]>([]);
+  const [recentOrders, setRecentOrders] = useState<RecentOrder[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [lastUpdated, setLastUpdated] = useState<string | null>(null);
   const [isOpen, setIsOpen] = useState(true);
 
-  // Dummy revenue data for chart
-  const revenueData = {
-    labels: ['T2', 'T3', 'T4', 'T5', 'T6', 'T7', 'CN'],
+  const fetchDashboardData = useCallback(async (targetStoreId?: number, isRefresh = false) => {
+    const idToUse = targetStoreId ?? storeId;
+    if (!idToUse) {
+      return;
+    }
+
+    if (isRefresh) {
+      setRefreshing(true);
+    } else {
+      setLoading(true);
+    }
+
+    try {
+      const data = (await dashboardApi.getStoreMetrics(idToUse)) as StoreDashboardResponse;
+      setStoreInfo(data.store);
+      setStats(data.stats);
+      setRevenueTrend(data.revenue_trend || { labels: ['—'], data: [0] });
+      setTopFoods(data.top_foods || []);
+      setRecentOrders(data.recent_orders || []);
+      setIsOpen(data.store?.is_open ?? true);
+      setLastUpdated(data.generated_at || null);
+      setErrorMessage(null);
+    } catch (error) {
+      const apiError = error as ApiError;
+      setErrorMessage(apiError?.message || 'Không thể tải dữ liệu cửa hàng');
+    } finally {
+      if (isRefresh) {
+        setRefreshing(false);
+      } else {
+        setLoading(false);
+      }
+    }
+  }, [storeId]);
+
+  useFocusEffect(
+    useCallback(() => {
+      let isActive = true;
+
+      const loadStore = async () => {
+        try {
+          setLoading(true);
+          const myStore = await storesService.getMyStore();
+          if (!isActive) {
+            return;
+          }
+          setStoreId(myStore.id);
+          setStoreInfo({
+            id: myStore.id,
+            name: myStore.store_name,
+            address: myStore.address,
+            image: myStore.image,
+            average_rating: myStore.average_rating || 0,
+            total_ratings: myStore.total_ratings || 0,
+            is_open: true,
+          });
+          await fetchDashboardData(myStore.id);
+        } catch (error) {
+          if (!isActive) {
+            return;
+          }
+          const apiError = error as ApiError;
+          setErrorMessage(apiError?.message || 'Không thể tải thông tin cửa hàng');
+          setLoading(false);
+        }
+      };
+
+      loadStore();
+
+      return () => {
+        isActive = false;
+      };
+    }, [fetchDashboardData])
+  );
+
+  const handleRefresh = useCallback(() => {
+    fetchDashboardData(undefined, true);
+  }, [fetchDashboardData]);
+
+  const revenueChartData = useMemo(() => ({
+    labels: revenueTrend?.labels?.length ? revenueTrend.labels : ['—'],
     datasets: [
       {
-        data: [1200000, 1500000, 1800000, 1700000, 2000000, 2200000, 2500000],
+        data: revenueTrend?.data?.length ? revenueTrend.data : [0],
         color: (opacity = 1) => `rgba(233, 83, 34, ${opacity})`,
         strokeWidth: 2,
       },
     ],
-  };
+  }), [revenueTrend]);
+
+  const barChartData = useMemo(() => {
+    if (!topFoods.length) {
+      return {
+        labels: ['—'],
+        datasets: [{ data: [0] }],
+      };
+    }
+    return {
+      labels: topFoods.map((item) => item.food_name),
+      datasets: [
+        {
+          data: topFoods.map((item) => item.quantity || 0),
+        },
+      ],
+    };
+  }, [topFoods]);
+
+  const isInitialLoading = loading && !refreshing;
+
+  const statCards = [
+    {
+      icon: '💲',
+      title: 'Doanh thu hôm nay',
+      value: stats ? formatCurrency(stats.revenue_today) : '—',
+      helper: lastUpdated
+        ? `Cập nhật ${new Date(lastUpdated).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}`
+        : 'Trong ngày',
+      helperColor: '#10b981',
+    },
+    {
+      icon: '🛒',
+      title: 'Đơn hàng mới',
+      value: stats ? formatNumber(stats.orders_today) : '—',
+      helper: stats ? `${formatNumber(stats.processing_orders)} đang xử lý` : '—',
+      helperColor: '#f97316',
+    },
+    {
+      icon: '👥',
+      title: 'Khách (30 ngày)',
+      value: stats ? formatNumber(stats.customers_30_days) : '—',
+      helper: 'Khách duy nhất',
+      helperColor: '#0ea5e9',
+    },
+    {
+      icon: '⭐',
+      title: 'Đánh giá TB',
+      value: stats ? Number(stats.average_rating || 0).toFixed(1) : '—',
+      helper: `${storeInfo?.total_ratings ?? 0} lượt`,
+      helperColor: '#facc15',
+    },
+  ];
+
+  const storeAddress = storeInfo?.address || 'Chưa cập nhật địa chỉ';
+  const storeRatingText = storeInfo
+    ? `${Number(storeInfo.average_rating || 0).toFixed(1)} (${storeInfo.total_ratings} đánh giá)`
+    : 'Chưa có đánh giá';
+  const storeEmoji = resolveStoreIcon(storeInfo?.image);
 
   // Import NewOrderListScreen
   const NewOrderListScreen = require('./NewOrderListScreen').default;
-  // Import ManageMenuScreen
-  const ManageMenuScreen = require('./ManageMenuScreen').default;
-  // Import VoucherManagementScreen
-  const VoucherManagementScreen = require('./VoucherManagementScreen').default;
-
   return (
     <View style={{ flex: 1, backgroundColor: '#fff7ed' }}>
       {/* Sidebar */}
@@ -162,68 +364,102 @@ const SellerDashboardScreen: React.FC<SellerDashboardScreenProps> = ({ navigatio
         </View>
       </View>
 
+      {errorMessage && (
+        <View style={styles.errorBanner}>
+          <Text style={styles.errorBannerText}>{errorMessage}</Text>
+          <TouchableOpacity onPress={() => fetchDashboardData()}>
+            <Text style={styles.errorBannerAction}>Thử lại</Text>
+          </TouchableOpacity>
+        </View>
+      )}
+
       {/* Section switch logic */}
       {activeSection === 'orders' ? (
         <NewOrderListScreen />
       ) : activeSection === 'analytics' ? (
-        <ScrollView contentContainerStyle={{ paddingBottom: 24 }}>
-          {/* Biểu đồ doanh thu */}
-          <View style={{ marginBottom: 20, marginTop: 20 }}>
-            <Text style={{ fontSize: 16, fontWeight: 'bold', color: '#1f2937', marginBottom: 12, alignSelf: 'center' }}>Biểu đồ doanh thu</Text>
-            <View style={{ backgroundColor: '#fff', borderRadius: 8, padding: 10, borderWidth: 1, borderColor: '#e5e7eb', alignItems: 'center' }}>
-              <LineChart
-                data={revenueData}
-                width={screenWidth * 0.9}
-                height={220}
-                chartConfig={{
-                  backgroundColor: '#fff',
-                  backgroundGradientFrom: '#fff',
-                  backgroundGradientTo: '#fff',
-                  decimalPlaces: 0,
-                  color: (opacity = 1) => `rgba(233, 83, 34, ${opacity})`,
-                  labelColor: (opacity = 1) => `rgba(57, 23, 19, ${opacity})`,
-                  style: { borderRadius: 16 },
-                  propsForDots: { r: '4', strokeWidth: '2', stroke: '#e95322' },
-                }}
-                bezier
-                style={{ borderRadius: 16 }}
-              />
+        <ScrollView
+          contentContainerStyle={{ paddingBottom: 24 }}
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor="#ea580c" />}
+        >
+          {isInitialLoading ? (
+            <View style={styles.loadingContainer}>
+              <ActivityIndicator size="large" color="#ea580c" />
+              <Text style={styles.loadingText}>Đang tải dữ liệu...</Text>
             </View>
-          </View>
-          {/* Biểu đồ cột */}
-          <View style={{ marginBottom: 20, marginTop: 20 }}>
-            <Text style={{ fontSize: 16, fontWeight: 'bold', color: '#1f2937', marginBottom: 12, alignSelf: 'center' }}>Biểu đồ số lượng món bán</Text>
-            <View style={{ backgroundColor: '#fff', borderRadius: 8, padding: 10, borderWidth: 1, borderColor: '#e5e7eb', alignItems: 'center' }}>
-              <BarChart
-                data={barData}
-                width={screenWidth * 0.9}
-                height={220}
-                yAxisLabel={''}
-                yAxisSuffix={' món'}
-                chartConfig={{
-                  backgroundColor: '#fff',
-                  backgroundGradientFrom: '#fff',
-                  backgroundGradientTo: '#fff',
-                  decimalPlaces: 0,
-                  color: (opacity = 1) => `rgba(233, 83, 34, ${opacity})`,
-                  labelColor: (opacity = 1) => `rgba(57, 23, 19, ${opacity})`,
-                  style: { borderRadius: 16 },
-                }}
-                style={{ borderRadius: 16 }}
-              />
-            </View>
-          </View>
+          ) : (
+            <>
+              <View style={{ marginBottom: 20, marginTop: 20 }}>
+                <Text style={{ fontSize: 16, fontWeight: 'bold', color: '#1f2937', marginBottom: 12, alignSelf: 'center' }}>Biểu đồ doanh thu</Text>
+                <View style={{ backgroundColor: '#fff', borderRadius: 8, padding: 10, borderWidth: 1, borderColor: '#e5e7eb', alignItems: 'center' }}>
+                  <LineChart
+                    data={revenueChartData}
+                    width={screenWidth * 0.9}
+                    height={220}
+                    chartConfig={{
+                      backgroundColor: '#fff',
+                      backgroundGradientFrom: '#fff',
+                      backgroundGradientTo: '#fff',
+                      decimalPlaces: 0,
+                      color: (opacity = 1) => `rgba(233, 83, 34, ${opacity})`,
+                      labelColor: (opacity = 1) => `rgba(57, 23, 19, ${opacity})`,
+                      style: { borderRadius: 16 },
+                      propsForDots: { r: '4', strokeWidth: '2', stroke: '#e95322' },
+                    }}
+                    bezier
+                    style={{ borderRadius: 16 }}
+                  />
+                </View>
+              </View>
+              <View style={{ marginBottom: 20, marginTop: 20 }}>
+                <Text style={{ fontSize: 16, fontWeight: 'bold', color: '#1f2937', marginBottom: 12, alignSelf: 'center' }}>Biểu đồ số lượng món bán</Text>
+                <View style={{ backgroundColor: '#fff', borderRadius: 8, padding: 10, borderWidth: 1, borderColor: '#e5e7eb', alignItems: 'center' }}>
+                  {topFoods.length === 0 ? (
+                    <View style={styles.emptyState}>
+                      <Text style={styles.emptyStateText}>Chưa có dữ liệu món bán</Text>
+                    </View>
+                  ) : (
+                    <BarChart
+                      data={barChartData}
+                      width={screenWidth * 0.9}
+                      height={220}
+                      yAxisLabel={''}
+                      yAxisSuffix={' món'}
+                      chartConfig={{
+                        backgroundColor: '#fff',
+                        backgroundGradientFrom: '#fff',
+                        backgroundGradientTo: '#fff',
+                        decimalPlaces: 0,
+                        color: (opacity = 1) => `rgba(233, 83, 34, ${opacity})`,
+                        labelColor: (opacity = 1) => `rgba(57, 23, 19, ${opacity})`,
+                        style: { borderRadius: 16 },
+                      }}
+                      style={{ borderRadius: 16 }}
+                    />
+                  )}
+                </View>
+              </View>
+            </>
+          )}
         </ScrollView>
       ) : (
-        <ScrollView contentContainerStyle={{ paddingBottom: 24 }}>
+        <ScrollView
+          contentContainerStyle={{ paddingBottom: 24 }}
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor="#ea580c" />}
+        >
           {/* Store Card */}
           <View style={styles.storeCardNew}>
             <View style={styles.storeHeaderNew}>
-              <Text style={styles.storeEmojiNew}>{storeInfo.image}</Text>
+              <Text style={styles.storeEmojiNew}>{storeEmoji}</Text>
               <View style={styles.storeInfoNew}>
-                <Text style={styles.storeNameNew}>{storeInfo.name}</Text>
-                <View style={styles.storeDetailsNew}><MapPin width={13} height={13} color="#6b7280" /><Text style={styles.storeAddressNew}>{storeInfo.address}</Text></View>
-                <View style={styles.storeDetailsNew}><Star width={13} height={13} color="#f59e0b" fill="#f59e0b" /><Text style={styles.storeRatingNew}>{storeInfo.rating}</Text></View>
+                <Text style={styles.storeNameNew}>{storeInfo?.name || 'Đang tải cửa hàng...'}</Text>
+                <View style={styles.storeDetailsNew}>
+                  <MapPin width={13} height={13} color="#6b7280" />
+                  <Text style={styles.storeAddressNew}>{storeAddress}</Text>
+                </View>
+                <View style={styles.storeDetailsNew}>
+                  <Star width={13} height={13} color="#f59e0b" fill="#f59e0b" />
+                  <Text style={styles.storeRatingNew}>{storeRatingText}</Text>
+                </View>
               </View>
               <View style={{ alignItems: 'center' }}>
                 <TouchableOpacity
@@ -236,21 +472,56 @@ const SellerDashboardScreen: React.FC<SellerDashboardScreenProps> = ({ navigatio
               </View>
             </View>
           </View>
-          {/* Stats Cards - 2 per row */}
-          <View style={{ flexDirection: 'row', marginHorizontal: 18, marginTop: 18 }}>
-            <View style={[styles.statCardNew, { flex: 1, marginRight: 8 }]}><View style={styles.statIconNew}><Text style={styles.statIconTextNew}>💲</Text></View><Text style={styles.statValueNew}>2.5M ₫</Text><Text style={styles.statTitleNew}>Doanh thu hôm nay</Text><Text style={styles.statChangeNew}>+12%</Text></View>
-            <View style={[styles.statCardNew, { flex: 1, marginLeft: 8 }]}><View style={styles.statIconNew}><Text style={styles.statIconTextNew}>🛒</Text></View><Text style={styles.statValueNew}>23</Text><Text style={styles.statTitleNew}>Đơn hàng mới</Text><Text style={styles.statChangeNew}>+8%</Text></View>
-          </View>
-          <View style={{ flexDirection: 'row', marginHorizontal: 18, marginTop: 8 }}>
-            <View style={[styles.statCardNew, { flex: 1, marginRight: 8 }]}><View style={styles.statIconNew}><Text style={styles.statIconTextNew}>👥</Text></View><Text style={styles.statValueNew}>156</Text><Text style={styles.statTitleNew}>Khách hàng</Text><Text style={styles.statChangeNew}>+15%</Text></View>
-            <View style={[styles.statCardNew, { flex: 1, marginLeft: 8 }]}><View style={styles.statIconNew}><Text style={styles.statIconTextNew}>⭐</Text></View><Text style={styles.statValueNew}>4.5</Text><Text style={styles.statTitleNew}>Đánh giá TB</Text><Text style={styles.statChangeNew}>+0.2</Text></View>
-          </View>
-          {/* Recent Orders */}
-          <View style={styles.sectionNew}>
-            <Text style={styles.sectionTitleNew}>Đơn hàng gần đây</Text>
-            <View style={styles.orderCardNew}><View style={styles.orderHeaderNew}><Text style={styles.orderIdNew}>ORD-001</Text><Text style={styles.orderTimeNew}>10:30</Text></View><Text style={styles.orderCustomerNew}>Nguyễn Văn A</Text><Text style={styles.orderItemsNew}>Phở Bò Tái x2, Trà Sữa x1</Text><View style={styles.orderFooterNew}><Text style={styles.orderTotalNew}>160.000 ₫</Text><View style={styles.orderStatusNew}><Text style={styles.orderStatusTextNew}>Chờ xác nhận</Text></View></View></View>
-            <View style={styles.orderCardNew}><View style={styles.orderHeaderNew}><Text style={styles.orderIdNew}>ORD-002</Text><Text style={styles.orderTimeNew}>10:15</Text></View><Text style={styles.orderCustomerNew}>Trần Thị B</Text><Text style={styles.orderItemsNew}>Bún Bò Huế x1, Chả Cá x1</Text><View style={styles.orderFooterNew}><Text style={styles.orderTotalNew}>100.000 ₫</Text><View style={[styles.orderStatusNew, { backgroundColor: '#3b82f6' }]}><Text style={styles.orderStatusTextNew}>Đang chuẩn bị</Text></View></View></View>
-          </View>
+          {isInitialLoading ? (
+            <View style={styles.loadingContainer}>
+              <ActivityIndicator size="large" color="#ea580c" />
+              <Text style={styles.loadingText}>Đang tải dữ liệu...</Text>
+            </View>
+          ) : (
+            <>
+              <View style={styles.statsGridNew}>
+                {statCards.map((stat, index) => (
+                  <View key={`${stat.title}-${index}`} style={[styles.statCardNew, { width: '48%', marginBottom: 12 }]}>
+                    <View style={styles.statIconNew}>
+                      <Text style={styles.statIconTextNew}>{stat.icon}</Text>
+                    </View>
+                    <Text style={styles.statValueNew}>{stat.value}</Text>
+                    <Text style={styles.statTitleNew}>{stat.title}</Text>
+                    <Text style={[styles.statChangeNew, { color: stat.helperColor }]}>{stat.helper}</Text>
+                  </View>
+                ))}
+              </View>
+
+              <View style={styles.sectionNew}>
+                <Text style={styles.sectionTitleNew}>Đơn hàng gần đây</Text>
+                {recentOrders.length === 0 ? (
+                  <View style={styles.emptyState}>
+                    <Text style={styles.emptyStateText}>Chưa có đơn hàng gần đây</Text>
+                  </View>
+                ) : (
+                  recentOrders.map((order) => {
+                    const statusMeta = getOrderStatusMeta(order.status);
+                    return (
+                      <View key={order.order_id} style={styles.orderCardNew}>
+                        <View style={styles.orderHeaderNew}>
+                          <Text style={styles.orderIdNew}>{order.code}</Text>
+                          <Text style={styles.orderTimeNew}>{formatOrderTime(order.created_at)}</Text>
+                        </View>
+                        <Text style={styles.orderCustomerNew}>{order.customer || 'Khách vãng lai'}</Text>
+                        <Text style={styles.orderItemsNew}>{order.items || '—'}</Text>
+                        <View style={styles.orderFooterNew}>
+                          <Text style={styles.orderTotalNew}>{formatCurrency(order.total)}</Text>
+                          <View style={[styles.orderStatusNew, { backgroundColor: statusMeta.color }]}>
+                            <Text style={styles.orderStatusTextNew}>{statusMeta.label}</Text>
+                          </View>
+                        </View>
+                      </View>
+                    );
+                  })
+                )}
+              </View>
+            </>
+          )}
         </ScrollView>
       )}
     </View>
@@ -270,6 +541,13 @@ const styles = StyleSheet.create({
   headerBadgeTextNew: { fontSize: 11, color: '#fff', fontWeight: 'bold' },
   headerAvatarNew: { width: 32, height: 32, borderRadius: 16, backgroundColor: '#ea580c', alignItems: 'center', justifyContent: 'center', marginLeft: 8 },
   headerAvatarTextNew: { fontSize: 14, color: '#fff', fontWeight: 'bold' },
+  errorBanner: { marginHorizontal: 18, marginTop: 12, padding: 12, backgroundColor: '#fee2e2', borderRadius: 12, borderWidth: 1, borderColor: '#fecaca', flexDirection: 'row', alignItems: 'center' },
+  errorBannerText: { color: '#991b1b', flex: 1, marginRight: 12, fontSize: 13 },
+  errorBannerAction: { color: '#b91c1c', fontWeight: 'bold' },
+  loadingContainer: { paddingVertical: 32, alignItems: 'center', justifyContent: 'center' },
+  loadingText: { marginTop: 8, color: '#6b7280' },
+  emptyState: { padding: 16, borderRadius: 12, borderWidth: 1, borderColor: '#f3f4f6', alignItems: 'center' },
+  emptyStateText: { color: '#6b7280', fontSize: 13 },
 
   storeCardNew: { backgroundColor: '#fff', borderRadius: 16, marginHorizontal: 18, marginTop: 18, padding: 18, shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 6, elevation: 2 },
   storeHeaderNew: { flexDirection: 'row', alignItems: 'center' },
@@ -283,8 +561,8 @@ const styles = StyleSheet.create({
   statusCircleNew: { width: 18, height: 18, borderRadius: 9, backgroundColor: '#ea580c', marginBottom: 2 },
   statusTextNew: { fontSize: 13, color: '#10b981', fontWeight: 'bold' },
 
-  statsRowNew: { flexDirection: 'row', justifyContent: 'space-between', marginHorizontal: 18, marginTop: 18, marginBottom: 8 },
-  statCardNew: { flex: 1, backgroundColor: '#fff', borderRadius: 12, padding: 12, alignItems: 'center', marginHorizontal: 4, borderWidth: 1, borderColor: '#f3f4f6' },
+  statsGridNew: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', marginHorizontal: 18, marginTop: 18 },
+  statCardNew: { backgroundColor: '#fff', borderRadius: 12, padding: 12, alignItems: 'center', marginHorizontal: 4, borderWidth: 1, borderColor: '#f3f4f6' },
   statIconNew: { width: 32, height: 32, borderRadius: 16, backgroundColor: '#fff7ed', alignItems: 'center', justifyContent: 'center', marginBottom: 6 },
   statIconTextNew: { fontSize: 18, color: '#ea580c' },
   statValueNew: { fontSize: 16, fontWeight: 'bold', color: '#ea580c' },

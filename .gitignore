@@ -8,3 +8,5 @@ assets/
 node_modules/
 
 .expo/
+
+data/
