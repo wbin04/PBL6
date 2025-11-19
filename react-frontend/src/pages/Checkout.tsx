@@ -704,7 +704,8 @@ const Checkout: React.FC = () => {
                   <span>{formatCurrency(calculations.deliveryFee)}</span>
                 </div>
                 <p className="text-xs text-gray-500 italic">
-                  * Phí giao hàng thực tế: 15,000đ + 4,000đ/km (tính theo khoảng cách)
+                  * Phí giao hàng thực tế: 15,000đ + 4,000đ/km (tính theo khoảng
+                  cách)
                 </p>
                 {calculations.discount > 0 && (
                   <div className="flex justify-between text-green-600">

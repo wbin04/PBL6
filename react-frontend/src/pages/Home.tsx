@@ -84,6 +84,7 @@ const Home: React.FC = () => {
 
   // Pagination states
   const [currentPage, setCurrentPage] = useState(1);
+  const [allStores, setAllStores] = useState<Store[]>([]); // Store all stores
   const [totalStores, setTotalStores] = useState(0);
   const [totalPages, setTotalPages] = useState(0);
   const [hasNext, setHasNext] = useState(false);
@@ -94,8 +95,15 @@ const Home: React.FC = () => {
 
   useEffect(() => {
     loadFeaturedCategories();
-    loadStores(currentPage);
-  }, [currentPage]);
+    loadStores();
+  }, []); // Load once
+
+  // Update displayed stores when page changes
+  useEffect(() => {
+    if (allStores.length > 0) {
+      updatePaginationInfo();
+    }
+  }, [currentPage, allStores]);
 
   // load categories
   const loadFeaturedCategories = async () => {
@@ -108,19 +116,24 @@ const Home: React.FC = () => {
     }
   };
 
-  // load stores + foods with pagination
-  const loadStores = async (page: number = 1) => {
+  // load stores + foods (load all stores once, paginate client-side)
+  const loadStores = async () => {
     try {
       setLoading(true);
 
-      // fetch stores with pagination
-      const url = `http://127.0.0.1:8000/api/stores/?page=${page}&page_size=${storesPerPage}`;
+      // Fetch all stores (backend returns all without pagination)
+      const url = `http://127.0.0.1:8000/api/stores/`;
+      console.log("🔄 Fetching stores from:", url);
+
       let storesResponse = await fetch(url, {
         method: "GET",
         headers: getAuthHeaders(),
       });
 
+      console.log("📡 Response status:", storesResponse.status);
+
       if (storesResponse.status === 401) {
+        console.log("🔑 Token expired, refreshing...");
         const newAccess = await refreshAccessToken();
         if (newAccess) {
           storesResponse = await fetch(url, {
@@ -130,6 +143,7 @@ const Home: React.FC = () => {
               "Content-Type": "application/json",
             },
           });
+          console.log("📡 Retry response status:", storesResponse.status);
         }
       }
 
@@ -137,14 +151,18 @@ const Home: React.FC = () => {
         throw new Error(`HTTP error! status: ${storesResponse.status}`);
       }
 
-      const data = await storesResponse.json();
-      const storesData: StoreResponse[] = data.results || [];
+      const responseData = await storesResponse.json();
 
-      // Update pagination info
-      setTotalStores(data.count || 0);
-      setTotalPages(data.num_pages || 0);
-      setHasNext(data.has_next || false);
-      setHasPrevious(data.has_previous || false);
+      // Handle both array and object response formats
+      const storesData: StoreResponse[] = Array.isArray(responseData)
+        ? responseData
+        : responseData.results || [];
+
+      console.log("🔍 DEBUG Loaded stores:", {
+        responseType: Array.isArray(responseData) ? "array" : "object",
+        total: storesData.length,
+        storesData: storesData,
+      });
 
       // fetch foods for each store (keep only 3 foods per store)
       const storesWithFoods: Store[] = await Promise.all(
@@ -190,13 +208,58 @@ const Home: React.FC = () => {
         })
       );
 
-      setStores(storesWithFoods);
+      // Store all stores for client-side pagination
+      setAllStores(storesWithFoods);
+      setTotalStores(storesWithFoods.length);
+
+      // Calculate pagination
+      const numPages = Math.ceil(storesWithFoods.length / storesPerPage);
+      setTotalPages(numPages);
+
+      // Set initial page display
+      const startIndex = (currentPage - 1) * storesPerPage;
+      const endIndex = startIndex + storesPerPage;
+      const paginatedStores = storesWithFoods.slice(startIndex, endIndex);
+
+      setStores(paginatedStores);
+      setHasNext(currentPage < numPages);
+      setHasPrevious(currentPage > 1);
+
+      console.log("📄 Initial pagination:", {
+        totalStores: storesWithFoods.length,
+        totalPages: numPages,
+        currentPage,
+        displayingStores: paginatedStores.length,
+      });
     } catch (error) {
       console.error("Error loading stores:", error);
+      setAllStores([]);
       setStores([]);
     } finally {
       setLoading(false);
     }
+  };
+
+  // Update pagination info and displayed stores based on current page
+  const updatePaginationInfo = () => {
+    if (allStores.length === 0) return;
+
+    const startIndex = (currentPage - 1) * storesPerPage;
+    const endIndex = startIndex + storesPerPage;
+    const paginatedStores = allStores.slice(startIndex, endIndex);
+
+    setStores(paginatedStores);
+    setHasNext(currentPage < totalPages);
+    setHasPrevious(currentPage > 1);
+
+    console.log("📄 Pagination updated:", {
+      currentPage,
+      totalPages,
+      totalStores: allStores.length,
+      displayingStores: paginatedStores.length,
+      startIndex,
+      endIndex,
+    });
   };
 
   // navigate
@@ -529,9 +592,11 @@ const Home: React.FC = () => {
               <h2 className="text-2xl font-bold text-gray-900">
                 Cửa hàng ({totalStores})
               </h2>
-              <div className="text-sm text-gray-600">
-                Trang {currentPage} / {totalPages}
-              </div>
+              {totalPages > 0 && (
+                <div className="text-sm text-gray-600">
+                  Trang {currentPage} / {totalPages}
+                </div>
+              )}
             </div>
           )}
 

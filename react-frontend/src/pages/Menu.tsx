@@ -81,6 +81,17 @@ export default function Menu() {
   const [storeInfo, setStoreInfo] = useState<StoreInfo | null>(null);
   const [loading, setLoading] = useState(false);
 
+  // Pagination states
+  const [currentPage, setCurrentPage] = useState(1);
+  const [totalCount, setTotalCount] = useState(0);
+  const [totalPages, setTotalPages] = useState(0);
+  const [hasNext, setHasNext] = useState(false);
+  const [hasPrevious, setHasPrevious] = useState(false);
+
+  // Search and filter states
+  const [searchTerm, setSearchTerm] = useState("");
+  const [sortBy, setSortBy] = useState("created_date");
+
   // Modal states
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedFood, setSelectedFood] = useState<Food | null>(null);
@@ -102,31 +113,55 @@ export default function Menu() {
     } else if (categoryParam) {
       const id = parseInt(categoryParam);
       setSelectedCategory(id);
-      loadFoods(id);
-    } else {
-      loadFoods();
     }
   }, [searchParams]);
+
+  // Load foods khi thay đổi filters hoặc pagination
+  useEffect(() => {
+    if (storeId) {
+      // Không load lại khi đang ở store view
+      return;
+    }
+    loadFoods(selectedCategory || undefined);
+  }, [selectedCategory, currentPage, sortBy]);
 
   // tải danh mục
   const loadCategories = async () => {
     try {
       const res = await API.get("/menu/categories/");
-      setCategories(res as Category[]);
+      const data = res as { results?: Category[] } | Category[];
+      setCategories(Array.isArray(data) ? data : data.results || []);
     } catch (err) {
       console.error("Error loading categories:", err);
     }
   };
 
-  // tải món ăn theo category
+  // tải món ăn theo category với phân trang, tìm kiếm và sắp xếp
   const loadFoods = async (categoryId?: number) => {
     try {
       setLoading(true);
-      let url = "/menu/items/";
-      if (categoryId) url += `?category=${categoryId}`;
+      const params = new URLSearchParams();
+      if (categoryId) params.append("category", categoryId.toString());
+      if (searchTerm) params.append("search", searchTerm);
+      if (sortBy) params.append("sort", sortBy);
+      params.append("page", currentPage.toString());
+      params.append("page_size", "12");
+
+      const url = `/menu/items/?${params.toString()}`;
       const res = await API.get(url);
-      const data = res as { results?: Food[] } | Food[];
-      setFoods(Array.isArray(data) ? data : data.results || []);
+      const data = res as {
+        results?: Food[];
+        count?: number;
+        num_pages?: number;
+        has_next?: boolean;
+        has_previous?: boolean;
+      };
+
+      setFoods(data.results || []);
+      setTotalCount(data.count || 0);
+      setTotalPages(data.num_pages || 0);
+      setHasNext(data.has_next || false);
+      setHasPrevious(data.has_previous || false);
     } catch (err) {
       console.error("Error loading foods:", err);
     } finally {
@@ -148,6 +183,36 @@ export default function Menu() {
       console.error("Error loading store:", error);
     } finally {
       setLoading(false);
+    }
+  };
+
+  // Search and filter handlers
+  const handleSearch = () => {
+    setCurrentPage(1);
+    loadFoods(selectedCategory || undefined);
+  };
+
+  const handleKeyPress = (event: React.KeyboardEvent) => {
+    if (event.key === "Enter") {
+      handleSearch();
+    }
+  };
+
+  const handleCategoryChange = (categoryId: number) => {
+    setSelectedCategory(categoryId);
+    setCurrentPage(1);
+  };
+
+  const handleSortChange = (sort: string) => {
+    setSortBy(sort);
+    setCurrentPage(1);
+  };
+
+  // Pagination handlers
+  const goToPage = (page: number) => {
+    if (page >= 1 && page <= totalPages && page !== currentPage) {
+      setCurrentPage(page);
+      window.scrollTo({ top: 0, behavior: "smooth" });
     }
   };
 
@@ -247,15 +312,53 @@ export default function Menu() {
             <Button
               key={cat.id}
               variant={selectedCategory === cat.id ? "default" : "outline"}
-              onClick={() => loadFoods(cat.id)}>
+              onClick={() => handleCategoryChange(cat.id)}>
               {cat.cate_name}
             </Button>
           ))}
         </div>
       )}
 
+      {/* Thanh tìm kiếm và bộ lọc */}
+      {!storeId && (
+        <Card className="mb-6">
+          <CardContent className="p-4">
+            <div className="flex flex-wrap gap-4 items-center">
+              <input
+                type="text"
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                onKeyPress={handleKeyPress}
+                placeholder="Tìm kiếm món ăn..."
+                className="flex-1 min-w-[200px] rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+              />
+
+              <select
+                value={sortBy}
+                onChange={(e) => handleSortChange(e.target.value)}
+                className="rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2">
+                <option value="created_date">Mới nhất</option>
+                <option value="price_asc">Giá tăng dần</option>
+                <option value="price_desc">Giá giảm dần</option>
+                <option value="name">Tên A-Z</option>
+              </select>
+
+              <Button onClick={handleSearch}>Tìm kiếm</Button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       {/* danh sách món ăn */}
       {loading && <p>Đang tải dữ liệu...</p>}
+
+      {/* Hiển thị thông tin phân trang */}
+      {!loading && totalCount > 0 && (
+        <div className="mb-4 text-sm text-gray-600">
+          Hiển thị {foods.length} trong tổng số {totalCount} món ăn (Trang{" "}
+          {currentPage}/{totalPages})
+        </div>
+      )}
 
       <div className="grid gap-6 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
         {foods.map((food) => (
@@ -327,6 +430,52 @@ export default function Menu() {
           </Card>
         ))}
       </div>
+
+      {/* Phân trang */}
+      {!loading && totalPages > 1 && (
+        <div className="flex justify-center items-center gap-2 mt-8">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => goToPage(currentPage - 1)}
+            disabled={!hasPrevious}>
+            ← Trước
+          </Button>
+
+          <div className="flex gap-1">
+            {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+              let pageNum: number;
+              if (totalPages <= 5) {
+                pageNum = i + 1;
+              } else if (currentPage <= 3) {
+                pageNum = i + 1;
+              } else if (currentPage >= totalPages - 2) {
+                pageNum = totalPages - 4 + i;
+              } else {
+                pageNum = currentPage - 2 + i;
+              }
+
+              return (
+                <Button
+                  key={pageNum}
+                  variant={currentPage === pageNum ? "default" : "outline"}
+                  size="sm"
+                  onClick={() => goToPage(pageNum)}>
+                  {pageNum}
+                </Button>
+              );
+            })}
+          </div>
+
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => goToPage(currentPage + 1)}
+            disabled={!hasNext}>
+            Tiếp →
+          </Button>
+        </div>
+      )}
 
       {/* Food Detail Modal */}
       <FoodDetailModal
