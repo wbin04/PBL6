@@ -1,5 +1,6 @@
 import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
 import Layout from "./components/Layout";
+import Chatbox from "./components/Chatbox";
 import Home from "./pages/Home";
 import Login from "./pages/Login";
 import Register from "./pages/Register";
@@ -14,7 +15,6 @@ import StoreManager from "./pages/StoreManager";
 import StoreManagerRegister from "./pages/StoreManagerRegister";
 import Account from "./pages/Account";
 
-
 function App() {
   return (
     <Router>
@@ -24,7 +24,10 @@ function App() {
         <Route path="/admin" element={<Admin />} />
         <Route path="/store-manager" element={<StoreManager />} />
         <Route path="/storemanager" element={<StoreManager />} />
-        <Route path="/store-manager/register" element={<StoreManagerRegister />} />
+        <Route
+          path="/store-manager/register"
+          element={<StoreManagerRegister />}
+        />
         <Route
           path="/*"
           element={
@@ -40,6 +43,8 @@ function App() {
                 <Route path="/account" element={<Account />} />
                 {/* Add more routes as needed */}
               </Routes>
+              {/* Global Chatbox - available on all pages */}
+              <Chatbox />
             </Layout>
           }
         />

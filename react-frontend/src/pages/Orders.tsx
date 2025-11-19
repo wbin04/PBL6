@@ -3,6 +3,7 @@ import { Link, useNavigate } from "react-router-dom";
 import { API, getImageUrl, formatDate, isAuthenticated } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { paymentService } from "@/services/paymentService";
 
 // Backend Order interface
 interface BackendOrderItem {
@@ -32,6 +33,7 @@ interface BackendOrder {
   delivery_status: string;
   total_money: string; // Chỉ giá món ăn
   payment_method: string;
+  payment_status?: string; // Trạng thái thanh toán: PAID, PENDING, CANCELLED
   receiver_name: string;
   phone_number: string;
   ship_address: string;
@@ -276,12 +278,40 @@ const Orders: React.FC = () => {
       const windowWithCartUpdate = window as typeof window & {
         updateCartCount?: () => void;
       };
-      if (windowWithCartUpdate.updateCartCount) {
+      if (windowWithCartUpdate.updateCartUpdate) {
         windowWithCartUpdate.updateCartCount();
       }
     } catch (error) {
       console.error("Error reordering:", error);
       alert("Không thể thêm món ăn vào giỏ hàng. Vui lòng thử lại!");
+    }
+  };
+
+  const retryPayment = async (order: BackendOrder) => {
+    if (!confirm("Bạn có muốn thanh toán lại đơn hàng này?")) {
+      return;
+    }
+
+    try {
+      const paymentData = await paymentService.createPaymentLink({
+        order_id: order.id,
+        amount: Math.round(getOrderTotal(order)),
+        message: `Thanh toán đơn hàng #${order.id}`,
+        user_id: order.user?.id,
+      });
+
+      if (paymentData.checkoutUrl) {
+        window.location.href = paymentData.checkoutUrl;
+      } else {
+        throw new Error("Không nhận được link thanh toán");
+      }
+    } catch (error) {
+      console.error("Payment error:", error);
+      alert(
+        `Không thể tạo link thanh toán: ${
+          error instanceof Error ? error.message : error
+        }`
+      );
     }
   };
 
@@ -435,6 +465,30 @@ const Orders: React.FC = () => {
                         🏪 {order.store_name}
                       </p>
                     )}
+                    <div className="flex items-center gap-2 mt-1">
+                      <span className="text-xs text-gray-500">
+                        {order.payment_method === "ONLINE"
+                          ? "💳 Thanh toán online"
+                          : "💵 Thanh toán khi nhận hàng"}
+                      </span>
+                      {order.payment_method === "ONLINE" &&
+                        order.payment_status && (
+                          <span
+                            className={`px-2 py-0.5 rounded text-xs font-semibold ${
+                              order.payment_status === "PAID"
+                                ? "bg-green-100 text-green-700"
+                                : order.payment_status === "CANCELLED"
+                                ? "bg-red-100 text-red-700"
+                                : "bg-yellow-100 text-yellow-700"
+                            }`}>
+                            {order.payment_status === "PAID"
+                              ? "✓ Đã thanh toán"
+                              : order.payment_status === "CANCELLED"
+                              ? "✗ Đã hủy"
+                              : "⏳ Chưa thanh toán"}
+                          </span>
+                        )}
+                    </div>
                   </div>
                   <span
                     className={`px-3 py-1 rounded-full text-xs font-bold uppercase ${getStatusClass(
@@ -520,6 +574,19 @@ const Orders: React.FC = () => {
                       Hủy đơn
                     </Button>
                   )}
+
+                  {/* Nút thanh toán lại cho đơn ONLINE chưa thanh toán */}
+                  {order.payment_method === "ONLINE" &&
+                    order.payment_status !== "PAID" &&
+                    order.order_status !== "Đã huỷ" &&
+                    order.order_status !== "Đã giao" && (
+                      <Button
+                        size="sm"
+                        className="bg-blue-500 hover:bg-blue-600"
+                        onClick={() => retryPayment(order)}>
+                        💳 Thanh toán ngay
+                      </Button>
+                    )}
 
                   {order.order_status === "Đã giao" && (
                     <>
