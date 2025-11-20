@@ -1,7 +1,7 @@
 import React, { useCallback, useState } from 'react';
 import { ActivityIndicator, Modal, View, Text, TouchableOpacity, Dimensions, StyleSheet, StatusBar, SafeAreaView, ScrollView, RefreshControl } from 'react-native';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
-import { BarChart3, Package, Users, ShoppingBag, Star, TrendingUp, Settings, Menu, X, Bell, Search, DollarSign } from 'lucide-react-native';
+import { BarChart3, Package, Users, ShoppingBag, Star, TrendingUp, Settings, Menu, X, Bell, Search, DollarSign, LogOut } from 'lucide-react-native';
 import OrderListScreen from './OrderListScreen';
 import CustomerListScreen from './CustomerListScreen';
 import StoreListScreen from './StoreListScreen';
@@ -9,6 +9,9 @@ import ShipperListScreen from './ShipperListScreen';
 import { LineChart } from 'react-native-chart-kit';
 import { dashboardApi } from '@/services/api';
 import { ApiError } from '@/types';
+import { useDispatch } from 'react-redux';
+import { AppDispatch } from '@/store';
+import { logout } from '@/store/slices/authSlice';
 
 const screenWidth = Dimensions.get('window').width;
 
@@ -97,6 +100,7 @@ const buildChartData = (trend: RevenueTrend, currentLabel: string, previousLabel
 
 function AdminDashboardScreen() {
   const navigation = useNavigation<any>();
+  const dispatch = useDispatch<AppDispatch>();
   const [sidebarVisible, setSidebarVisible] = useState(false);
   const [activeSection, setActiveSection] = useState<Section>('dashboard');
   const [showChart, setShowChart] = useState(false);
@@ -152,6 +156,14 @@ function AdminDashboardScreen() {
   const handleRefresh = useCallback(() => {
     fetchDashboard(true);
   }, [fetchDashboard]);
+
+  const handleLogout = async () => {
+    try {
+      await dispatch(logout()).unwrap();
+    } catch (error) {
+      console.error('Logout error:', error);
+    }
+  };
 
   const statCards = [
     { title: 'Tổng khách hàng', value: stats ? formatNumber(stats.total_customers) : '—', icon: Users, color: '#ea580c', bgColor: '#fed7aa', helper: 'Toàn hệ thống', helperColor: '#6b7280' },
@@ -209,6 +221,12 @@ function AdminDashboardScreen() {
                     </TouchableOpacity>
                   );
                 })}
+              </View>
+              <View style={styles.logoutContainer}>
+                <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
+                  <LogOut size={16} color="#dc2626" />
+                  <Text style={styles.logoutLabel}>Đăng xuất</Text>
+                </TouchableOpacity>
               </View>
             </View>
           </>
@@ -541,6 +559,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  logoutContainer: { padding: 16, borderTopWidth: 1, borderTopColor: '#e5e7eb' },
+  logoutButton: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingVertical: 10, borderRadius: 10, borderWidth: 1, borderColor: '#fecaca', backgroundColor: '#fff' },
+  logoutLabel: { marginLeft: 8, color: '#dc2626', fontWeight: 'bold' },
 });
 
 export default AdminDashboardScreen;

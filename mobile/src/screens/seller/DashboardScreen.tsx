@@ -2,12 +2,15 @@ import React, { useCallback, useMemo, useState } from 'react';
 import { ActivityIndicator, RefreshControl, View, ScrollView, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { LineChart, BarChart } from 'react-native-chart-kit';
 import { Dimensions } from 'react-native';
-import { MapPin, Star, Menu, X, ShoppingBag } from 'react-native-feather';
+import { MapPin, Star, Menu, X, ShoppingBag, LogOut } from 'react-native-feather';
 import { useFocusEffect } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { dashboardApi } from '@/services/api';
 import { storesService } from '@/services';
 import { ApiError } from '@/types';
+import { useDispatch } from 'react-redux';
+import { AppDispatch } from '@/store';
+import { logout } from '@/store/slices/authSlice';
 
 type StoreCardInfo = {
   id: number;
@@ -132,6 +135,7 @@ type SellerDashboardScreenProps = {
 };
 
 const SellerDashboardScreen: React.FC<SellerDashboardScreenProps> = ({ navigation }) => {
+  const dispatch = useDispatch<AppDispatch>();
   const [sidebarVisible, setSidebarVisible] = useState(false);
   const [activeSection, setActiveSection] = useState('dashboard');
   const [storeId, setStoreId] = useState<number | null>(null);
@@ -145,6 +149,14 @@ const SellerDashboardScreen: React.FC<SellerDashboardScreenProps> = ({ navigatio
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [lastUpdated, setLastUpdated] = useState<string | null>(null);
   const [isOpen, setIsOpen] = useState(true);
+
+  const handleLogout = async () => {
+    try {
+      await dispatch(logout()).unwrap();
+    } catch (error) {
+      console.error('Logout error:', error);
+    }
+  };
 
   const fetchDashboardData = useCallback(async (targetStoreId?: number, isRefresh = false) => {
     const idToUse = targetStoreId ?? storeId;
@@ -343,6 +355,12 @@ const SellerDashboardScreen: React.FC<SellerDashboardScreenProps> = ({ navigatio
                   </TouchableOpacity>
                 );
               })}
+            </View>
+            <View style={styles.logoutContainer}>
+              <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
+                <LogOut width={16} height={16} stroke="#dc2626" />
+                <Text style={styles.logoutLabel}>Đăng xuất</Text>
+              </TouchableOpacity>
             </View>
           </View>
         </>
@@ -619,6 +637,9 @@ const styles = StyleSheet.create({
   orderTotal: { fontSize: 14, color: '#10b981' },
   orderStatus: { fontSize: 12, fontWeight: 'bold' },
   addButton: { backgroundColor: '#ea580c', borderRadius: 8, paddingVertical: 12, paddingHorizontal: 16, alignItems: 'center', justifyContent: 'center', margin: 16 },
+  logoutContainer: { paddingHorizontal: 18, paddingBottom: 24 },
+  logoutButton: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', borderRadius: 12, borderWidth: 1, borderColor: '#fecaca', paddingVertical: 12, backgroundColor: '#fff' },
+  logoutLabel: { marginLeft: 8, color: '#dc2626', fontWeight: 'bold', fontSize: 14 },
 });
 
 export default SellerDashboardScreen;

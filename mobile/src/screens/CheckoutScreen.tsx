@@ -82,6 +82,10 @@ interface APICartItemWithSize {
   };
 }
 
+type CheckoutSelectedCartItem = APICartItemWithSize & {
+  customToppings?: string[];
+};
+
 type CartItem = {
   id: number;
   food_id: number; // Add food_id for API calls
@@ -346,7 +350,7 @@ export default function CheckoutScreen() {
 
       // Build store info map from cart items
       const storeMap: {[storeName: string]: StoreDeliveryInfo} = {};
-      paramSelectedCartItems.forEach((item: APICartItemWithSize) => {
+      paramSelectedCartItems.forEach((item: CheckoutSelectedCartItem) => {
         const storeName = item.food.store?.store_name || 'Unknown Restaurant';
         const storeLatitude = parseCoordinate(item.food.store?.latitude ?? null);
         const storeLongitude = parseCoordinate(item.food.store?.longitude ?? null);
@@ -364,10 +368,11 @@ export default function CheckoutScreen() {
       setStoreInfoMap(storeMap);
       console.log('CheckoutScreen - Store map:', storeMap);
 
-      const checkoutItems: CartItem[] = paramSelectedCartItems.map((item: APICartItemWithSize) => {
+      const checkoutItems: CartItem[] = paramSelectedCartItems.map((item: CheckoutSelectedCartItem) => {
         console.log('CheckoutScreen - Processing item image:', item.food.image);
         const storeLatitude = parseCoordinate(item.food.store?.latitude ?? null);
         const storeLongitude = parseCoordinate(item.food.store?.longitude ?? null);
+        const toppingList = Array.isArray(item.customToppings) ? item.customToppings : [];
         return {
           id: item.id,
           food_id: item.food_id, // Store food_id for API calls
@@ -377,7 +382,7 @@ export default function CheckoutScreen() {
           image: item.food.image,
           quantity: item.quantity,
           size: item.size?.size_name || 'Regular',
-          toppings: [],
+          toppings: toppingList,
           totalPrice: item.subtotal,
           note: item.item_note || '',
           storeId: item.food.store?.id ?? undefined,
@@ -1294,7 +1299,7 @@ export default function CheckoutScreen() {
 
           {/* Món ăn đã chọn - Grouped by Store */}
           <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Món ăn đã chọn ({selectedItems.length} items)</Text>
+            <Text style={styles.sectionTitle}>Món ăn đã chọn ({selectedItems.length} món)</Text>
 
             <View>
               {Object.entries(groupedItems).map(([storeName, items]) => 

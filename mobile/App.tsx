@@ -92,11 +92,14 @@ function MainTabs() {
     console.log('MainTabs - activeRole from storage:', activeRole);
     console.log('MainTabs - user role:', user?.role);
     
-    // If user is shipper, they can choose between shipper and customer mode
     if (user?.role === 'Người vận chuyển') {
+      if (!activeRole) {
+        await AsyncStorage.setItem("activeRole", "shipper");
+        setMode("shipper");
+        return;
+      }
       setMode(activeRole === "shipper" ? "shipper" : "customer");
     } else {
-      // Other users (customers, admins) default to customer mode
       setMode("customer");
     }
   }, [user?.role]);
