@@ -6,6 +6,15 @@ export interface ApiResponse<T = any> {
     };
   }
   
+  export interface ShipperApplication {
+    id: number;       // User ID
+    username: string;
+    fullname: string;
+    email?: string;
+    phone_number?: string;
+    is_shipper_registered: boolean;
+  }
+
   export interface LoginResponse {
     access: string;
     refresh: string;
