@@ -70,7 +70,8 @@ class Order(models.Model):
     
     # New many-to-many relationship with promotions
     promotions = models.ManyToManyField('promotions.Promo', through='promotions.OrderPromo', blank=True, related_name='orders')
-    
+    # promotions = models.ManyToManyField('promotions.Promo', blank=True, related_name='orders')
+
     class Meta:
         db_table = 'orders'
     
