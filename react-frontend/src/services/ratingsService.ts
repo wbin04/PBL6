@@ -28,7 +28,8 @@ export interface CreateRatingRequest {
 // Get ratings for a specific food item
 export const getRatingsByFood = async (foodId: number): Promise<Rating[]> => {
   try {
-    const result = await makeRequest(`/api/ratings/?food_id=${foodId}`);
+    // Backend uses 'food' parameter, not 'food_id'
+    const result = await makeRequest(`/api/ratings/?food=${foodId}`);
     // Ensure we always return an array
     return Array.isArray(result) ? result : [];
   } catch (error) {

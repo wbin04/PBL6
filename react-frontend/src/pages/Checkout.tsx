@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { API, getImageUrl } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import { paymentService } from "@/services/paymentService";
 
 // Types
 type CartItem = {
@@ -151,7 +152,8 @@ const Checkout: React.FC = () => {
 
       const subtotal = parseFloat(cart.total_money) || 0;
 
-      // Calculate delivery fee based on number of stores (15,000 VND per store)
+      // Calculate estimated delivery fee (actual fee calculated by backend based on distance)
+      // Base fee: 15,000 VND + 4,000 VND per km from store to customer
       const storeNames = new Set();
       cart.items.forEach((item) => {
         try {
@@ -175,7 +177,8 @@ const Checkout: React.FC = () => {
         }
       });
       const numberOfStores = storeNames.size || 1; // At least 1 store
-      const deliveryFee = numberOfStores * 15000;
+      // Estimated: 15k base + ~3km avg = 27k per store (actual fee calculated by backend)
+      const deliveryFee = numberOfStores * 27000;
 
       // Calculate discount from selected promos
       let discount = 0;
@@ -331,43 +334,62 @@ const Checkout: React.FC = () => {
       // Create order first
       const orderResponse = await API.post("/orders/", orderData);
       console.log("Order created:", orderResponse);
+      console.log("Order response type:", typeof orderResponse);
+      console.log("Is array:", Array.isArray(orderResponse));
 
       // If payment method is online, create payment link
       if (formData.payment_method === "ONLINE") {
         try {
           // Extract order ID - handle both array and single object response
-          const orders = Array.isArray(orderResponse)
-            ? orderResponse
-            : [orderResponse];
-          const firstOrder = orders[0];
-          const orderId = firstOrder?.id;
+          let orderId = null;
+          let userId = null;
+
+          // Case 1: Response has 'orders' array (grouped orders)
+          if (orderResponse && typeof orderResponse === "object") {
+            const response = orderResponse as {
+              orders?: Array<{ id?: number; user?: { id?: number } }>;
+              id?: number;
+              user?: { id?: number };
+            };
+
+            if (
+              response.orders &&
+              Array.isArray(response.orders) &&
+              response.orders.length > 0
+            ) {
+              orderId = response.orders[0]?.id;
+              userId = response.orders[0]?.user?.id;
+            }
+            // Case 2: Response is a single order object
+            else if (response.id) {
+              orderId = response.id;
+              userId = response.user?.id;
+            }
+          }
+          // Case 3: Response is an array of orders
+          else if (Array.isArray(orderResponse) && orderResponse.length > 0) {
+            orderId = orderResponse[0]?.id;
+            userId = orderResponse[0]?.user?.id;
+          }
+
+          console.log("Extracted orderId:", orderId);
+          console.log("Extracted userId:", userId);
 
           if (!orderId) {
+            console.error(
+              "Could not extract order ID from response:",
+              orderResponse
+            );
             throw new Error("Không nhận được order ID");
           }
 
-          // Create payment link with PayOS
-          const paymentResponse = await fetch(
-            "http://localhost:8001/create_payment_link",
-            {
-              method: "POST",
-              headers: {
-                "Content-Type": "application/json",
-              },
-              body: JSON.stringify({
-                order_id: orderId,
-                amount: Math.round(calculations.total),
-                message: `Thanh toán đơn hàng #${orderId}`,
-                user_id: firstOrder?.user?.id,
-              }),
-            }
-          );
-
-          const paymentData = await paymentResponse.json();
-
-          if (paymentData.error) {
-            throw new Error(paymentData.error);
-          }
+          // Create payment link with PayOS using payment service
+          const paymentData = await paymentService.createPaymentLink({
+            order_id: orderId,
+            amount: Math.round(calculations.total),
+            message: `Thanh toán đơn hàng #${orderId}`,
+            user_id: userId,
+          });
 
           if (paymentData.checkoutUrl) {
             // Redirect to PayOS checkout
@@ -625,7 +647,7 @@ const Checkout: React.FC = () => {
                             item.food.image_url || item.food.image
                           );
                           e.currentTarget.src =
-                            "https://via.placeholder.com/64x64/f97316/ffffff?text=🍔";
+                            "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='64' height='64'%3E%3Crect fill='%23f97316' width='64' height='64'/%3E%3Ctext x='50%25' y='50%25' text-anchor='middle' dy='.3em' font-size='32'%3E🍔%3C/text%3E%3C/svg%3E";
                         }}
                       />
                     </div>
@@ -678,9 +700,13 @@ const Checkout: React.FC = () => {
                   <span>{formatCurrency(calculations.subtotal)}</span>
                 </div>
                 <div className="flex justify-between">
-                  <span>Phí giao hàng:</span>
+                  <span>Phí giao hàng (ước tính):</span>
                   <span>{formatCurrency(calculations.deliveryFee)}</span>
                 </div>
+                <p className="text-xs text-gray-500 italic">
+                  * Phí giao hàng thực tế: 15,000đ + 4,000đ/km (tính theo khoảng
+                  cách)
+                </p>
                 {calculations.discount > 0 && (
                   <div className="flex justify-between text-green-600">
                     <span>Giảm giá:</span>

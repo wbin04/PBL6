@@ -3,6 +3,7 @@ import { Link, useNavigate } from "react-router-dom";
 import { API, getImageUrl, formatDate, isAuthenticated } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { paymentService } from "@/services/paymentService";
 
 // Backend Order interface
 interface BackendOrderItem {
@@ -32,6 +33,7 @@ interface BackendOrder {
   delivery_status: string;
   total_money: string; // Chỉ giá món ăn
   payment_method: string;
+  payment_status?: string; // Trạng thái thanh toán: PAID, PENDING, CANCELLED
   receiver_name: string;
   phone_number: string;
   ship_address: string;
@@ -82,8 +84,9 @@ const Orders: React.FC = () => {
   const [selectedOrder, setSelectedOrder] = useState<BackendOrder | null>(null);
   const [showDetailModal, setShowDetailModal] = useState(false);
   const [showRatingModal, setShowRatingModal] = useState(false);
-  const [currentRating, setCurrentRating] = useState(0);
-  const [ratingContent, setRatingContent] = useState("");
+  const [foodRatings, setFoodRatings] = useState<
+    Record<number, { rating: number; content: string }>
+  >({});
 
   const navigate = useNavigate();
 
@@ -276,7 +279,7 @@ const Orders: React.FC = () => {
       const windowWithCartUpdate = window as typeof window & {
         updateCartCount?: () => void;
       };
-      if (windowWithCartUpdate.updateCartCount) {
+      if (windowWithCartUpdate.updateCartUpdate) {
         windowWithCartUpdate.updateCartCount();
       }
     } catch (error) {
@@ -285,32 +288,89 @@ const Orders: React.FC = () => {
     }
   };
 
+  const retryPayment = async (order: BackendOrder) => {
+    if (!confirm("Bạn có muốn thanh toán lại đơn hàng này?")) {
+      return;
+    }
+
+    try {
+      const paymentData = await paymentService.createPaymentLink({
+        order_id: order.id,
+        amount: Math.round(getOrderTotal(order)),
+        message: `Thanh toán đơn hàng #${order.id}`,
+        user_id: order.user?.id,
+      });
+
+      if (paymentData.checkoutUrl) {
+        window.location.href = paymentData.checkoutUrl;
+      } else {
+        throw new Error("Không nhận được link thanh toán");
+      }
+    } catch (error) {
+      console.error("Payment error:", error);
+      alert(
+        `Không thể tạo link thanh toán: ${
+          error instanceof Error ? error.message : error
+        }`
+      );
+    }
+  };
+
   const openRatingModal = (orderId: number) => {
     const order = orders.find((o) => o.id === orderId);
     if (order) {
       setSelectedOrder(order);
-      setCurrentRating(0);
-      setRatingContent("");
+      // Initialize ratings for each food item
+      const initialRatings: Record<
+        number,
+        { rating: number; content: string }
+      > = {};
+      order.items.forEach((item) => {
+        initialRatings[item.food.id] = { rating: 0, content: "" };
+      });
+      setFoodRatings(initialRatings);
       setShowRatingModal(true);
     }
+  };
+
+  const updateFoodRating = (foodId: number, rating: number) => {
+    setFoodRatings((prev) => ({
+      ...prev,
+      [foodId]: { ...prev[foodId], rating },
+    }));
+  };
+
+  const updateFoodContent = (foodId: number, content: string) => {
+    // Limit to 100 characters as per backend
+    const limitedContent = content.slice(0, 100);
+    setFoodRatings((prev) => ({
+      ...prev,
+      [foodId]: { ...prev[foodId], content: limitedContent },
+    }));
   };
 
   const saveRating = async () => {
     if (!selectedOrder) return;
 
-    if (currentRating < 1) {
-      alert("Vui lòng chọn số sao đánh giá");
+    // Check if at least one food has a rating
+    const hasAnyRating = Object.values(foodRatings).some((r) => r.rating > 0);
+    if (!hasAnyRating) {
+      alert("Vui lòng đánh giá ít nhất một món ăn");
       return;
     }
 
     try {
+      // Submit ratings for each food that has a rating
       for (const item of selectedOrder.items) {
-        await API.post("/ratings/", {
-          food: item.food.id,
-          order: selectedOrder.id,
-          rating: currentRating,
-          content: ratingContent,
-        });
+        const foodRating = foodRatings[item.food.id];
+        if (foodRating && foodRating.rating > 0) {
+          await API.post("/ratings/", {
+            food: item.food.id,
+            order: selectedOrder.id,
+            rating: foodRating.rating,
+            content: foodRating.content || "",
+          });
+        }
       }
       alert("Cảm ơn bạn đã đánh giá!");
       setShowRatingModal(false);
@@ -435,6 +495,30 @@ const Orders: React.FC = () => {
                         🏪 {order.store_name}
                       </p>
                     )}
+                    <div className="flex items-center gap-2 mt-1">
+                      <span className="text-xs text-gray-500">
+                        {order.payment_method === "ONLINE"
+                          ? "💳 Thanh toán online"
+                          : "💵 Thanh toán khi nhận hàng"}
+                      </span>
+                      {order.payment_method === "ONLINE" &&
+                        order.payment_status && (
+                          <span
+                            className={`px-2 py-0.5 rounded text-xs font-semibold ${
+                              order.payment_status === "PAID"
+                                ? "bg-green-100 text-green-700"
+                                : order.payment_status === "CANCELLED"
+                                ? "bg-red-100 text-red-700"
+                                : "bg-yellow-100 text-yellow-700"
+                            }`}>
+                            {order.payment_status === "PAID"
+                              ? "✓ Đã thanh toán"
+                              : order.payment_status === "CANCELLED"
+                              ? "✗ Đã hủy"
+                              : "⏳ Chưa thanh toán"}
+                          </span>
+                        )}
+                    </div>
                   </div>
                   <span
                     className={`px-3 py-1 rounded-full text-xs font-bold uppercase ${getStatusClass(
@@ -520,6 +604,19 @@ const Orders: React.FC = () => {
                       Hủy đơn
                     </Button>
                   )}
+
+                  {/* Nút thanh toán lại cho đơn ONLINE chưa thanh toán */}
+                  {order.payment_method === "ONLINE" &&
+                    order.payment_status !== "PAID" &&
+                    order.order_status !== "Đã huỷ" &&
+                    order.order_status !== "Đã giao" && (
+                      <Button
+                        size="sm"
+                        className="bg-blue-500 hover:bg-blue-600"
+                        onClick={() => retryPayment(order)}>
+                        💳 Thanh toán ngay
+                      </Button>
+                    )}
 
                   {order.order_status === "Đã giao" && (
                     <>
@@ -706,43 +803,113 @@ const Orders: React.FC = () => {
 
       {/* Rating Modal */}
       {showRatingModal && selectedOrder && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-lg max-w-md w-full">
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4 overflow-y-auto">
+          <div className="bg-white rounded-lg max-w-2xl w-full my-8">
             <div className="p-6">
-              <h2 className="text-xl font-bold mb-4">Đánh giá đơn hàng</h2>
+              <h2 className="text-xl font-bold mb-4">
+                Đánh giá đơn hàng #{selectedOrder.id}
+              </h2>
+              <p className="text-sm text-gray-600 mb-6">
+                Đánh giá và nhận xét của bạn sẽ giúp người khác có thêm thông
+                tin tham khảo
+              </p>
 
-              <div className="mb-4">
-                <label className="block font-medium mb-2">Điểm đánh giá</label>
-                <div className="text-center">
-                  {[1, 2, 3, 4, 5].map((star) => (
-                    <button
-                      key={star}
-                      className="text-3xl cursor-pointer hover:text-yellow-400"
-                      onClick={() => setCurrentRating(star)}>
-                      {star <= currentRating ? "★" : "☆"}
-                    </button>
-                  ))}
-                </div>
+              {/* List of food items to rate */}
+              <div className="space-y-6 max-h-[60vh] overflow-y-auto pr-2">
+                {selectedOrder.items.map((item) => (
+                  <div
+                    key={item.id}
+                    className="border rounded-lg p-4 bg-gray-50">
+                    {/* Food info */}
+                    <div className="flex gap-3 mb-4">
+                      <img
+                        src={
+                          item.food.image_url ||
+                          getImageUrl(item.food.image) ||
+                          "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='100' height='100'%3E%3Crect fill='%23ddd' width='100' height='100'/%3E%3Ctext x='50%25' y='50%25' text-anchor='middle' dy='.3em' fill='%23999'%3ENo Image%3C/text%3E%3C/svg%3E"
+                        }
+                        alt={item.food.title}
+                        className="w-16 h-16 object-cover rounded"
+                      />
+                      <div className="flex-1">
+                        <h4 className="font-semibold">{item.food.title}</h4>
+                        {item.food_option && (
+                          <p className="text-sm text-gray-600">
+                            {item.food_option.size_name}
+                          </p>
+                        )}
+                        <p className="text-sm text-gray-500">
+                          Số lượng: {item.quantity}
+                        </p>
+                      </div>
+                    </div>
+
+                    {/* Star rating */}
+                    <div className="mb-3">
+                      <label className="block text-sm font-medium mb-2">
+                        Đánh giá sao
+                      </label>
+                      <div className="flex gap-1">
+                        {[1, 2, 3, 4, 5].map((star) => (
+                          <button
+                            key={star}
+                            className="text-2xl cursor-pointer hover:scale-110 transition-transform"
+                            onClick={() =>
+                              updateFoodRating(item.food.id, star)
+                            }>
+                            <span
+                              className={
+                                star <= (foodRatings[item.food.id]?.rating || 0)
+                                  ? "text-yellow-400"
+                                  : "text-gray-300"
+                              }>
+                              ★
+                            </span>
+                          </button>
+                        ))}
+                        <span className="ml-2 text-sm text-gray-600 self-center">
+                          {foodRatings[item.food.id]?.rating > 0
+                            ? `${foodRatings[item.food.id]?.rating} sao`
+                            : "Chưa đánh giá"}
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Review content */}
+                    <div>
+                      <label className="block text-sm font-medium mb-2">
+                        Nhận xét (tùy chọn)
+                      </label>
+                      <textarea
+                        rows={3}
+                        className="w-full p-3 border rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
+                        placeholder="Chia sẻ trải nghiệm của bạn về món ăn này..."
+                        maxLength={100}
+                        value={foodRatings[item.food.id]?.content || ""}
+                        onChange={(e) =>
+                          updateFoodContent(item.food.id, e.target.value)
+                        }
+                      />
+                      <p className="text-xs text-gray-500 mt-1 text-right">
+                        {foodRatings[item.food.id]?.content?.length || 0}/100 ký
+                        tự
+                      </p>
+                    </div>
+                  </div>
+                ))}
               </div>
 
-              <div className="mb-4">
-                <label className="block font-medium mb-2">
-                  Nội dung đánh giá
-                </label>
-                <textarea
-                  rows={4}
-                  className="w-full p-3 border rounded"
-                  value={ratingContent}
-                  onChange={(e) => setRatingContent(e.target.value)}
-                />
-              </div>
-
-              <div className="flex justify-end gap-2">
-                <Button onClick={saveRating}>Lưu</Button>
+              {/* Action buttons */}
+              <div className="flex justify-end gap-2 mt-6 pt-4 border-t">
                 <Button
                   variant="outline"
                   onClick={() => setShowRatingModal(false)}>
-                  Đóng
+                  Hủy
+                </Button>
+                <Button
+                  onClick={saveRating}
+                  className="bg-orange-500 hover:bg-orange-600">
+                  Gửi đánh giá
                 </Button>
               </div>
             </div>

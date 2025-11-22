@@ -77,17 +77,58 @@ const FoodDetailModal: React.FC<FoodDetailModalProps> = ({
 
     try {
       setIsLoadingRatings(true);
+      console.log("🔍 DEBUG: Loading ratings for food ID:", food.id);
       const ratingsData = await getRatingsByFood(food.id);
+      console.log("📦 DEBUG: Raw ratings data:", ratingsData);
+      console.log("📊 DEBUG: Ratings count:", ratingsData?.length || 0);
+
+      // Log each rating item structure
+      if (ratingsData && ratingsData.length > 0) {
+        ratingsData.forEach((r, idx) => {
+          console.log(`📝 DEBUG Rating ${idx + 1}:`, {
+            raw: r,
+            hasId: "id" in r,
+            idType: typeof r.id,
+            idValue: r.id,
+            hasRating: "rating" in r,
+            ratingType: typeof r.rating,
+            ratingValue: r.rating,
+            hasContent: "content" in r,
+            contentValue: r.content,
+            hasComment: "comment" in r,
+            commentValue: r.comment,
+            allKeys: Object.keys(r),
+          });
+        });
+      }
+
       // Filter out invalid ratings and ensure data integrity
-      const validRatings = (ratingsData || []).filter(
-        (rating) =>
-          rating &&
-          typeof rating.id === "number" &&
-          typeof rating.rating === "number"
+      // Backend returns: {username, rating, content} without id field
+      const validRatings = (ratingsData || [])
+        .filter(
+          (rating) =>
+            rating && typeof rating.rating === "number" && rating.rating > 0
+        )
+        .map((rating, index) => ({
+          // Add synthetic id since backend doesn't return one
+          id: index + 1,
+          rating: rating.rating,
+          comment: rating.content || "", // Backend uses 'content' not 'comment'
+          user: {
+            id: 0,
+            fullname: rating.username || "Khách hàng",
+          },
+          created_date: rating.created_date || new Date().toISOString(),
+        }));
+      console.log("✅ DEBUG: Valid ratings after filter:", validRatings);
+      console.log(
+        "💬 DEBUG: Ratings with comments:",
+        validRatings.filter((r) => r.comment)
       );
+
       setRatings(validRatings);
     } catch (err) {
-      console.error("Error loading ratings:", err);
+      console.error("❌ Error loading ratings:", err);
       // Don't set error for ratings as it's not critical
       setRatings([]);
     } finally {
@@ -256,18 +297,47 @@ const FoodDetailModal: React.FC<FoodDetailModalProps> = ({
           </div>
 
           {/* Rating Display */}
-          {detailedFood &&
-            detailedFood.rating_count &&
-            detailedFood.rating_count > 0 &&
-            detailedFood.average_rating && (
-              <div className="flex items-center mb-3">
-                <StarRating rating={Math.round(detailedFood.average_rating)} />
-                <span className="ml-2 text-sm text-gray-600">
-                  {detailedFood.average_rating.toFixed(1)} (
-                  {detailedFood.rating_count} đánh giá)
-                </span>
-              </div>
-            )}
+          {(() => {
+            // Try to get rating from detailedFood first (from backend aggregate)
+            if (
+              detailedFood &&
+              detailedFood.rating_count &&
+              detailedFood.rating_count > 0 &&
+              detailedFood.average_rating
+            ) {
+              return (
+                <div className="flex items-center mb-3">
+                  <StarRating
+                    rating={Math.round(detailedFood.average_rating)}
+                  />
+                  <span className="ml-2 text-sm text-gray-600">
+                    {detailedFood.average_rating.toFixed(1)} (
+                    {detailedFood.rating_count} đánh giá)
+                  </span>
+                </div>
+              );
+            }
+
+            // Fallback: Calculate from loaded ratings
+            const validRatings = ratings.filter(
+              (r) => r && r.rating && r.rating > 0
+            );
+            if (validRatings.length > 0) {
+              const avgRating =
+                validRatings.reduce((sum, r) => sum + r.rating, 0) /
+                validRatings.length;
+              return (
+                <div className="flex items-center mb-3">
+                  <StarRating rating={Math.round(avgRating)} />
+                  <span className="ml-2 text-sm text-gray-600">
+                    {avgRating.toFixed(1)} ({validRatings.length} đánh giá)
+                  </span>
+                </div>
+              );
+            }
+
+            return null;
+          })()}
 
           <p className="text-gray-600 leading-relaxed">
             {currentFood.description || "Không có mô tả"}
@@ -384,33 +454,62 @@ const FoodDetailModal: React.FC<FoodDetailModalProps> = ({
         {Array.isArray(ratings) && ratings.length > 0 && (
           <div className="mb-6">
             <h3 className="text-lg font-semibold text-gray-900 mb-4">
-              Đánh giá ({ratings.length})
+              Đánh giá từ khách hàng ({ratings.length})
             </h3>
             <div className="space-y-4 max-h-60 overflow-y-auto">
               {ratings
                 .filter((rating) => rating && rating.id)
-                .map((rating) => (
-                  <div
-                    key={rating.id}
-                    className="border-b border-gray-200 pb-4 last:border-b-0">
-                    <div className="flex items-center justify-between mb-2">
-                      <span className="font-medium text-gray-900">
-                        {rating.user?.fullname || "Người dùng ẩn danh"}
-                      </span>
-                      <StarRating rating={rating.rating || 0} />
+                .map((rating) => {
+                  // Only show rating if it has a star rating or comment
+                  const hasRating = rating.rating && rating.rating > 0;
+                  const hasComment =
+                    rating.comment && rating.comment.trim().length > 0;
+
+                  console.log("🎯 DEBUG Rating item:", {
+                    id: rating.id,
+                    rating: rating.rating,
+                    hasRating,
+                    comment: rating.comment,
+                    hasComment,
+                    willDisplay: hasRating || hasComment,
+                  });
+
+                  if (!hasRating && !hasComment) {
+                    return null;
+                  }
+
+                  return (
+                    <div
+                      key={rating.id}
+                      className="border-b border-gray-200 pb-4 last:border-b-0">
+                      <div className="flex items-center justify-between mb-2">
+                        <span className="font-medium text-gray-900">
+                          {rating.user?.fullname || "Khách hàng"}
+                        </span>
+                        {hasRating && (
+                          <StarRating rating={rating.rating || 0} />
+                        )}
+                      </div>
+                      {hasComment && (
+                        <p className="text-gray-600 text-sm leading-relaxed">
+                          {rating.comment}
+                        </p>
+                      )}
+                      {rating.created_date && (
+                        <p className="text-xs text-gray-400 mt-2">
+                          {new Date(rating.created_date).toLocaleDateString(
+                            "vi-VN",
+                            {
+                              year: "numeric",
+                              month: "long",
+                              day: "numeric",
+                            }
+                          )}
+                        </p>
+                      )}
                     </div>
-                    {rating.comment && (
-                      <p className="text-gray-600 text-sm">{rating.comment}</p>
-                    )}
-                    <p className="text-xs text-gray-400 mt-1">
-                      {rating.created_date
-                        ? new Date(rating.created_date).toLocaleDateString(
-                            "vi-VN"
-                          )
-                        : "N/A"}
-                    </p>
-                  </div>
-                ))}
+                  );
+                })}
             </div>
             {isLoadingRatings && (
               <div className="text-center py-4">

@@ -356,7 +356,7 @@ const Cart: React.FC = () => {
             0
           )
         : 0;
-    const deliveryFee = selectedSubtotal > 0 ? 15000 : 0;
+    const deliveryFee = 0; // Bỏ phí ship
     const total = selectedSubtotal + deliveryFee;
 
     return { subtotal: selectedSubtotal, deliveryFee, total };
@@ -573,22 +573,10 @@ const Cart: React.FC = () => {
                     .reduce((total, item) => total + item.quantity, 0)}
                 </span>
               </div>
-              <div className="flex justify-between text-sm">
-                <span>Tạm tính:</span>
-                <span className="text-blue-600 font-bold">
-                  {formatCurrency(selectedCalculations.subtotal)}
-                </span>
-              </div>
-              <div className="flex justify-between text-sm">
-                <span>Phí giao hàng:</span>
-                <span className="text-blue-600 font-bold">
-                  {formatCurrency(selectedCalculations.deliveryFee)}
-                </span>
-              </div>
-              <div className="flex justify-between text-sm font-bold border-t border-blue-200 pt-2 mt-2">
+              <div className="flex justify-between text-sm font-bold">
                 <span>Tổng đã chọn:</span>
                 <span className="text-blue-600">
-                  {formatCurrency(selectedCalculations.total)}
+                  {formatCurrency(selectedCalculations.subtotal)}
                 </span>
               </div>
             </div>
