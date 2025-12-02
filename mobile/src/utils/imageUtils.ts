@@ -27,15 +27,24 @@ export function getImageSource(img?: ImageName | string) {
       // Remove leading slash if present
       const cleanPath = img.startsWith('/') ? img.slice(1) : img;
       
-      // If it starts with media/ or assets/, construct full URL
-      if (cleanPath.startsWith('media/') || cleanPath.startsWith('assets/')) {
-        const fullUrl = `${API_CONFIG.BASE_URL}/${cleanPath}`;
-        return { uri: fullUrl };
+      // Normalize base URL: remove trailing /api if present (API_CONFIG.BASE_URL often contains /api)
+      const base = API_CONFIG.BASE_URL.replace(/\/api$/, '');
+
+      // If it starts with media/, it's already a media path -> use directly
+      if (cleanPath.startsWith('media/')) {
+        const fullUrl = `${base}/${cleanPath}`;
+        return { uri: encodeURI(fullUrl) };
       }
-      
-      // For other relative paths, try to construct full URL
-      const fullUrl = `${API_CONFIG.BASE_URL}/media/${cleanPath}`;
-      return { uri: fullUrl };
+
+      // If it starts with assets/, server serves those under /media/assets/
+      if (cleanPath.startsWith('assets/')) {
+        const fullUrl = `${base}/media/${cleanPath}`;
+        return { uri: encodeURI(fullUrl) };
+      }
+
+      // For other relative paths, assume they live under /media
+      const fullUrl = `${base}/media/${cleanPath}`;
+      return { uri: encodeURI(fullUrl) };
     }
 
     // Return default placeholder for any other case

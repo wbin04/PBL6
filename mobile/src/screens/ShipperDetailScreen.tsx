@@ -1,9 +1,10 @@
-
 import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, FlatList, TouchableOpacity, ActivityIndicator, Modal, ScrollView, KeyboardAvoidingView, Platform, Alert } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRoute, useNavigation, useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { shipperApi, ordersApi } from '../services/api';
+import { Fonts } from '../constants/Fonts';
 
 interface Shipper {
   id: number;
@@ -16,11 +17,11 @@ interface Shipper {
 
 interface Order {
   id: number;
-  total_money: string; // Changed from total_amount
+  total_money: string;
   order_status: string;
   delivery_status: string;
   receiver_name: string;
-  phone_number: string; // Changed from receiver_phone
+  phone_number: string;
   ship_address: string;
   created_date: string;
   store_name?: string;
@@ -37,7 +38,6 @@ interface OrdersData {
     results: Order[];
   };
 }
-
 
 const ShipperDetailScreen: React.FC = () => {
   const route = useRoute();
@@ -150,7 +150,6 @@ const ShipperDetailScreen: React.FC = () => {
       setLoading(true);
       console.log('Fetching order detail for ID:', order.id);
 
-      // Fetch detailed order data
       const detailedOrder = await ordersApi.admin.getOrder(order.id) as any;
       console.log('Detailed order:', detailedOrder);
 
@@ -184,10 +183,8 @@ const ShipperDetailScreen: React.FC = () => {
       const updatedOrder = await ordersApi.admin.updateOrderStatus(orderId, data) as any;
       console.log('Order status updated:', updatedOrder);
 
-      // Refresh orders data
       fetchOrdersData(selectedStatus === 'all' ? undefined : selectedStatus);
 
-      // Update selected order if it's the same
       if (selectedOrder && selectedOrder.id === orderId) {
         setSelectedOrder({ ...selectedOrder, order_status: newStatus, cancel_reason: cancelReason });
       }
@@ -205,20 +202,18 @@ const ShipperDetailScreen: React.FC = () => {
 
   if (!ordersData && loading) {
     return (
-      <View style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}>
-        <ActivityIndicator size="large" color="#ea580c" />
-        <Text style={{ marginTop: 10, color: '#6b7280' }}>Đang tải dữ liệu...</Text>
-      </View>
+      <SafeAreaView style={styles.safeArea} edges={['top']}>
+        <View style={styles.loadingFullScreen}>
+          <ActivityIndicator size="large" color="#ea580c" />
+          <Text style={styles.loadingFullScreenText}>Đang tải dữ liệu...</Text>
+        </View>
+      </SafeAreaView>
     );
   }
 
   // Header component
   const renderHeader = () => (
-    <>
-      <TouchableOpacity style={styles.backBtn} onPress={() => navigation.goBack()}>
-        <Text style={styles.backIcon}>{'←'}</Text>
-      </TouchableOpacity>
-      
+    <View style={styles.headerContainer}>
       {/* Shipper Info Card */}
       <View style={styles.card}>
         <View style={styles.avatar}>
@@ -227,27 +222,45 @@ const ShipperDetailScreen: React.FC = () => {
           </Text>
         </View>
         <Text style={styles.shipperName}>{shipper.fullname}</Text>
-        <Text style={styles.shipperPhone}>SĐT: {shipper.phone}</Text>
-        <Text style={styles.shipperEmail}>Email: {shipper.email}</Text>
-        <Text style={styles.shipperAddress}>Địa chỉ: {shipper.address}</Text>
+        <View style={styles.infoRow}>
+          <Ionicons name="call-outline" size={14} color="#6b7280" />
+          <Text style={styles.shipperPhone}>{shipper.phone}</Text>
+        </View>
+        <View style={styles.infoRow}>
+          <Ionicons name="mail-outline" size={14} color="#6b7280" />
+          <Text style={styles.shipperEmail}>{shipper.email}</Text>
+        </View>
+        <View style={styles.infoRow}>
+          <Ionicons name="location-outline" size={14} color="#6b7280" />
+          <Text style={styles.shipperAddress} numberOfLines={2}>{shipper.address}</Text>
+        </View>
       </View>
 
       {/* Orders Summary */}
       {ordersData && (
-        <View style={styles.summarySection}>
+        <View style={styles.summaryCard}>
           <Text style={styles.sectionTitle}>Tổng quan đơn hàng</Text>
           <View style={styles.summaryGrid}>
             <View style={styles.summaryItem}>
+              <View style={[styles.summaryIconContainer, { backgroundColor: '#dbeafe' }]}>
+                <Ionicons name="document-text-outline" size={24} color="#3b82f6" />
+              </View>
               <Text style={styles.summaryNumber}>{ordersData.total_orders}</Text>
               <Text style={styles.summaryLabel}>Tổng đơn</Text>
             </View>
             <View style={styles.summaryItem}>
+              <View style={[styles.summaryIconContainer, { backgroundColor: '#d1fae5' }]}>
+                <Ionicons name="checkmark-circle-outline" size={24} color="#10b981" />
+              </View>
               <Text style={styles.summaryNumber}>
                 {ordersData.status_counts['Đã giao'] || 0}
               </Text>
               <Text style={styles.summaryLabel}>Đã giao</Text>
             </View>
             <View style={styles.summaryItem}>
+              <View style={[styles.summaryIconContainer, { backgroundColor: '#fef3c7' }]}>
+                <Ionicons name="bicycle-outline" size={24} color="#f59e0b" />
+              </View>
               <Text style={styles.summaryNumber}>
                 {ordersData.status_counts['Đang giao'] || 0}
               </Text>
@@ -258,114 +271,155 @@ const ShipperDetailScreen: React.FC = () => {
       )}
 
       {/* Status Filter */}
-      <View style={styles.filterSection}>
+      <View style={styles.filterCard}>
         <Text style={styles.sectionTitle}>Lọc theo trạng thái</Text>
-        <View style={styles.filterButtons}>
+        <ScrollView 
+          horizontal 
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.filterScrollContent}
+        >
           {Object.entries(statusDisplayNames).map(([status, displayName]) => (
             <TouchableOpacity
               key={status}
               style={[
-                styles.filterButton,
-                selectedStatus === status && styles.filterButtonActive
+                styles.filterPill,
+                selectedStatus === status && styles.filterPillActive
               ]}
               onPress={() => handleStatusChange(status)}
+              activeOpacity={0.7}
             >
               <Text style={[
-                styles.filterButtonText,
-                selectedStatus === status && styles.filterButtonTextActive
+                styles.filterPillText,
+                selectedStatus === status && styles.filterPillTextActive
               ]}>
                 {displayName}
-                {ordersData && status !== 'all' && (
-                  <Text style={styles.filterCount}>
-                    {' '}({ordersData.status_counts[status] || 0})
-                  </Text>
-                )}
               </Text>
+              {ordersData && status !== 'all' && (
+                <View style={[
+                  styles.filterBadge,
+                  selectedStatus === status && styles.filterBadgeActive
+                ]}>
+                  <Text style={[
+                    styles.filterBadgeText,
+                    selectedStatus === status && styles.filterBadgeTextActive
+                  ]}>
+                    {ordersData.status_counts[status] || 0}
+                  </Text>
+                </View>
+              )}
             </TouchableOpacity>
           ))}
-        </View>
+        </ScrollView>
       </View>
-    </>
+
+      <Text style={styles.ordersTitle}>Danh sách đơn hàng</Text>
+    </View>
   );
 
   return (
-    <View style={styles.safeArea}>
-      {error ? (
-        <View style={styles.errorContainer}>
-          <Text style={styles.errorText}>{error}</Text>
+    <SafeAreaView style={styles.safeArea} edges={['top']}>
+      <View style={styles.container}>
+        {/* Header */}
+        <View style={styles.header}>
           <TouchableOpacity 
-            style={styles.retryButton}
-            onPress={() => fetchOrdersData(selectedStatus === 'all' ? undefined : selectedStatus)}
+            style={styles.backButton}
+            onPress={() => navigation.goBack()}
+            activeOpacity={0.7}
           >
-            <Text style={styles.retryButtonText}>Thử lại</Text>
+            <Ionicons name="arrow-back" size={24} color="#1f2937" />
           </TouchableOpacity>
+          <Text style={styles.headerTitle}>Chi tiết Shipper</Text>
+          <View style={styles.placeholder} />
         </View>
-      ) : (
-        <FlatList
-          data={ordersData?.orders.results || []}
-          keyExtractor={item => item.id.toString()}
-          ListHeaderComponent={renderHeader}
-          renderItem={({ item }) => (
-            <TouchableOpacity
-              style={styles.orderItem}
-              onPress={() => handleOrderPress(item)}
-              activeOpacity={0.7}
+
+        {error ? (
+          <View style={styles.errorContainer}>
+            <Ionicons name="alert-circle-outline" size={64} color="#ef4444" />
+            <Text style={styles.errorText}>{error}</Text>
+            <TouchableOpacity 
+              style={styles.retryButton}
+              onPress={() => fetchOrdersData(selectedStatus === 'all' ? undefined : selectedStatus)}
+              activeOpacity={0.8}
             >
-              <View style={styles.orderHeader}>
-                <Text style={styles.orderTitle}>
-                  Đơn hàng #{item.id}
-                </Text>
-                <View style={[
-                  styles.statusBadge,
-                  { backgroundColor: getStatusColor(item.delivery_status) }
-                ]}>
-                  <Text style={styles.statusText}>{item.delivery_status}</Text>
-                </View>
-              </View>
-              
-              <Text style={styles.orderInfo}>
-                Khách hàng: {item.receiver_name}
-              </Text>
-              <Text style={styles.orderInfo}>
-                SĐT: {item.phone_number}
-              </Text>
-              <Text style={styles.orderInfo}>
-                Địa chỉ: {item.ship_address}
-              </Text>
-              <Text style={styles.orderInfo}>
-                Tổng tiền: {formatCurrency(item.total_money)}
-              </Text>
-              <Text style={styles.orderDate}>
-                Ngày tạo: {formatDate(item.created_date)}
-              </Text>
-              
-              {/* Visual indicator */}
-              <View style={styles.tapIndicator}>
-                <Text style={styles.tapIndicatorText}>Nhấn để xem chi tiết</Text>
-                <Ionicons name="chevron-forward" size={16} color="#6b7280" />
-              </View>
+              <Ionicons name="refresh-outline" size={18} color="#fff" />
+              <Text style={styles.retryButtonText}>Thử lại</Text>
             </TouchableOpacity>
-          )}
-          ListEmptyComponent={
-            loading ? (
-              <View style={styles.loadingContainer}>
-                <ActivityIndicator color="#ea580c" />
-                <Text style={styles.loadingText}>Đang tải...</Text>
-              </View>
-            ) : (
-              <Text style={styles.emptyText}>
-                {selectedStatus === 'all' 
-                  ? 'Shipper này chưa có đơn hàng nào' 
-                  : `Không có đơn hàng nào ở trạng thái "${statusDisplayNames[selectedStatus]}"`
-                }
-              </Text>
-            )
-          }
-          contentContainerStyle={{ padding: 18, paddingBottom: 0 }}
-          refreshing={loading}
-          onRefresh={() => fetchOrdersData(selectedStatus === 'all' ? undefined : selectedStatus)}
-        />
-      )}
+          </View>
+        ) : (
+          <FlatList
+            data={ordersData?.orders.results || []}
+            keyExtractor={item => item.id.toString()}
+            ListHeaderComponent={renderHeader}
+            renderItem={({ item }) => (
+              <TouchableOpacity
+                style={styles.orderCard}
+                onPress={() => handleOrderPress(item)}
+                activeOpacity={0.9}
+              >
+                <View style={styles.orderHeader}>
+                  <View style={styles.orderIdContainer}>
+                    <Ionicons name="receipt-outline" size={18} color="#ea580c" />
+                    <Text style={styles.orderTitle}>#{item.id}</Text>
+                  </View>
+                  <View style={[
+                    styles.statusBadge,
+                    { backgroundColor: getStatusColor(item.delivery_status) }
+                  ]}>
+                    <Text style={styles.statusText}>{item.delivery_status}</Text>
+                  </View>
+                </View>
+                
+                <View style={styles.orderInfoRow}>
+                  <Ionicons name="person-outline" size={16} color="#6b7280" />
+                  <Text style={styles.orderInfo}>{item.receiver_name}</Text>
+                </View>
+                <View style={styles.orderInfoRow}>
+                  <Ionicons name="call-outline" size={16} color="#6b7280" />
+                  <Text style={styles.orderInfo}>{item.phone_number}</Text>
+                </View>
+                <View style={styles.orderInfoRow}>
+                  <Ionicons name="location-outline" size={16} color="#6b7280" />
+                  <Text style={styles.orderInfo} numberOfLines={2}>{item.ship_address}</Text>
+                </View>
+                <View style={styles.orderFooter}>
+                  <View style={styles.orderInfoRow}>
+                    <Ionicons name="cash-outline" size={16} color="#10b981" />
+                    <Text style={styles.orderPrice}>{formatCurrency(item.total_money)}</Text>
+                  </View>
+                  <Text style={styles.orderDate}>{formatDate(item.created_date)}</Text>
+                </View>
+                
+                <View style={styles.tapIndicator}>
+                  <Text style={styles.tapIndicatorText}>Xem chi tiết</Text>
+                  <Ionicons name="chevron-forward" size={16} color="#9ca3af" />
+                </View>
+              </TouchableOpacity>
+            )}
+            ListEmptyComponent={
+              loading ? (
+                <View style={styles.loadingContainer}>
+                  <ActivityIndicator color="#ea580c" />
+                  <Text style={styles.loadingText}>Đang tải...</Text>
+                </View>
+              ) : (
+                <View style={styles.emptyContainer}>
+                  <Ionicons name="document-outline" size={64} color="#d1d5db" />
+                  <Text style={styles.emptyText}>
+                    {selectedStatus === 'all' 
+                      ? 'Shipper này chưa có đơn hàng nào' 
+                      : `Không có đơn hàng "${statusDisplayNames[selectedStatus]}"`
+                    }
+                  </Text>
+                </View>
+              )
+            }
+            contentContainerStyle={styles.listContent}
+            showsVerticalScrollIndicator={false}
+            refreshing={loading}
+            onRefresh={() => fetchOrdersData(selectedStatus === 'all' ? undefined : selectedStatus)}
+          />
+        )}
+      </View>
 
       {/* Order Detail Modal */}
       <Modal
@@ -374,152 +428,188 @@ const ShipperDetailScreen: React.FC = () => {
         visible={orderDetailModalVisible}
         onRequestClose={closeOrderDetailModal}
       >
-        <View style={styles.overlay}>
-          <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={styles.keyboardAvoidingView}>
-            <View style={styles.orderDetailModal}>
-              <View style={styles.orderDetailHeader}>
-                <Text style={styles.orderDetailTitle}>Chi tiết đơn hàng</Text>
-                <TouchableOpacity style={styles.closeButton} onPress={closeOrderDetailModal}>
+        <View style={styles.modalOverlay}>
+          <KeyboardAvoidingView 
+            behavior={Platform.OS === 'ios' ? 'padding' : 'height'} 
+            style={styles.modalKeyboardView}
+          >
+            <View style={styles.modalContainer}>
+              <View style={styles.modalHeader}>
+                <Text style={styles.modalTitle}>Chi tiết đơn hàng</Text>
+                <TouchableOpacity 
+                  style={styles.modalCloseButton} 
+                  onPress={closeOrderDetailModal}
+                  activeOpacity={0.7}
+                >
                   <Ionicons name="close" size={24} color="#6b7280" />
                 </TouchableOpacity>
               </View>
-              <ScrollView style={styles.orderDetailContent}>
+              
+              <ScrollView 
+                style={styles.modalContent}
+                showsVerticalScrollIndicator={false}
+              >
                 {selectedOrder && (
                   <>
-                    <View style={styles.orderDetailSection}>
-                      <Text style={styles.orderDetailSectionTitle}>Thông tin đơn hàng</Text>
-                      <View style={styles.orderDetailItem}>
-                        <Text style={styles.orderDetailLabel}>Mã đơn hàng:</Text>
-                        <Text style={styles.orderDetailValue}>#{selectedOrder.id}</Text>
-                      </View>
-                      <View style={styles.orderDetailItem}>
-                        <Text style={styles.orderDetailLabel}>Khách hàng:</Text>
-                        <Text style={styles.orderDetailValue}>{selectedOrder.user?.fullname || selectedOrder.receiver_name || 'Khách hàng'}</Text>
-                      </View>
-                      <View style={styles.orderDetailItem}>
-                        <Text style={styles.orderDetailLabel}>Số điện thoại:</Text>
-                        <Text style={styles.orderDetailValue}>{selectedOrder.phone_number}</Text>
-                      </View>
-                      <View style={styles.orderDetailItem}>
-                        <Text style={styles.orderDetailLabel}>Cửa hàng:</Text>
-                        <Text style={styles.orderDetailValue}>{selectedOrder.store_name || 'Chưa xác định'}</Text>
-                      </View>
-                      <View style={styles.orderDetailItem}>
-                        <Text style={styles.orderDetailLabel}>Địa chỉ giao:</Text>
-                        <Text style={styles.orderDetailValue}>{selectedOrder.ship_address}</Text>
-                      </View>
-                      <View style={styles.orderDetailItem}>
-                        <Text style={styles.orderDetailLabel}>Thời gian đặt:</Text>
-                        <Text style={styles.orderDetailValue}>{formatDate(selectedOrder.created_date || selectedOrder.created_date_display)}</Text>
-                      </View>
-                      <View style={styles.orderDetailItem}>
-                        <Text style={styles.orderDetailLabel}>Trạng thái:</Text>
-                        <View style={[styles.orderDetailStatusBadge, { backgroundColor: getStatusColor(selectedOrder.order_status || selectedOrder.delivery_status) }]}>
-                          <Text style={styles.orderDetailStatusText}>{selectedOrder.order_status || selectedOrder.delivery_status}</Text>
+                    {/* Order Info Section */}
+                    <View style={styles.modalSection}>
+                      <Text style={styles.modalSectionTitle}>Thông tin đơn hàng</Text>
+                      <View style={styles.modalInfoCard}>
+                        <View style={styles.modalInfoRow}>
+                          <Text style={styles.modalLabel}>Mã đơn:</Text>
+                          <Text style={styles.modalValue}>#{selectedOrder.id}</Text>
                         </View>
-                      </View>
-                      {selectedOrder.note && (
-                        <View style={styles.orderDetailItem}>
-                          <Text style={styles.orderDetailLabel}>Ghi chú:</Text>
-                          <Text style={styles.orderDetailValue}>{selectedOrder.note}</Text>
+                        <View style={styles.modalInfoRow}>
+                          <Text style={styles.modalLabel}>Khách hàng:</Text>
+                          <Text style={styles.modalValue}>{selectedOrder.user?.fullname || selectedOrder.receiver_name || 'N/A'}</Text>
                         </View>
-                      )}
+                        <View style={styles.modalInfoRow}>
+                          <Text style={styles.modalLabel}>Số điện thoại:</Text>
+                          <Text style={styles.modalValue}>{selectedOrder.phone_number}</Text>
+                        </View>
+                        <View style={styles.modalInfoRow}>
+                          <Text style={styles.modalLabel}>Cửa hàng:</Text>
+                          <Text style={styles.modalValue}>{selectedOrder.store_name || 'N/A'}</Text>
+                        </View>
+                        <View style={styles.modalInfoRow}>
+                          <Text style={styles.modalLabel}>Địa chỉ:</Text>
+                          <Text style={[styles.modalValue, styles.modalValueMultiline]}>{selectedOrder.ship_address}</Text>
+                        </View>
+                        <View style={styles.modalInfoRow}>
+                          <Text style={styles.modalLabel}>Thời gian:</Text>
+                          <Text style={styles.modalValue}>{formatDate(selectedOrder.created_date)}</Text>
+                        </View>
+                        <View style={styles.modalInfoRow}>
+                          <Text style={styles.modalLabel}>Trạng thái:</Text>
+                          <View style={[
+                            styles.modalStatusBadge,
+                            { backgroundColor: getStatusColor(selectedOrder.order_status || selectedOrder.delivery_status) }
+                          ]}>
+                            <Text style={styles.modalStatusText}>
+                              {selectedOrder.order_status || selectedOrder.delivery_status}
+                            </Text>
+                          </View>
+                        </View>
+                        {selectedOrder.note && (
+                          <View style={styles.modalInfoRow}>
+                            <Text style={styles.modalLabel}>Ghi chú:</Text>
+                            <Text style={[styles.modalValue, styles.modalValueMultiline]}>{selectedOrder.note}</Text>
+                          </View>
+                        )}
+                      </View>
                     </View>
 
-                    <View style={styles.orderDetailSection}>
-                      <Text style={styles.orderDetailSectionTitle}>Món ăn đã đặt</Text>
-                      {selectedOrder.items && selectedOrder.items.length > 0 ? (
-                        <>
-                          {selectedOrder.items.map((item: any, idx: number) => (
-                            <View key={idx} style={styles.orderDetailFoodItem}>
-                              <View style={{ flex: 1 }}>
-                                <Text style={styles.orderDetailFoodName}>{item.food?.title || 'Món ăn'}</Text>
-                                {item.food_option && (
-                                  <Text style={styles.orderDetailFoodSize}>Size: {item.food_option.size_name}</Text>
-                                )}
-                                {item.food_note && (
-                                  <Text style={styles.orderDetailFoodSize}>Ghi chú: {item.food_note}</Text>
-                                )}
+                    {/* Food Items Section */}
+                    <View style={styles.modalSection}>
+                      <Text style={styles.modalSectionTitle}>Món ăn đã đặt</Text>
+                      <View style={styles.modalFoodCard}>
+                        {selectedOrder.items && selectedOrder.items.length > 0 ? (
+                          <>
+                            {selectedOrder.items.map((item: any, idx: number) => (
+                              <View key={idx} style={styles.modalFoodItem}>
+                                <View style={styles.modalFoodInfo}>
+                                  <Text style={styles.modalFoodName}>{item.food?.title || 'Món ăn'}</Text>
+                                  {item.food_option && (
+                                    <Text style={styles.modalFoodSize}>Size: {item.food_option.size_name}</Text>
+                                  )}
+                                  {item.food_note && (
+                                    <Text style={styles.modalFoodNote}>Ghi chú: {item.food_note}</Text>
+                                  )}
+                                </View>
+                                <Text style={styles.modalFoodQuantity}>x{item.quantity}</Text>
+                                <Text style={styles.modalFoodPrice}>{formatPrice(item.subtotal)}</Text>
                               </View>
-                              <Text style={styles.orderDetailFoodQuantity}>x{item.quantity}</Text>
-                              <Text style={styles.orderDetailFoodPrice}>{formatPrice(item.subtotal)}</Text>
+                            ))}
+                            <View style={styles.modalTotal}>
+                              <Text style={styles.modalTotalLabel}>Tổng cộng:</Text>
+                              <Text style={styles.modalTotalValue}>{formatPrice(selectedOrder.total_money)}</Text>
                             </View>
-                          ))}
-                        </>
-                      ) : (
-                        <Text style={styles.orderDetailValue}>Không có thông tin món ăn</Text>
-                      )}
-                      <View style={styles.orderDetailTotal}>
-                        <Text style={styles.orderDetailTotalLabel}>Tổng cộng:</Text>
-                        <Text style={styles.orderDetailTotalValue}>{formatPrice(selectedOrder.total_money)}</Text>
+                          </>
+                        ) : (
+                          <Text style={styles.modalNoData}>Không có thông tin món ăn</Text>
+                        )}
                       </View>
                     </View>
 
+                    {/* Cancel Reason Section */}
                     {selectedOrder.cancel_reason && (
-                      <View style={styles.orderDetailSection}>
-                        <Text style={styles.orderDetailSectionTitle}>Lý do hủy</Text>
-                        <Text style={styles.orderDetailValue}>{selectedOrder.cancel_reason}</Text>
+                      <View style={styles.modalSection}>
+                        <Text style={styles.modalSectionTitle}>Lý do hủy</Text>
+                        <View style={styles.modalCancelCard}>
+                          <Text style={styles.modalCancelReason}>{selectedOrder.cancel_reason}</Text>
+                        </View>
                       </View>
                     )}
 
+                    {/* Action Buttons */}
                     {(selectedOrder.order_status !== 'Đã giao' && selectedOrder.order_status !== 'Đã huỷ' && 
                       selectedOrder.delivery_status !== 'Đã giao' && selectedOrder.delivery_status !== 'Đã huỷ') && (
-                      <View style={styles.orderDetailActions}>
-                        {/* Status transition buttons */}
+                      <View style={styles.modalActions}>
                         {(selectedOrder.order_status === 'Chờ xác nhận' || selectedOrder.delivery_status === 'Chờ xác nhận') && (
                           <TouchableOpacity
-                            style={styles.confirmOrderButton}
+                            style={styles.modalActionButton}
                             onPress={() => updateOrderStatus(selectedOrder.id, 'Đã xác nhận')}
                             disabled={loading}
+                            activeOpacity={0.8}
                           >
-                            <Text style={styles.confirmOrderButtonText}>Xác nhận</Text>
+                            <Ionicons name="checkmark-circle-outline" size={18} color="#fff" />
+                            <Text style={styles.modalActionButtonText}>Xác nhận</Text>
                           </TouchableOpacity>
                         )}
                         {(selectedOrder.order_status === 'Đã xác nhận' || selectedOrder.delivery_status === 'Đã xác nhận') && (
                           <TouchableOpacity
-                            style={styles.confirmOrderButton}
+                            style={styles.modalActionButton}
                             onPress={() => updateOrderStatus(selectedOrder.id, 'Đang chuẩn bị')}
                             disabled={loading}
+                            activeOpacity={0.8}
                           >
-                            <Text style={styles.confirmOrderButtonText}>Chuẩn bị</Text>
+                            <Ionicons name="restaurant-outline" size={18} color="#fff" />
+                            <Text style={styles.modalActionButtonText}>Chuẩn bị</Text>
                           </TouchableOpacity>
                         )}
                         {(selectedOrder.order_status === 'Đang chuẩn bị' || selectedOrder.delivery_status === 'Đang chuẩn bị') && (
                           <TouchableOpacity
-                            style={styles.confirmOrderButton}
+                            style={styles.modalActionButton}
                             onPress={() => updateOrderStatus(selectedOrder.id, 'Sẵn sàng')}
                             disabled={loading}
+                            activeOpacity={0.8}
                           >
-                            <Text style={styles.confirmOrderButtonText}>Sẵn sàng</Text>
+                            <Ionicons name="cube-outline" size={18} color="#fff" />
+                            <Text style={styles.modalActionButtonText}>Sẵn sàng</Text>
                           </TouchableOpacity>
                         )}
                         {((selectedOrder.order_status === 'Sẵn sàng' || selectedOrder.order_status === 'Đã lấy hàng') ||
                           (selectedOrder.delivery_status === 'Sẵn sàng' || selectedOrder.delivery_status === 'Đã lấy hàng')) && (
                           <TouchableOpacity
-                            style={styles.confirmOrderButton}
+                            style={styles.modalActionButton}
                             onPress={() => updateOrderStatus(selectedOrder.id, 'Đang giao')}
                             disabled={loading}
+                            activeOpacity={0.8}
                           >
-                            <Text style={styles.confirmOrderButtonText}>Giao hàng</Text>
+                            <Ionicons name="bicycle-outline" size={18} color="#fff" />
+                            <Text style={styles.modalActionButtonText}>Giao hàng</Text>
                           </TouchableOpacity>
                         )}
                         {(selectedOrder.order_status === 'Đang giao' || selectedOrder.delivery_status === 'Đang giao') && (
                           <TouchableOpacity
-                            style={styles.confirmOrderButton}
+                            style={styles.modalActionButton}
                             onPress={() => updateOrderStatus(selectedOrder.id, 'Đã giao')}
                             disabled={loading}
+                            activeOpacity={0.8}
                           >
-                            <Text style={styles.confirmOrderButtonText}>Đã giao</Text>
+                            <Ionicons name="checkmark-done-outline" size={18} color="#fff" />
+                            <Text style={styles.modalActionButtonText}>Đã giao</Text>
                           </TouchableOpacity>
                         )}
                         
-                        {/* Cancel button */}
                         <TouchableOpacity
-                          style={styles.cancelOrderDetailButton}
+                          style={styles.modalCancelButton}
                           onPress={() => updateOrderStatus(selectedOrder.id, 'Đã huỷ', 'Hủy từ quản lý shipper')}
                           disabled={loading}
+                          activeOpacity={0.8}
                         >
-                          <Text style={styles.cancelOrderDetailButtonText}>Hủy</Text>
+                          <Ionicons name="close-circle-outline" size={18} color="#fff" />
+                          <Text style={styles.modalCancelButtonText}>Hủy đơn</Text>
                         </TouchableOpacity>
                       </View>
                     )}
@@ -530,43 +620,65 @@ const ShipperDetailScreen: React.FC = () => {
           </KeyboardAvoidingView>
         </View>
       </Modal>
-    </View>
+    </SafeAreaView>
   );
 };
 
 const styles = StyleSheet.create({
-  safeArea: { flex: 1, backgroundColor: '#f8fafc' },
-  backBtn: {
-    position: 'absolute',
-    top: 38,
-    left: 16,
-    zIndex: 10,
-    backgroundColor: 'rgba(255,255,255,0.85)',
-    borderRadius: 20,
-    padding: 6,
+  safeArea: { 
+    flex: 1, 
+    backgroundColor: '#ffffff',
+  },
+  container: { 
+    flex: 1, 
+    backgroundColor: '#ffffff',
+  },
+
+  // Header
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#e5e7eb',
+    backgroundColor: '#ffffff',
+  },
+  backButton: {
+    padding: 8,
+    borderRadius: 8,
+  },
+  headerTitle: {
+    fontSize: 18,
+    fontFamily: Fonts.LeagueSpartanBold,
+    color: '#1f2937',
+  },
+  placeholder: {
+    width: 40,
+  },
+
+  // Header Container
+  headerContainer: {
+    paddingBottom: 0,
+  },
+
+  // Shipper Card
+  card: {
+    backgroundColor: '#ffffff',
+    borderRadius: 24,
+    padding: 20,
+    marginHorizontal: 0,
+    marginTop: 0,
+    marginBottom: 12,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#e5e7eb',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.12,
-    shadowRadius: 4,
+    shadowOpacity: 0.05,
+    shadowRadius: 3,
     elevation: 2,
-  },
-  backIcon: {
-    fontSize: 22,
-    color: '#ea580c',
-    fontWeight: 'bold',
-  },
-  container: { flex: 1, padding: 18 },
-  card: {
-    backgroundColor: '#fff',
-    borderRadius: 18,
-    padding: 18,
-    alignItems: 'center',
-    marginBottom: 18,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.08,
-    shadowRadius: 8,
-    elevation: 3,
   },
   avatar: { 
     width: 80, 
@@ -575,24 +687,63 @@ const styles = StyleSheet.create({
     backgroundColor: '#ea580c', 
     alignItems: 'center', 
     justifyContent: 'center', 
-    marginBottom: 10 
+    marginBottom: 12,
+    borderWidth: 4,
+    borderColor: '#fff',
+    shadowColor: '#ea580c',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 4,
+    elevation: 3,
   },
-  avatarText: { color: '#fff', fontWeight: 'bold', fontSize: 24 },
-  shipperName: { fontSize: 22, fontWeight: 'bold', color: '#1f2937', marginBottom: 4 },
-  shipperPhone: { fontSize: 15, color: '#6b7280', marginBottom: 2 },
-  shipperEmail: { fontSize: 15, color: '#6b7280', marginBottom: 2 },
-  shipperAddress: { fontSize: 15, color: '#6b7280', marginBottom: 2, textAlign: 'center' },
+  avatarText: { 
+    color: '#fff', 
+    fontFamily: Fonts.LeagueSpartanBold, 
+    fontSize: 32,
+  },
+  shipperName: { 
+    fontSize: 20, 
+    fontFamily: Fonts.LeagueSpartanBold, 
+    color: '#1f2937', 
+    marginBottom: 8,
+  },
+  infoRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: 4,
+  },
+  shipperPhone: { 
+    fontSize: 14, 
+    color: '#6b7280', 
+    fontFamily: Fonts.LeagueSpartanRegular,
+  },
+  shipperEmail: { 
+    fontSize: 14, 
+    color: '#6b7280', 
+    fontFamily: Fonts.LeagueSpartanRegular,
+  },
+  shipperAddress: { 
+    fontSize: 14, 
+    color: '#6b7280', 
+    fontFamily: Fonts.LeagueSpartanRegular,
+    textAlign: 'center',
+    flex: 1,
+  },
   
-  // Summary section
-  summarySection: {
-    backgroundColor: '#fff',
-    borderRadius: 16,
-    padding: 16,
-    marginBottom: 18,
+  // Summary Card
+  summaryCard: {
+    backgroundColor: '#ffffff',
+    borderRadius: 24,
+    padding: 20,
+    marginHorizontal: 0,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: '#e5e7eb',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.07,
-    shadowRadius: 6,
+    shadowOpacity: 0.05,
+    shadowRadius: 3,
     elevation: 2,
   },
   summaryGrid: {
@@ -602,109 +753,186 @@ const styles = StyleSheet.create({
   summaryItem: {
     alignItems: 'center',
   },
+  summaryIconContainer: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 8,
+  },
   summaryNumber: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: '#ea580c',
+    fontSize: 20,
+    fontFamily: Fonts.LeagueSpartanBold,
+    color: '#1f2937',
     marginBottom: 4,
   },
   summaryLabel: {
-    fontSize: 14,
-    color: '#6b7280',
-  },
-  
-  // Filter section
-  filterSection: {
-    backgroundColor: '#fff',
-    borderRadius: 16,
-    padding: 16,
-    marginBottom: 18,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.07,
-    shadowRadius: 6,
-    elevation: 2,
-  },
-  filterButtons: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-  },
-  filterButton: {
-    backgroundColor: '#f3f4f6',
-    borderRadius: 20,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    marginBottom: 8,
-  },
-  filterButtonActive: {
-    backgroundColor: '#ea580c',
-  },
-  filterButtonText: {
     fontSize: 13,
     color: '#6b7280',
-    fontWeight: '500',
+    fontFamily: Fonts.LeagueSpartanRegular,
   },
-  filterButtonTextActive: {
+  
+  // Filter Card
+  filterCard: {
+    backgroundColor: '#ffffff',
+    borderRadius: 24,
+    padding: 16,
+    marginHorizontal: 0,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: '#e5e7eb',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 3,
+    elevation: 2,
+  },
+  filterScrollContent: {
+    gap: 8,
+  },
+  filterPill: {
+    backgroundColor: '#f3f4f6',
+    borderRadius: 999,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    borderWidth: 1,
+    borderColor: '#e5e7eb',
+  },
+  filterPillActive: {
+    backgroundColor: '#ea580c',
+    borderColor: '#ea580c',
+  },
+  filterPillText: {
+    fontSize: 13,
+    color: '#6b7280',
+    fontFamily: Fonts.LeagueSpartanMedium,
+  },
+  filterPillTextActive: {
     color: '#fff',
+    fontFamily: Fonts.LeagueSpartanSemiBold,
   },
-  filterCount: {
-    fontSize: 12,
-    opacity: 0.8,
+  filterBadge: {
+    backgroundColor: '#e5e7eb',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 10,
+    minWidth: 20,
+    alignItems: 'center',
+  },
+  filterBadgeActive: {
+    backgroundColor: 'rgba(255,255,255,0.3)',
+  },
+  filterBadgeText: {
+    fontSize: 11,
+    color: '#6b7280',
+    fontFamily: Fonts.LeagueSpartanBold,
+  },
+  filterBadgeTextActive: {
+    color: '#fff',
   },
   
   sectionTitle: {
-    fontWeight: 'bold',
+    fontFamily: Fonts.LeagueSpartanBold,
     fontSize: 16,
     color: '#1f2937',
     marginBottom: 12,
   },
+
+  ordersTitle: {
+    fontFamily: Fonts.LeagueSpartanBold,
+    fontSize: 16,
+    color: '#1f2937',
+    marginHorizontal: 0,
+    marginTop: 8,
+    marginBottom: 12,
+  },
+
+  // List Content
+  listContent: {
+    paddingHorizontal: 16,
+    paddingBottom: 16,
+  },
   
-  // Order items
-  orderItem: {
-    backgroundColor: '#fff',
-    borderRadius: 12,
+  // Order Card
+  orderCard: {
+    backgroundColor: '#ffffff',
+    borderRadius: 24,
     padding: 16,
     marginBottom: 12,
+    borderWidth: 1,
+    borderColor: '#e5e7eb',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.05,
-    shadowRadius: 2,
-    elevation: 1,
+    shadowRadius: 3,
+    elevation: 2,
   },
   orderHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 8,
+    marginBottom: 12,
+    paddingBottom: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f3f4f6',
+  },
+  orderIdContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
   },
   orderTitle: {
     fontSize: 16,
-    fontWeight: 'bold',
+    fontFamily: Fonts.LeagueSpartanBold,
     color: '#1f2937',
   },
   statusBadge: {
-    paddingHorizontal: 8,
+    paddingHorizontal: 10,
     paddingVertical: 4,
     borderRadius: 12,
   },
   statusText: {
-    fontSize: 12,
+    fontSize: 11,
     color: '#fff',
-    fontWeight: 'bold',
+    fontFamily: Fonts.LeagueSpartanBold,
+  },
+  orderInfoRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 6,
   },
   orderInfo: {
     fontSize: 14,
     color: '#374151',
-    marginBottom: 4,
+    fontFamily: Fonts.LeagueSpartanRegular,
+    flex: 1,
+  },
+  orderFooter: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginTop: 8,
+    paddingTop: 8,
+    borderTopWidth: 1,
+    borderTopColor: '#f3f4f6',
+  },
+  orderPrice: {
+    fontSize: 15,
+    fontFamily: Fonts.LeagueSpartanBold,
+    color: '#10b981',
   },
   orderDate: {
     fontSize: 12,
-    color: '#6b7280',
-    marginTop: 8,
+    color: '#9ca3af',
+    fontFamily: Fonts.LeagueSpartanRegular,
   },
   
-  // Tap indicator
+  // Tap Indicator
   tapIndicator: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -712,230 +940,308 @@ const styles = StyleSheet.create({
     marginTop: 8,
     paddingTop: 8,
     borderTopWidth: 1,
-    borderTopColor: '#e5e7eb',
+    borderTopColor: '#f3f4f6',
   },
   tapIndicatorText: {
     fontSize: 12,
-    color: '#6b7280',
+    color: '#9ca3af',
     marginRight: 4,
+    fontFamily: Fonts.LeagueSpartanRegular,
   },
   
   // States
+  loadingFullScreen: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  loadingFullScreenText: {
+    marginTop: 12,
+    fontSize: 14,
+    color: '#6b7280',
+    fontFamily: Fonts.LeagueSpartanRegular,
+  },
   loadingContainer: {
     alignItems: 'center',
-    paddingVertical: 20,
+    paddingVertical: 40,
   },
   loadingText: {
-    marginTop: 8,
+    marginTop: 12,
+    fontSize: 14,
     color: '#6b7280',
+    fontFamily: Fonts.LeagueSpartanRegular,
   },
   errorContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    padding: 20,
+    paddingHorizontal: 32,
   },
   errorText: {
+    fontSize: 14,
     color: '#ef4444',
     textAlign: 'center',
-    marginBottom: 16,
-    fontSize: 16,
+    marginTop: 16,
+    marginBottom: 20,
+    fontFamily: Fonts.LeagueSpartanRegular,
   },
   retryButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
     backgroundColor: '#ea580c',
     paddingHorizontal: 20,
     paddingVertical: 10,
-    borderRadius: 8,
+    borderRadius: 999,
+    shadowColor: '#ea580c',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.2,
+    shadowRadius: 3,
+    elevation: 2,
   },
   retryButtonText: {
+    fontSize: 14,
     color: '#fff',
-    fontWeight: 'bold',
+    fontFamily: Fonts.LeagueSpartanSemiBold,
+  },
+  emptyContainer: {
+    alignItems: 'center',
+    paddingVertical: 60,
   },
   emptyText: {
-    color: '#6b7280',
-    fontStyle: 'italic',
-    textAlign: 'center',
-    marginVertical: 20,
+    marginTop: 16,
     fontSize: 16,
+    color: '#6b7280',
+    fontFamily: Fonts.LeagueSpartanRegular,
+    textAlign: 'center',
   },
 
-  // Modal styles
-  overlay: { 
-    position: 'absolute', 
-    top: 0, 
-    left: 0, 
-    right: 0, 
-    bottom: 0, 
+  // Modal Styles
+  modalOverlay: { 
+    flex: 1,
     backgroundColor: 'rgba(0,0,0,0.5)', 
-    zIndex: 1, 
-    justifyContent: 'center', 
-    alignItems: 'center' 
+    justifyContent: 'flex-end',
   },
-  keyboardAvoidingView: { 
-    flex: 1, 
-    justifyContent: 'center', 
-    alignItems: 'center', 
-    width: '100%' 
+  modalKeyboardView: { 
+    flex: 1,
+    justifyContent: 'flex-end',
   },
-  orderDetailModal: { 
-    backgroundColor: 'white', 
-    borderRadius: 16, 
-    height: '95%', 
-    width: '98%', 
+  modalContainer: { 
+    backgroundColor: '#ffffff', 
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    maxHeight: '90%',
     shadowColor: '#000', 
-    shadowOffset: { width: 0, height: 4 }, 
-    shadowOpacity: 0.25, 
+    shadowOffset: { width: 0, height: -2 }, 
+    shadowOpacity: 0.1, 
     shadowRadius: 8, 
-    elevation: 8 
+    elevation: 5,
   },
   
   // Modal Header
-  orderDetailHeader: { 
+  modalHeader: { 
     flexDirection: 'row', 
     justifyContent: 'space-between', 
     alignItems: 'center', 
-    padding: 20, 
+    paddingHorizontal: 20,
+    paddingVertical: 16,
     borderBottomWidth: 1, 
-    borderBottomColor: '#f3f4f6' 
+    borderBottomColor: '#f3f4f6',
   },
-  orderDetailTitle: { 
-    fontSize: 20, 
-    fontWeight: 'bold', 
-    color: '#1f2937' 
+  modalTitle: { 
+    fontSize: 18, 
+    fontFamily: Fonts.LeagueSpartanBold, 
+    color: '#1f2937',
   },
-  closeButton: { 
+  modalCloseButton: { 
     padding: 4, 
     backgroundColor: '#f3f4f6', 
-    borderRadius: 8 
+    borderRadius: 8,
   },
   
   // Modal Content
-  orderDetailContent: { 
-    padding: 20 
+  modalContent: { 
+    paddingHorizontal: 20,
+    paddingBottom: 20,
   },
-  orderDetailSection: { 
-    marginBottom: 24 
+  modalSection: { 
+    marginTop: 20,
   },
-  orderDetailSectionTitle: { 
-    fontSize: 16, 
-    fontWeight: 'bold', 
+  modalSectionTitle: { 
+    fontSize: 15, 
+    fontFamily: Fonts.LeagueSpartanBold, 
     color: '#1f2937', 
-    marginBottom: 12 
+    marginBottom: 12,
   },
-  orderDetailItem: { 
+  modalInfoCard: {
+    backgroundColor: '#f9fafb',
+    borderRadius: 16,
+    padding: 16,
+  },
+  modalInfoRow: { 
     flexDirection: 'row', 
     justifyContent: 'space-between', 
     alignItems: 'center', 
-    paddingVertical: 8, 
+    paddingVertical: 8,
     borderBottomWidth: 1, 
-    borderBottomColor: '#f9fafb' 
+    borderBottomColor: '#f3f4f6',
   },
-  orderDetailLabel: { 
+  modalLabel: { 
     fontSize: 14, 
-    fontWeight: '500', 
-    color: '#6b7280' 
+    fontFamily: Fonts.LeagueSpartanMedium, 
+    color: '#6b7280',
   },
-  orderDetailValue: { 
+  modalValue: { 
     fontSize: 14, 
-    fontWeight: '500', 
+    fontFamily: Fonts.LeagueSpartanRegular, 
     color: '#1f2937', 
-    flex: 1, 
-    textAlign: 'right' 
+    textAlign: 'right',
+    flex: 1,
+    marginLeft: 12,
   },
-  orderDetailStatusBadge: { 
-    paddingHorizontal: 8, 
+  modalValueMultiline: {
+    textAlign: 'left',
+  },
+  modalStatusBadge: { 
+    paddingHorizontal: 10, 
     paddingVertical: 4, 
-    borderRadius: 12 
+    borderRadius: 12,
   },
-  orderDetailStatusText: { 
+  modalStatusText: { 
     fontSize: 12, 
-    fontWeight: 'bold', 
-    color: 'white' 
+    fontFamily: Fonts.LeagueSpartanBold, 
+    color: '#fff',
   },
   
-  // Food items
-  orderDetailFoodItem: { 
+  // Food Items
+  modalFoodCard: {
+    backgroundColor: '#f9fafb',
+    borderRadius: 16,
+    padding: 16,
+  },
+  modalFoodItem: { 
     flexDirection: 'row', 
     justifyContent: 'space-between', 
     alignItems: 'center', 
-    paddingVertical: 12, 
+    paddingVertical: 12,
     borderBottomWidth: 1, 
-    borderBottomColor: '#f9fafb' 
+    borderBottomColor: '#f3f4f6',
   },
-  orderDetailFoodName: { 
+  modalFoodInfo: {
+    flex: 1,
+  },
+  modalFoodName: { 
     fontSize: 14, 
-    fontWeight: '500', 
-    color: '#1f2937', 
-    flex: 1 
+    fontFamily: Fonts.LeagueSpartanMedium, 
+    color: '#1f2937',
   },
-  orderDetailFoodSize: { 
+  modalFoodSize: { 
     fontSize: 12, 
     color: '#6b7280', 
-    marginLeft: 8 
+    fontFamily: Fonts.LeagueSpartanRegular,
+    marginTop: 2,
   },
-  orderDetailFoodQuantity: { 
+  modalFoodNote: {
+    fontSize: 12,
+    color: '#6b7280',
+    fontFamily: Fonts.LeagueSpartanRegular,
+    fontStyle: 'italic',
+    marginTop: 2,
+  },
+  modalFoodQuantity: { 
     fontSize: 14, 
-    fontWeight: '500', 
+    fontFamily: Fonts.LeagueSpartanMedium, 
     color: '#6b7280', 
-    marginHorizontal: 12 
+    marginHorizontal: 12,
   },
-  orderDetailFoodPrice: { 
+  modalFoodPrice: { 
     fontSize: 14, 
-    fontWeight: 'bold', 
-    color: '#1f2937' 
+    fontFamily: Fonts.LeagueSpartanBold, 
+    color: '#1f2937',
   },
-  orderDetailTotal: { 
+  modalTotal: { 
     flexDirection: 'row', 
     justifyContent: 'space-between', 
     alignItems: 'center', 
-    paddingVertical: 12, 
-    marginTop: 8, 
+    paddingTop: 16,
+    marginTop: 8,
     borderTopWidth: 2, 
-    borderTopColor: '#e5e7eb' 
+    borderTopColor: '#e5e7eb',
   },
-  orderDetailTotalLabel: { 
+  modalTotalLabel: { 
     fontSize: 16, 
-    fontWeight: 'bold', 
-    color: '#1f2937' 
+    fontFamily: Fonts.LeagueSpartanBold, 
+    color: '#1f2937',
   },
-  orderDetailTotalValue: { 
-    fontSize: 16, 
-    fontWeight: 'bold', 
-    color: '#dc2626' 
+  modalTotalValue: { 
+    fontSize: 18, 
+    fontFamily: Fonts.LeagueSpartanBold, 
+    color: '#ea580c',
+  },
+  modalNoData: {
+    fontSize: 14,
+    color: '#9ca3af',
+    fontFamily: Fonts.LeagueSpartanRegular,
+    textAlign: 'center',
+    paddingVertical: 20,
+  },
+
+  // Cancel Reason
+  modalCancelCard: {
+    backgroundColor: '#fef2f2',
+    borderRadius: 12,
+    padding: 16,
+    borderLeftWidth: 4,
+    borderLeftColor: '#ef4444',
+  },
+  modalCancelReason: {
+    fontSize: 14,
+    color: '#991b1b',
+    fontFamily: Fonts.LeagueSpartanRegular,
   },
   
   // Modal Actions
-  orderDetailActions: { 
-    padding: 20, 
-    borderTopWidth: 1, 
-    borderTopColor: '#f3f4f6', 
-    gap: 12 
+  modalActions: { 
+    paddingVertical: 20,
+    gap: 12,
   },
-  confirmOrderButton: { 
+  modalActionButton: { 
     backgroundColor: '#10b981', 
-    paddingVertical: 12, 
-    borderRadius: 8, 
-    width: 100, 
-    alignSelf: 'center', 
-    alignItems: 'center' 
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingVertical: 12,
+    borderRadius: 12,
+    shadowColor: '#10b981',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.2,
+    shadowRadius: 3,
+    elevation: 2,
   },
-  confirmOrderButtonText: { 
-    fontSize: 16, 
-    fontWeight: 'bold', 
-    color: 'white' 
+  modalActionButtonText: { 
+    fontSize: 15, 
+    fontFamily: Fonts.LeagueSpartanSemiBold, 
+    color: '#fff',
   },
-  cancelOrderDetailButton: { 
-    backgroundColor: '#dc2626', 
-    paddingVertical: 12, 
-    borderRadius: 8, 
-    width: 100, 
-    alignSelf: 'center', 
-    alignItems: 'center' 
+  modalCancelButton: { 
+    backgroundColor: '#ef4444', 
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingVertical: 12,
+    borderRadius: 12,
+    shadowColor: '#ef4444',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.2,
+    shadowRadius: 3,
+    elevation: 2,
   },
-  cancelOrderDetailButtonText: { 
-    fontSize: 16, 
-    fontWeight: 'bold', 
-    color: 'white' 
+  modalCancelButtonText: { 
+    fontSize: 15, 
+    fontFamily: Fonts.LeagueSpartanSemiBold, 
+    color: '#fff',
   },
 });
 

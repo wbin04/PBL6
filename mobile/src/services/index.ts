@@ -1,5 +1,5 @@
 import { apiClient } from './api';
-import { ENDPOINTS } from '@/constants';
+import { ENDPOINTS, API_CONFIG } from '@/constants';
 import {
   LoginRequest,
   RegisterRequest,
@@ -15,12 +15,16 @@ import {
   Order,
   CreateOrderRequest,
   Promotion,
+  ValidatePromoResponse,
+  AppliedPromo,
   Rating,
   CreateRatingRequest,
 } from '@/types';
 
 export { ratingService } from './ratingService';
 export { shipperService } from './shipperService';
+export { locationService } from './locationService';
+export type { PlaceSuggestion, PlaceDetailsResult } from './locationService';
 
 // Authentication Service
 export const authService = {
@@ -82,6 +86,15 @@ export const menuService = {
   },
 };
 
+export type StoreUpdatePayload = {
+  store_name?: string;
+  description?: string;
+  address?: string;
+  latitude?: number | null;
+  longitude?: number | null;
+  image?: string;
+};
+
 // Stores Service
 export const storesService = {
   async getStores(): Promise<Store[]> {
@@ -90,6 +103,10 @@ export const storesService = {
 
   async getStoreDetail(id: number): Promise<Store> {
     return apiClient.get(ENDPOINTS.STORE_DETAIL(id));
+  },
+
+  async getMyStore(): Promise<Store> {
+    return apiClient.get(ENDPOINTS.STORE_MY);
   },
 
   async getStoreFoods(storeId: number, page = 1): Promise<PaginatedResponse<Food>> {
@@ -133,6 +150,10 @@ export const storesService = {
       console.error('storesService.getStoreStats - API error:', error);
       throw error;
     }
+  },
+
+  async updateStore(storeId: number, data: StoreUpdatePayload): Promise<Store> {
+    return apiClient.patch(ENDPOINTS.STORE_DETAIL(storeId), data);
   },
 };
 
@@ -200,15 +221,99 @@ export const ordersService = {
 
 // Promotions Service
 export const promotionsService = {
-  async getPromotions(): Promise<Promotion[]> {
-    const response: PaginatedResponse<Promotion> = await apiClient.get(ENDPOINTS.PROMOTIONS);
-    return response.results;
+  async getPromotions(storeId?: number): Promise<Promotion[]> {
+    try {
+      const url = storeId !== undefined
+        ? `${ENDPOINTS.PROMOTIONS}?store=${storeId}&active=true` 
+        : `${ENDPOINTS.PROMOTIONS}?active=true`;
+      
+      console.log('Fetching promotions from:', url);
+      
+      const response = await apiClient.get(url);
+      
+      // Check if response is paginated or direct array
+      if (response && typeof response === 'object') {
+        // If it's a paginated response
+        if ('results' in response && Array.isArray(response.results)) {
+          console.log(`Got ${response.results.length} promos for store ${storeId}`);
+          return response.results;
+        }
+        // If it's a direct array
+        if (Array.isArray(response)) {
+          console.log(`Got ${response.length} promos for store ${storeId}`);
+          return response;
+        }
+      }
+      
+      // Fallback to empty array
+      console.log(`No promos found for store ${storeId}`);
+      return [];
+    } catch (error) {
+      console.error('Error fetching promotions:', error);
+      return [];
+    }
   },
 
-  async validatePromoCode(promoCode: string): Promise<{ valid: boolean; discount: number }> {
-    return apiClient.post(ENDPOINTS.VALIDATE_PROMO, { promo_code: promoCode });
+  async validatePromo(promoId: number, totalAmount: number): Promise<ValidatePromoResponse> {
+    return apiClient.post(ENDPOINTS.VALIDATE_PROMO, { 
+      promo_id: promoId,
+      total_amount: totalAmount 
+    });
+  },
+
+  async validateMultiplePromos(
+    promos: Array<{ promo: Promotion; storeAmount: number }>,
+    totalAmount: number
+  ): Promise<{
+    appliedPromos: Array<{ promo: Promotion; discount: number; storeAmount: number }>;
+    totalDiscount: number;
+  }> {
+    const appliedPromos = [];
+    let totalDiscount = 0;
+
+    console.log('=== Validating Multiple Promos ===');
+    console.log('Total cart amount:', totalAmount);
+
+    for (const { promo, storeAmount } of promos) {
+      try {
+        // For system-wide promos (store = 0), use total cart amount
+        // For store-specific promos, use that store's subtotal
+        const amountToValidate = promo.store === 0 ? totalAmount : storeAmount;
+        
+        console.log(`\nValidating promo: ${promo.name}`);
+        console.log(`  - Store ID: ${promo.store} ${promo.store === 0 ? '(System-wide)' : '(Store-specific)'}`);
+        console.log(`  - Store amount: ${storeAmount}`);
+        console.log(`  - Amount to validate: ${amountToValidate}`);
+        console.log(`  - Minimum required: ${promo.minimum_pay}`);
+        
+        const response = await this.validatePromo(promo.id, amountToValidate);
+        
+        if (response.valid && response.discount_amount) {
+          const discount = parseFloat(response.discount_amount);
+          console.log(`  ✓ Valid! Discount: ${discount}`);
+          totalDiscount += discount;
+          appliedPromos.push({
+            promo,
+            discount,
+            storeAmount: amountToValidate
+          });
+        } else {
+          console.log(`  ✗ Invalid or not eligible`);
+          console.log(`  Reason: ${response.error || 'Unknown'}`);
+        }
+      } catch (error) {
+        console.error(`Error validating promo ${promo.id}:`, error);
+      }
+    }
+
+    console.log(`\n=== Validation Complete ===`);
+    console.log(`Applied promos: ${appliedPromos.length}`);
+    console.log(`Total discount: ${totalDiscount}`);
+
+    return { appliedPromos, totalDiscount };
   },
 };
+
 
 // Ratings Service
 export const ratingsService = {
@@ -238,6 +343,38 @@ export const paymentsService = {
     return apiClient.post(ENDPOINTS.CREATE_PAYMENT, {
       order_id: orderId,
       payment_method: paymentMethod,
+    });
+  },
+};
+
+// PayOS Service - for bank transfer payments
+export const payosService = {
+  async createPaymentLink(data: {
+    user_id: number;
+    order_id: number;
+    amount: number;
+    message?: string;
+  }): Promise<{
+    checkoutUrl: string;
+    status: string;
+    orderCode: number;
+  }> {
+    // Call Django backend PayOS endpoint with extended timeout
+    console.log('Creating PayOS payment link via Django API:', data);
+    
+    // Use longer timeout for PayOS API (30 seconds)
+    return apiClient.post('/payments/payos/create-link/', data, {
+      timeout: 30000, // 30 seconds
+    });
+  },
+
+  async checkPaymentStatus(orderCode: number): Promise<{
+    orderCode: number;
+    status: string;
+    paid: boolean;
+  }> {
+    return apiClient.post('/payments/payos/check-status/', { orderCode }, {
+      timeout: 15000, // 15 seconds
     });
   },
 };

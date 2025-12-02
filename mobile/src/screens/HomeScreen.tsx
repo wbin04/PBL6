@@ -146,7 +146,7 @@ export const HomeScreen: React.FC = () => {
         <View style={styles.headerTop}>
           <View style={styles.userInfo}>
             <Text style={styles.greeting}>
-              {getCurrentGreeting()}, {user ? user.username : 'Khách hàng'}! 👋
+              {getCurrentGreeting()}{user ? `, ${user.username}` : ', Khách hàng'}! 👋
             </Text>
           </View>
           
@@ -154,7 +154,7 @@ export const HomeScreen: React.FC = () => {
           <TouchableOpacity style={styles.notificationButton} onPress={handleNotificationPress}>
             <Ionicons name="notifications-outline" size={24} color={COLORS.white} />
             <View style={styles.notificationBadge}>
-              <Text style={styles.notificationCount}>3</Text>
+              <Text style={styles.notificationCount}>{3}</Text>
             </View>
           </TouchableOpacity>
         </View>
@@ -275,7 +275,9 @@ export const HomeScreen: React.FC = () => {
         <View style={styles.section}>
           <View style={styles.featuredBanner}>
             <View style={styles.featuredContent}>
-              <Text style={styles.featuredTitle}>🎉 Ưu đãi đặc biệt</Text>
+              <Text style={styles.featuredTitle}>
+                {'🎉 Ưu đãi đặc biệt'}
+              </Text>
               <Text style={styles.featuredSubtitle}>Giảm 30% cho đơn hàng đầu tiên</Text>
               <TouchableOpacity style={styles.featuredButton}>
                 <Text style={styles.featuredButtonText}>Khám phá ngay</Text>

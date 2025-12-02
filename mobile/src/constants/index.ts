@@ -30,15 +30,24 @@ export const getApiHost = (): string => {
     (Constants as any)?.manifest?.debuggerHost;
 
   console.log('Host-like from constants:', hostLike);
-  if (hostLike) {
-    try {
-      const host = hostLike.split('//').pop()!.split(':')[0];
-      console.log('Parsed host from constants:', host);
-      if (host) return host; 
-    } catch (error) {
-      console.log('Error parsing host from constants:', error);
+if (hostLike) {
+  try {
+    const hostPart = hostLike.split('//').pop()!;
+    const parts = hostPart.split(':');
+    const host = parts[0];
+
+    console.log('===============host', hostPart);
+
+    if (host.includes('exp.direct') || host.includes('expo.dev')) {
+      console.log('⚠️ Ignoring Expo tunnel host:', host);
+    } else {
+      console.log('✅ Using local host from constants:', host);
+      return host;
     }
+  } catch (error) {
+    console.log('Error parsing host from constants:', error);
   }
+}
 
   // 4) Fallbacks
   console.log('Platform OS:', Platform.OS);
@@ -204,6 +213,7 @@ export const ENDPOINTS = {
   STORE_DETAIL: (id: number) => `/stores/${id}/`,
   STORE_FOODS: (id: number) => `/stores/${id}/foods/`,
   STORE_STATS: (id: number) => `/stores/${id}/stats/`,
+  STORE_MY: '/stores/my_store/',
   
   // Cart
   CART: '/cart/',

@@ -703,6 +703,10 @@ export default function FoodDetailScreen() {
 
           <TouchableOpacity
             onPress={async () => {
+              if (!food) {
+                return;
+              }
+
               const toppingsPrice = Object.entries(selectedToppings).reduce((acc, [toppingIdStr, toppingQuantity]) => {
                 const toppingId = parseInt(toppingIdStr);
                 const topping = toppings.find(t => t.id === toppingId);
@@ -715,6 +719,9 @@ export default function FoodDetailScreen() {
                 return topping ? `${topping.title} (x${toppingQuantity})` : '';
               }).filter(name => name);
               
+              const selectedSize = getSelectedSize();
+              const subtotal = totalPrice;
+
               const checkoutItem = {
                 id: food?.id, 
                 name: food?.title, 
@@ -730,7 +737,48 @@ export default function FoodDetailScreen() {
                 totalPrice,
               };
               await AsyncStorage.setItem("checkoutItem", JSON.stringify(checkoutItem));
-              navigation.navigate("Checkout");
+
+              const storePayload = food.store ? {
+                id: food.store.id ?? 0,
+                store_name: food.store.store_name ?? 'Nhà hàng',
+                address: food.store.address ?? null,
+                latitude: food.store.latitude ?? null,
+                longitude: food.store.longitude ?? null,
+              } : {
+                id: 0,
+                store_name: 'Nhà hàng',
+                address: null,
+                latitude: null,
+                longitude: null,
+              };
+
+              const buyNowPayload = {
+                id: Date.now(),
+                food_id: food.id,
+                food_option_id: selectedSizeId ?? undefined,
+                quantity,
+                item_note: null,
+                subtotal,
+                food: {
+                  id: food.id,
+                  title: food.title,
+                  price: parseFloat(String(food.price ?? 0)),
+                  image: food.image,
+                  store: storePayload,
+                },
+                size: selectedSize ? {
+                  id: selectedSize.id,
+                  size_name: selectedSize.size_name,
+                  price: parseFloat(String(selectedSize.price ?? 0)),
+                } : undefined,
+                customToppings: toppingNames,
+              };
+
+              navigation.navigate("Checkout", {
+                selectedIds: [food.id],
+                selectedCartItems: [buyNowPayload],
+                fromBuyNow: true,
+              });
             }}
             activeOpacity={0.9}
             style={styles.btnOrange}

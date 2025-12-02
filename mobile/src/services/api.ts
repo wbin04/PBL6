@@ -427,3 +427,13 @@ export const authApi = {
   },
 };
 
+export const dashboardApi = {
+  getAdminMetrics: async () => {
+    return apiClient.get('/dashboard/admin/');
+  },
+
+  getStoreMetrics: async (storeId: number) => {
+    return apiClient.get(`/dashboard/store/${storeId}/`);
+  },
+};
+

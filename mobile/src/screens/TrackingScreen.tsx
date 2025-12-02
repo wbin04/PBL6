@@ -5,6 +5,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { addressEmitter } from '@/utils/AddressEventEmitter';
 import { API_CONFIG } from '@/constants';
+import { Fonts } from '@/constants/Fonts';
 
 interface TrackingInfo {
   orderId: string;
@@ -555,7 +556,7 @@ export default function TrackingScreen() {
               )}
               {trackingInfo.voucherDiscount < 0 && (
                 <View style={styles.costRow}>
-                  <Text style={styles.costLabel}>Voucher từ cửa hàng</Text>
+                  <Text style={styles.costLabel}>Giảm giá khuyến mãi</Text>
                   <Text style={[styles.costValue, styles.discountText]}>{costBreakdown.voucherDiscount}</Text>
                 </View>
               )}
@@ -689,9 +690,9 @@ const styles = StyleSheet.create({
   },
   headerTitle: {
     fontSize: 18,
-    fontWeight: '600',
     color: '#333',
     marginLeft: 16,
+    fontFamily: Fonts.LeagueSpartanSemiBold,
   },
   content: {
     flex: 1,
@@ -708,8 +709,8 @@ const styles = StyleSheet.create({
   statusText: {
     color: '#FFF',
     fontSize: 16,
-    fontWeight: '600',
     textAlign: 'left',
+    fontFamily: Fonts.LeagueSpartanSemiBold,
   },
   pendingStatusBanner: {
     backgroundColor: '#E95322',
@@ -722,8 +723,8 @@ const styles = StyleSheet.create({
   pendingStatusText: {
     color: '#FFF',
     fontSize: 16,
-    fontWeight: '600',
     textAlign: 'center',
+    fontFamily: Fonts.LeagueSpartanSemiBold,
   },
   paymentSection: {
     backgroundColor: '#FFF',
@@ -742,6 +743,7 @@ const styles = StyleSheet.create({
     color: '#333',
     marginLeft: 12,
     flex: 1,
+    fontFamily: Fonts.LeagueSpartanRegular,
   },
   section: {
     backgroundColor: '#FFF',
@@ -753,9 +755,9 @@ const styles = StyleSheet.create({
   },
   sectionTitle: {
     fontSize: 16,
-    fontWeight: '600',
     color: '#333',
     marginBottom: 12,
+    fontFamily: Fonts.LeagueSpartanSemiBold,
   },
   addressContainer: {
     marginTop: 8,
@@ -774,14 +776,15 @@ const styles = StyleSheet.create({
   },
   recipientName: {
     fontSize: 15,
-    fontWeight: '600',
     color: '#333',
     marginBottom: 4,
+    fontFamily: Fonts.LeagueSpartanSemiBold,
   },
   addressText: {
     fontSize: 14,
     color: '#666',
     lineHeight: 20,
+    fontFamily: Fonts.LeagueSpartanRegular,
   },
   updateButton: {
     paddingHorizontal: 16,
@@ -793,7 +796,7 @@ const styles = StyleSheet.create({
   updateButtonText: {
     fontSize: 12,
     color: '#666',
-    fontWeight: '500',
+    fontFamily: Fonts.LeagueSpartanMedium,
   },
   shopSection: {
     backgroundColor: '#FFF',
@@ -810,9 +813,9 @@ const styles = StyleSheet.create({
   shopName: {
     fontSize: 15,
     color: '#333',
-    fontWeight: '500',
     marginLeft: 8,
     flex: 1,
+    fontFamily: Fonts.LeagueSpartanMedium,
   },
   productSection: {
     backgroundColor: '#FFF',
@@ -844,19 +847,20 @@ const styles = StyleSheet.create({
   productName: {
     fontSize: 14,
     color: '#333',
-    fontWeight: '500',
     marginBottom: 4,
     lineHeight: 18,
+    fontFamily: Fonts.LeagueSpartanSemiBold,
   },
   productQuantity: {
     fontSize: 13,
     color: '#666',
     marginTop: 2,
+    fontFamily: Fonts.LeagueSpartanRegular,
   },
   productPrice: {
     fontSize: 15,
     color: '#E95322',
-    fontWeight: '600',
+    fontFamily: Fonts.LeagueSpartanSemiBold,
   },
   totalSection: {
     flexDirection: 'row',
@@ -869,12 +873,13 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#333',
     flex: 1,
+    fontFamily: Fonts.LeagueSpartanMedium,
   },
   totalAmount: {
     fontSize: 16,
     color: '#333',
-    fontWeight: '600',
     marginRight: 8,
+    fontFamily: Fonts.LeagueSpartanSemiBold,
   },
   supportSection: {
     backgroundColor: '#FFF',
@@ -886,9 +891,9 @@ const styles = StyleSheet.create({
   },
   supportTitle: {
     fontSize: 16,
-    fontWeight: '600',
     color: '#333',
     marginBottom: 16,
+    fontFamily: Fonts.LeagueSpartanSemiBold,
   },
   supportItem: {
     flexDirection: 'row',
@@ -904,6 +909,7 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#333',
     flex: 1,
+    fontFamily: Fonts.LeagueSpartanRegular,
   },
   orderIdSection: {
     backgroundColor: '#FFF',
@@ -923,11 +929,13 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#333',
     flex: 1,
+    fontFamily: Fonts.LeagueSpartanMedium,
   },
   orderIdValue: {
     fontSize: 14,
     color: '#666',
     marginRight: 12,
+    fontFamily: Fonts.LeagueSpartanRegular,
   },
   copyButton: {
     paddingHorizontal: 12,
@@ -938,7 +946,7 @@ const styles = StyleSheet.create({
   copyButtonText: {
     fontSize: 12,
     color: '#666',
-    fontWeight: '600',
+    fontFamily: Fonts.LeagueSpartanSemiBold,
   },
   detailsButton: {
     flexDirection: 'row',
@@ -951,6 +959,7 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#666',
     marginRight: 4,
+    fontFamily: Fonts.LeagueSpartanMedium,
   },
   finalTotal: {
     flexDirection: 'row',
@@ -963,12 +972,12 @@ const styles = StyleSheet.create({
   finalTotalLabel: {
     fontSize: 16,
     color: '#333',
-    fontWeight: '600',
+    fontFamily: Fonts.LeagueSpartanSemiBold,
   },
   finalTotalAmount: {
     fontSize: 18,
     color: '#E53E3E',
-    fontWeight: '700',
+    fontFamily: Fonts.LeagueSpartanBold,
   },
   bottomSection: {
     position: 'absolute',
@@ -992,7 +1001,7 @@ const styles = StyleSheet.create({
   cancelButtonText: {
     fontSize: 16,
     color: '#333',
-    fontWeight: '500',
+    fontFamily: Fonts.LeagueSpartanMedium,
   },
   costBreakdown: {
     marginTop: 12,
@@ -1009,11 +1018,12 @@ const styles = StyleSheet.create({
   costLabel: {
     fontSize: 14,
     color: '#333',
+    fontFamily: Fonts.LeagueSpartanRegular,
   },
   costValue: {
     fontSize: 14,
     color: '#333',
-    fontWeight: '500',
+    fontFamily: Fonts.LeagueSpartanMedium,
   },
   discountText: {
     color: '#E53E3E',
@@ -1037,7 +1047,7 @@ const styles = StyleSheet.create({
   paymentMethodText: {
     fontSize: 14,
     color: '#4bb183ff',
-    fontWeight: '500',
+    fontFamily: Fonts.LeagueSpartanMedium,
   },
   orderDetails: {
     marginTop: 16,
@@ -1059,9 +1069,9 @@ const styles = StyleSheet.create({
   detailValue: {
     fontSize: 14,
     color: '#333',
-    fontWeight: '500',
     textAlign: 'right',
     flex: 1,
+    fontFamily: Fonts.LeagueSpartanMedium,
   },
   productDetails: {
     flex: 1,
@@ -1080,15 +1090,12 @@ const styles = StyleSheet.create({
     alignItems: 'flex-end',
     minWidth: 80,
   },
-  priceContainer: {
-    alignItems: 'flex-end',
-  },
   itemPrice: {
     fontSize: 14,
     color: '#E95322',
-    fontWeight: '600',
     textAlign: 'right',
     lineHeight: 18,
+    fontFamily: Fonts.LeagueSpartanSemiBold,
   },
   sizeInfo: {
     fontSize: 12,
@@ -1107,8 +1114,8 @@ const styles = StyleSheet.create({
   foodNoteLabel: {
     fontSize: 12,
     color: '#666',
-    fontWeight: '500',
     marginBottom: 2,
+    fontFamily: Fonts.LeagueSpartanMedium,
   },
   foodNoteText: {
     fontSize: 13,
@@ -1126,12 +1133,13 @@ const styles = StyleSheet.create({
   orderNoteLabel: {
     fontSize: 14,
     color: '#E95322',
-    fontWeight: '600',
     marginBottom: 4,
+    fontFamily: Fonts.LeagueSpartanSemiBold,
   },
   orderNoteText: {
     fontSize: 14,
     color: '#333',
     lineHeight: 18,
+    fontFamily: Fonts.LeagueSpartanRegular,
   },
 });

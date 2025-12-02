@@ -239,12 +239,20 @@ export default function Sidebar({ isOpen, onClose, currentRole, onSwitchRole }: 
               <TouchableOpacity
                 style={[styles.card, styles.cardInactive]}
                 activeOpacity={0.9}
-                onPress={() => {
+                onPress={async () => {
+                  try {
+                    // đặt role admin để MainTabs hiểu
+                    await AsyncStorage.setItem("activeRole", "admin");
+                  } catch (e) {
+                    console.error("Failed to set activeRole=admin", e);
+                  }
+
                   onClose();
+
                   setTimeout(() => {
-                    navigation.reset({ 
-                      index: 0, 
-                      routes: [{ name: "AdminDashboard" }] 
+                    navigation.reset({
+                      index: 0,
+                      routes: [{ name: "MainTabs" }],
                     });
                   }, 100);
                 }}

@@ -19,6 +19,7 @@ import { RootState, AppDispatch } from '@/store';
 import { fetchCart, updateCartItem, removeFromCart, clearCart } from '@/store/slices/cartSlice';
 import { CartItem as CartItemType, RootStackParamList } from '@/types';
 import { COLORS, SPACING, BORDER_RADIUS, SHADOWS, API_CONFIG } from '@/constants';
+import { getImageSource } from '@/utils/imageUtils';
 import { CartItem } from '@/components';
 
 type CartScreenNavigationProp = NativeStackNavigationProp<RootStackParamList, 'Cart'>;
@@ -219,11 +220,8 @@ const handleQuantityChange = async (itemId: number, delta: number) => {
     }).format(price);
   };
 
-  const getImageUri = (imageUrl: string) => {
-    return imageUrl.startsWith('http')
-      ? imageUrl
-      : `${API_CONFIG.BASE_URL.replace(/\/api$/, '')}/media/${imageUrl}`;
-  };
+  // Use centralized helper if needed elsewhere
+  const getImageUri = (imageUrl?: string | null) => getImageSource(imageUrl as any);
 
   const selectedCartItems = cartItems.filter(item => selectedItems.has(item.id));
   const totalItems = selectedCartItems.reduce((sum, item) => sum + item.quantity, 0);

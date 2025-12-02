@@ -7,8 +7,10 @@ export interface ShipperOrder {
   created_date: string;
   total_before_discount?: number | string;
   total_after_discount?: number | string;
-  total_money?: number | string; // Backend uses this field
+  total_money?: number | string; // Backend uses this field (food only)
+  total_discount?: number | string; // Total discount applied
   shipping_fee: number | string;
+  promo_discount?: number; // Total promo discount from database
   user: {
     id: number;
     fullname: string;
@@ -20,17 +22,26 @@ export interface ShipperOrder {
   payment_method: string;
   receiver_name: string;
   ship_address: string;
+  ship_latitude?: number | string | null;
+  ship_longitude?: number | string | null;
   phone_number: string;
   shipper?: {
     id: number;
     name: string;
   };
+  route_polyline?: string | null;
   store?: {
     id: number;
     store_name: string;
+    address?: string | null;
+    latitude?: number | string | null;
+    longitude?: number | string | null;
   };
   store_name?: string; // Backend uses this field directly
   store_info_id?: number;
+  store_address?: string | null;
+  store_latitude?: number | string | null;
+  store_longitude?: number | string | null;
   details?: Array<{
     id: number;
     food: {

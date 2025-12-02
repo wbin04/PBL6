@@ -26,4 +26,4 @@
 export { default as CancelScreen } from './CancelScreen';
 export { default as TrackingScreen } from './TrackingScreen';
 export { default as MapTrackingScreen } from './MapTrackingScreen';
-
+export { default as ChatbotScreen } from './ChatbotScreen';
