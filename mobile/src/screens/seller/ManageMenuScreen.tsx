@@ -1,15 +1,19 @@
 import React, { useEffect, useState, useCallback } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Image, Switch, TouchableWithoutFeedback, ActivityIndicator, Alert, Dimensions, Modal } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Image, Switch, TouchableWithoutFeedback, ActivityIndicator, Alert, Dimensions, TextInput } from 'react-native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { Swipeable } from 'react-native-gesture-handler';
-import { Trash2, Menu, X, ShoppingBag } from 'lucide-react-native';
+import { Trash2, Menu, X, ShoppingBag, Plus, User } from 'lucide-react-native';
 import { useSelector } from 'react-redux';
 import { RootState } from '../../store/index';
 import axios from 'axios';
 import { useFocusEffect } from '@react-navigation/native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { Ionicons } from '@expo/vector-icons';
 
 import { API_CONFIG } from '@/constants';
 import { IMAGE_MAP, type ImageName } from "@/assets/imageMap";
+import { Fonts } from '@/constants/Fonts';
+import Sidebar from '@/components/sidebar';
 
 const { width: screenWidth } = Dimensions.get('window');
 
@@ -55,6 +59,7 @@ const ManageMenuScreen: React.FC<ManageMenuScreenProps> = ({ navigation }) => {
   const [categories, setCategories] = useState<any[]>([]);
   const [selectedTab, setSelectedTab] = useState('all');
   const [sidebarVisible, setSidebarVisible] = useState(false);
+  const [searchText, setSearchText] = useState('');
   const { user, tokens } = useSelector((state: RootState) => state.auth);
 
   const hashString = (str: string): number => {
@@ -246,14 +251,20 @@ const ManageMenuScreen: React.FC<ManageMenuScreenProps> = ({ navigation }) => {
   }, [fetchCategories]);
 
   const filteredMenu = menu.filter(item => {
-    if (selectedTab === 'all') return true;
+    const matchSearch = searchText.trim() === '' || 
+      item.title?.toLowerCase().includes(searchText.toLowerCase()) ||
+      item.description?.toLowerCase().includes(searchText.toLowerCase());
+    
+    if (selectedTab === 'all') return matchSearch;
     if (selectedTab === 'main') {
-      return item.category?.name?.toLowerCase().includes('chính') || 
-             item.category?.name?.toLowerCase().includes('main');
+      return matchSearch && (
+        item.category?.name?.toLowerCase().includes('chính') || 
+        item.category?.name?.toLowerCase().includes('main')
+      );
     }
     const categoryMatch = item.category?.id.toString() === selectedTab;
     console.log(`Food: ${item.title}, Category: ${item.category?.name} (ID: ${item.category?.id}), Selected tab: ${selectedTab}, Match: ${categoryMatch}`);
-    return categoryMatch;
+    return matchSearch && categoryMatch;
   });
 
   useEffect(() => {
@@ -330,567 +341,586 @@ const ManageMenuScreen: React.FC<ManageMenuScreenProps> = ({ navigation }) => {
 
   if (loading) {
     return (
-      <View style={styles.loaderContainer}>
+      <SafeAreaView style={styles.loaderContainer} edges={['top']}>
         <ActivityIndicator size="large" color="#ea580c" />
         <Text style={styles.loadingText}>Đang tải...</Text>
-      </View>
+      </SafeAreaView>
     );
   }
 
   return (
-    <View style={styles.container}>
+    <SafeAreaView style={styles.container} edges={['top']}>
+      {/* Sidebar chung */}
+      <Sidebar
+        isOpen={sidebarVisible}
+        onClose={() => setSidebarVisible(false)}
+      />
+
       {/* Header */}
-      <View style={styles.headerRow}>
-        <TouchableOpacity 
-          style={styles.menuButton}
-          onPress={() => setSidebarVisible(true)}
-        >
-          <Menu color="#ea580c" size={24} />
-        </TouchableOpacity>
-        <View style={styles.headerCenter}>
+      <View style={styles.headerWrap}>
+        <View style={styles.headerTopRow}>
+          <TouchableOpacity
+            onPress={() => setSidebarVisible(true)}
+            style={styles.roundIconBtn}
+          >
+            <Menu size={24} color="#eb5523" />
+          </TouchableOpacity>
+
           <Text style={styles.headerTitle}>Quản lý thực đơn</Text>
-          <Text style={styles.headerSubtitle}>Cửa hàng của tôi</Text>
-        </View>
-        <View style={styles.headerRight}>
-          <TouchableOpacity style={styles.iconBtn}>
-            <Text style={styles.icon}>🔔</Text>
-            <View style={styles.badge}>
-              <Text style={styles.badgeText}>3</Text>
-            </View>
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.avatar}>
-            <Text style={styles.avatarText}>A</Text>
+
+          <TouchableOpacity 
+            style={styles.roundIconBtn}
+            onPress={() => navigation.navigate('SellerProfileScreen')}
+          >
+            <User size={24} color="#eb5523" />
           </TouchableOpacity>
         </View>
-      </View>
-      
-      {/* Section title + button */}
-      <View style={styles.sectionTitleRow}>
-        <Text style={styles.menuSectionTitle}>Thực đơn của tôi</Text>
-        <TouchableOpacity 
-          style={styles.addBtn} 
-          onPress={() => navigation.navigate('AddFoodScreen', { 
-            onRefresh: fetchMenu,
-            categories: categories
-          })}
-        >
-          <Text style={styles.addBtnText}>+ Thêm món</Text>
-        </TouchableOpacity>
-      </View>
 
-      {/* Category Tabs */}
-      <ScrollView 
-        horizontal 
-        showsHorizontalScrollIndicator={false}
-        style={styles.tabScrollView}
-        contentContainerStyle={styles.tabBox}
-      >
-        <TouchableOpacity
-          style={[styles.tabBtn, selectedTab === 'all' && styles.tabActive]}
-          onPress={() => setSelectedTab('all')}
-        >
-          <Text style={[styles.tabText, selectedTab === 'all' && styles.tabTextActive]}>Tất cả</Text>
-        </TouchableOpacity>
-        {categories.length > 0 && categories.map((category, index) => (
-          <TouchableOpacity
-            key={category.id}
-            style={[styles.tabBtn, selectedTab === category.id.toString() && styles.tabActive]}
-            onPress={() => {
-              console.log('Selected category:', category.name, 'ID:', category.id);
-              setSelectedTab(category.id.toString());
-            }}
-          >
-            <Text style={[styles.tabText, selectedTab === category.id.toString() && styles.tabTextActive]} numberOfLines={1}>
-              {category.name}
-            </Text>
-          </TouchableOpacity>
-        ))}
-        {categories.length === 0 && !loading && (
-          <TouchableOpacity
-            style={[styles.tabBtn, selectedTab === 'main' && styles.tabActive]}
-            onPress={() => setSelectedTab('main')}
-          >
-            <Text style={[styles.tabText, selectedTab === 'main' && styles.tabTextActive]}>Bữa chính</Text>
-          </TouchableOpacity>
-        )}
-      </ScrollView>
-
-      {/* Menu list with filtered count */}
-      <View style={styles.menuListContainer}>
-        <Text style={styles.menuListTitle}>
-          Tất cả món ăn ({filteredMenu.length})
-          {loading && ' - Đang tải...'}
-        </Text>
-        
-        <ScrollView contentContainerStyle={{ paddingBottom: 24 }}>
-          {filteredMenu.length === 0 ? (
-            <View style={styles.emptyContainer}>
-              <Text style={styles.emptyText}>
-                {selectedTab === 'all' ? 'Chưa có món ăn nào' : 'Không có món ăn trong danh mục này'}
-              </Text>
-              <Text style={styles.emptySubText}>
-                {selectedTab === 'all' ? 'Nhấn nút "Thêm món" để bắt đầu' : 'Thử chọn danh mục khác'}
-              </Text>
-            </View>
-          ) : (
-            filteredMenu.map(item => (
-              <Swipeable
-                key={item.id}
-                renderRightActions={() => (
-                  <TouchableOpacity style={styles.deleteBtn} onPress={() => handleDeleteFood(item.id)}>
-                    <Trash2 color="#fff" size={28} />
-                  </TouchableOpacity>
-                )}
+        {/* Search Box giữ nguyên */}
+        <View style={styles.searchRow}>
+          <View style={styles.searchBox}>
+            <TextInput
+              style={styles.searchInput}
+              placeholder="Tìm theo tên món, mô tả..."
+              placeholderTextColor="#9ca3af"
+              value={searchText}
+              onChangeText={setSearchText}
+              returnKeyType="search"
+            />
+            {searchText.length > 0 && (
+              <TouchableOpacity
+                onPress={() => setSearchText('')}
+                style={styles.clearBtn}
               >
-                <TouchableWithoutFeedback onPress={() => navigation.navigate('FoodDetailScreen', item)}>
-                  <View style={styles.menuCard}>
-                    <View style={styles.menuLeft}>
-                      <Image 
-                        source={getImageSource(item.image)} 
-                        style={styles.menuImage} 
-                      />
-                    </View>
-                    <View style={styles.menuCenter}>
-                      <Text style={styles.menuName}>{item.title}</Text>
-                      <Text style={styles.menuDesc}>{item.description}</Text>
-                      <Text style={styles.menuPrice}>{parseInt(item.price).toLocaleString()} đ</Text>
-                      <View style={styles.menuInfoRow}>
-                        <Text style={styles.menuStar}>⭐ {item.average_rating?.toFixed(1) || '0.0'}</Text>
-                        <Text style={styles.menuOrders}>{item.rating_count || 0} đánh giá</Text>
-                        {item.category && (
-                          <>
-                            <Text style={styles.dot}>·</Text>
-                            <Text style={styles.categoryText}>{item.category.name}</Text>
-                          </>
-                        )}
-                      </View>
-                    </View>
-                    <View style={styles.menuRight}>
-                      <Switch 
-                        value={item.availability === 'Còn hàng'} 
-                        onValueChange={() => handleToggle(item.id)} 
-                        style={{ transform: [{ scaleX: 1.2 }, { scaleY: 1.2 }] }} 
-                      />
-                      <TouchableOpacity 
-                        style={styles.editBtn} 
-                        onPress={() => navigation.navigate('EditFoodScreen', { 
-                          food: item, 
-                          onEditFood: fetchMenu,
-                          categories: categories,
-                        })}
-                      >
-                        <Text style={styles.editIcon}>✏️</Text>
-                      </TouchableOpacity>
-                    </View>
+                <Ionicons name="close-circle" size={16} color="#9ca3af" />
+              </TouchableOpacity>
+            )}
+            <TouchableOpacity style={styles.searchBtn} activeOpacity={0.8}>
+              <Ionicons name="search" size={16} color="#fff" />
+            </TouchableOpacity>
+          </View>
+        </View>
+      </View>
+
+      {/* Category Tabs: KHÔNG còn nút Thêm trong tabs */}
+      <View style={styles.tabs}>
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.tabsContent}
+        >
+          {/* Tab Tất cả */}
+          <TouchableOpacity
+            style={[styles.tab, selectedTab === 'all' && styles.tabActive]}
+            onPress={() => setSelectedTab('all')}
+            activeOpacity={0.7}
+          >
+            <Text
+              style={[
+                styles.tabText,
+                selectedTab === 'all' && styles.tabTextActive,
+              ]}
+            >
+              Tất cả
+            </Text>
+            <View
+              style={[
+                styles.countBadge,
+                selectedTab === 'all' && styles.countBadgeActive,
+              ]}
+            >
+              <Text
+                style={[
+                  styles.countText,
+                  selectedTab === 'all' && styles.countTextActive,
+                ]}
+              >
+                {menu.length}
+              </Text>
+            </View>
+          </TouchableOpacity>
+
+          {/* Category tabs */}
+          {categories.length > 0 &&
+            categories.map((category) => {
+              const count = menu.filter(
+                (item) => item.category?.id === category.id
+              ).length;
+              const isActive = selectedTab === category.id.toString();
+              return (
+                <TouchableOpacity
+                  key={category.id}
+                  style={[styles.tab, isActive && styles.tabActive]}
+                  onPress={() => {
+                    console.log(
+                      'Selected category:',
+                      category.name,
+                      'ID:',
+                      category.id
+                    );
+                    setSelectedTab(category.id.toString());
+                  }}
+                  activeOpacity={0.7}
+                >
+                  <Text
+                    style={[styles.tabText, isActive && styles.tabTextActive]}
+                    numberOfLines={1}
+                  >
+                    {category.name}
+                  </Text>
+                  <View
+                    style={[
+                      styles.countBadge,
+                      isActive && styles.countBadgeActive,
+                    ]}
+                  >
+                    <Text
+                      style={[
+                        styles.countText,
+                        isActive && styles.countTextActive,
+                      ]}
+                    >
+                      {count}
+                    </Text>
                   </View>
-                </TouchableWithoutFeedback>
-              </Swipeable>
-            ))
-          )}
+                </TouchableOpacity>
+              );
+            })}
         </ScrollView>
       </View>
 
-      {/* Sidebar */}
-      {sidebarVisible && (
-        <>
-          <TouchableOpacity style={styles.overlay} activeOpacity={1} onPress={() => setSidebarVisible(false)} />
-          <View style={styles.sidebar}>
-            <View style={styles.logoContainer}>
-              <View style={styles.logoHeader}>
-                <TouchableOpacity onPress={() => setSidebarVisible(false)} style={styles.closeButton}>
-                  <X width={24} height={24} stroke="#fff" />
-                </TouchableOpacity>
-              </View>
-              <View style={styles.logoBox}>
-                <View style={styles.logoCircle}>
-                  <Text style={styles.logoEmoji}>🍔</Text>
-                </View>
-                <Text style={styles.logoText}>BÁN HÀNG</Text>
-              </View>
-            </View>
-            <View style={styles.menuContainer}>
-              <TouchableOpacity
-                style={[styles.menuItem, { backgroundColor: '#ea580c' }]}
-                onPress={() => {
-                  setSidebarVisible(false);
-                  navigation.navigate('DashboardScreen');
-                }}
-              >
-                <Menu width={16} height={16} stroke="#fff7ed" />
-                <Text style={styles.menuText}>Trang chủ</Text>
-              </TouchableOpacity>
+      <View style={styles.foundWrap}>
+        <Text style={styles.foundText}>
+          Tìm thấy{' '}
+          <Text style={styles.foundNum}>{filteredMenu.length}</Text> món ăn
+        </Text>
 
-              <TouchableOpacity
-                style={[styles.menuItem, { backgroundColor: '#ea580c' }]}
-                onPress={() => {
-                  setSidebarVisible(false);
-                  navigation.reset({
-                    index: 0,
-                    routes: [{ name: 'MainTabs', params: { screen: 'Home' } }],
-                  });
-                }}
-              >
-                <ShoppingBag width={16} height={16} stroke="#fff7ed" />
-                <Text style={styles.menuText}>Mua hàng</Text>
-              </TouchableOpacity>
+        <TouchableOpacity
+          style={styles.addBtn}
+          onPress={() =>
+            navigation.navigate('AddFoodScreen', {
+              onRefresh: fetchMenu,
+              categories: categories,
+            })
+          }
+        >
+          <Ionicons name="add" size={18} color="#fff" />
+          <Text style={styles.addBtnText}>Thêm</Text>
+        </TouchableOpacity>
+      </View>
 
-              <TouchableOpacity
-                style={[styles.menuItem, styles.menuItemActive]}
-                onPress={() => setSidebarVisible(false)}
-              >
-                <ShoppingBag width={16} height={16} stroke="#fff" />
-                <Text style={[styles.menuText, styles.menuTextActive]}>Quản lí món ăn</Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={[styles.menuItem, { backgroundColor: '#ea580c' }]}
-                onPress={() => {
-                  setSidebarVisible(false);
-                  navigation.navigate('NewOrderListScreen');
-                }}
-              >
-                <ShoppingBag width={16} height={16} stroke="#fff7ed" />
-                <Text style={styles.menuText}>Quản lí đơn hàng</Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={[styles.menuItem, { backgroundColor: '#ea580c' }]}
-                onPress={() => {
-                  setSidebarVisible(false);
-                  // navigation.navigate('SellerVoucherManagementScreen');
-                }}
-              >
-                <ShoppingBag width={16} height={16} stroke="#fff7ed" />
-                <Text style={styles.menuText}>Quản lí khuyến mãi</Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={[styles.menuItem, { backgroundColor: '#ea580c' }]}
-                onPress={() => {
-                  setSidebarVisible(false);
-                  // Analytics section - could navigate to analytics screen
-                }}
-              >
-                <Menu width={16} height={16} stroke="#fff7ed" />
-                <Text style={styles.menuText}>Thống kê</Text>
-              </TouchableOpacity>
-            </View>
+      {/* Menu list giữ nguyên */}
+      <ScrollView
+        style={styles.menuScrollView}
+        contentContainerStyle={styles.menuScrollContent}
+        showsVerticalScrollIndicator={false}
+      >
+        {filteredMenu.length === 0 ? (
+          <View style={styles.emptyContainer}>
+            <ShoppingBag
+              size={64}
+              color="#d1d5db"
+              style={{ marginBottom: 16 }}
+            />
+            <Text style={styles.emptyText}>
+              {searchText
+                ? 'Không tìm thấy món ăn nào'
+                : selectedTab === 'all'
+                ? 'Chưa có món ăn nào'
+                : 'Không có món trong danh mục này'}
+            </Text>
+            <Text style={styles.emptySubText}>
+              {searchText
+                ? 'Thử từ khóa khác'
+                : selectedTab === 'all'
+                ? 'Nhấn nút "Thêm" để bắt đầu'
+                : 'Thử chọn danh mục khác'}
+            </Text>
           </View>
-        </>
-      )}
-    </View>
+        ) : (
+          filteredMenu.map((item) => (
+            <Swipeable
+              key={item.id}
+              renderRightActions={() => (
+                <TouchableOpacity
+                  style={styles.deleteBtn}
+                  onPress={() => handleDeleteFood(item.id)}
+                >
+                  <Trash2 color="#fff" size={24} />
+                </TouchableOpacity>
+              )}
+            >
+              <TouchableWithoutFeedback
+                onPress={() =>
+                  navigation.navigate('FoodDetailScreen', item)
+                }
+              >
+                <View style={styles.menuCard}>
+                  <Image
+                    source={getImageSource(item.image)}
+                    style={styles.menuImage}
+                  />
+                  <View style={styles.menuInfo}>
+                    <Text style={styles.menuName} numberOfLines={1}>
+                      {item.title}
+                    </Text>
+                    <Text style={styles.menuPrice}>
+                      {parseInt(item.price).toLocaleString()}₫
+                    </Text>
+                    <View style={styles.menuMeta}>
+                      <Text style={styles.menuRating}>
+                        ⭐ {item.average_rating?.toFixed(1) || '0.0'}
+                      </Text>
+                      <Text style={styles.menuDivider}>•</Text>
+                      <Text style={styles.menuReviews}>
+                        {item.rating_count || 0} đánh giá
+                      </Text>
+                      {item.category && (
+                        <>
+                          <Text style={styles.menuDivider}>•</Text>
+                          <Text
+                            style={styles.categoryBadge}
+                            numberOfLines={1}
+                          >
+                            {item.category.name}
+                          </Text>
+                        </>
+                      )}
+                    </View>
+                  </View>
+                  <View style={styles.menuActions}>
+                    <Switch
+                      value={item.availability === 'Còn hàng'}
+                      onValueChange={() => handleToggle(item.id)}
+                      trackColor={{ false: '#d1d5db', true: '#86efac' }}
+                      thumbColor={
+                        item.availability === 'Còn hàng'
+                          ? '#22c55e'
+                          : '#f3f4f6'
+                      }
+                    />
+                    <TouchableOpacity
+                      style={styles.editBtn}
+                      onPress={() =>
+                        navigation.navigate('EditFoodScreen', {
+                          food: item,
+                          onEditFood: fetchMenu,
+                          categories: categories,
+                        })
+                      }
+                    >
+                      <Ionicons
+                        name="create-outline"
+                        size={18}
+                        color="#ea580c"
+                      />
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              </TouchableWithoutFeedback>
+            </Swipeable>
+          ))
+        )}
+      </ScrollView>
+    </SafeAreaView>
   );
 };
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#fff7ed' },
+  container: { 
+    flex: 1, 
+    backgroundColor: '#ffffff',
+  },
   loaderContainer: { 
     flex: 1, 
     justifyContent: 'center', 
     alignItems: 'center', 
-    backgroundColor: '#fff7ed' 
+    backgroundColor: '#ffffff',
   },
   loadingText: {
-    marginTop: 10,
-    fontSize: 16,
-    color: '#ea580c',
-    fontWeight: '500'
+    marginTop: 12,
+    fontSize: 15,
+    color: '#6b7280',
+    fontFamily: Fonts.LeagueSpartanRegular,
   },
-  headerRow: { 
-    flexDirection: 'row', 
-    alignItems: 'center', 
-    paddingHorizontal: 18, 
-    paddingTop: 50, 
-    paddingBottom: 8, 
-    backgroundColor: '#fff7ed',
-    borderBottomWidth: 0 
+
+  headerWrap: {
+    backgroundColor: '#f5cb58',
+    paddingTop: 0,
+    paddingBottom: 12,
   },
-  menuButton: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
+  headerTopRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: 20,
+    marginBottom: 20,
+    paddingHorizontal: 16,
+  },
+  roundIconBtn: {
+    backgroundColor: '#FFFFFF',
+    padding: 10,
+    borderRadius: 999,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.06,
+    shadowRadius: 2,
+    elevation: 1,
+  },
+  headerTitle: {
+    fontSize: 20,
+    color: '#ffffff',
+    fontFamily: Fonts.LeagueSpartanExtraBold,
+  },
+
+  // Search Box
+  searchRow: {
+    paddingBottom: 8,
+    paddingHorizontal: 16,
+  },
+  searchBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
     backgroundColor: '#fff',
+    borderRadius: 999,
+    paddingLeft: 16,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+  },
+  searchInput: {
+    flex: 1,
+    height: 42,
+    fontSize: 14,
+    color: '#111827',
+    fontFamily: Fonts.LeagueSpartanRegular,
+  },
+  clearBtn: {
+    paddingHorizontal: 4,
+  },
+  searchBtn: {
+    height: 42,
+    width: 42,
+    borderRadius: 999,
+    backgroundColor: '#EB552D',
     alignItems: 'center',
     justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: '#f3f4f6',
-    shadowColor: '#000',
-    shadowOpacity: 0.1,
-    shadowRadius: 2,
-    elevation: 2
+    margin: 4,
   },
-  headerCenter: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center'
-  },
-  headerTitle: { fontSize: 20, color: '#1e293b', fontWeight: 'bold' },
-  headerSubtitle: { fontSize: 13, color: '#64748b', marginTop: 2 },
-  headerRight: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  iconBtn: { 
-    width: 32, 
-    height: 32, 
-    borderRadius: 16, 
-    backgroundColor: '#fff', 
-    alignItems: 'center', 
-    justifyContent: 'center', 
-    borderWidth: 1, 
-    borderColor: '#f3f4f6', 
-    marginLeft: 6 
-  },
-  icon: { fontSize: 18 },
-  badge: { 
-    position: 'absolute', 
-    top: -4, 
-    right: -4, 
-    backgroundColor: '#ea580c', 
-    borderRadius: 10, 
-    minWidth: 18, 
-    height: 18, 
-    alignItems: 'center', 
-    justifyContent: 'center', 
-    borderWidth: 2, 
-    borderColor: '#fff' 
-  },
-  badgeText: { fontSize: 11, color: '#fff', fontWeight: 'bold' },
-  avatar: { 
-    width: 32, 
-    height: 32, 
-    borderRadius: 16, 
-    backgroundColor: '#F4A460', 
-    alignItems: 'center', 
-    justifyContent: 'center', 
-    marginLeft: 8 
-  },
-  avatarText: { color: '#fff', fontSize: 14, fontWeight: 'bold' },
-  sectionTitleRow: { 
-    flexDirection: 'row', 
-    alignItems: 'center', 
-    justifyContent: 'space-between', 
-    marginHorizontal: 18, 
-    marginTop: 0, 
-    marginBottom: 16
-  },
-  menuSectionTitle: { 
-    fontSize: 20, 
-    fontWeight: 'bold', 
-    color: '#ea580c' 
-  },
-  addBtn: { 
-    backgroundColor: '#ea580c', 
-    borderRadius: 20, 
-    paddingHorizontal: 16, 
-    paddingVertical: 6 
-  },
-  addBtnText: { color: '#fff', fontWeight: 'bold', fontSize: 15 },
-  tabScrollView: {
-    marginHorizontal: 18,
-    marginBottom: 12,
-    marginTop: 0,
-    maxHeight: 50,
-  },
-  tabBox: {
-    flexDirection: 'row',
-    gap: 8,
-    alignItems: 'center'
-  },
-  tabBtn: {
-    paddingVertical: 6,
-    paddingHorizontal: 16,
-    borderRadius: 20,
+
+  tabs: {
     backgroundColor: '#fff',
-    minWidth: 80,
-    maxWidth: screenWidth * 0.35,
-    marginRight: 8,
+    paddingTop: 12,
+    paddingBottom: 12,
+  },
+  tabsContent: {
+    paddingHorizontal: 16,
+    paddingRight: 24,
+    flexDirection: 'row',
+    alignItems: 'center',
+    columnGap: 10,
+  },
+
+  addBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#ea580c',
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 999,
+  },
+  addBtnText: {
+    color: '#fff',
+    fontFamily: Fonts.LeagueSpartanBold,
+    fontSize: 14,
+  },
+  
+  tab: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 999,
+    backgroundColor: '#F2F3F5',
   },
   tabActive: {
-    backgroundColor: '#fee2e2',
+    backgroundColor: '#EB552D',
+    shadowColor: '#000',
+    shadowOpacity: 0.06,
+    shadowRadius: 2,
+    shadowOffset: { width: 0, height: 1 },
+    elevation: 1,
   },
-  tabText: { 
-    textAlign: 'center', 
-    color: '#ea580c', 
-    fontWeight: 'normal', 
-    fontSize: 14
+  tabText: {
+    color: '#6B7280',
+    fontFamily: Fonts.LeagueSpartanMedium,
+    fontSize: 14,
   },
-  tabTextActive: { 
-    color: '#ea580c',
-    fontWeight: 'bold',
-    fontSize: 15
+  tabTextActive: {
+    color: '#FFFFFF',
+    fontFamily: Fonts.LeagueSpartanSemiBold,
+    fontSize: 14,
   },
-  menuListContainer: {
+  countBadge: {
+    marginLeft: 8,
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 999,
+    backgroundColor: '#e5e7eb',
+  },
+  countBadgeActive: {
+    backgroundColor: 'rgba(255,255,255,0.3)',
+  },
+  countText: {
+    fontSize: 11,
+    color: '#6b7280',
+    fontFamily: Fonts.LeagueSpartanBold,
+  },
+  countTextActive: {
+    color: '#fff',
+  },
+
+  // Found Bar
+  foundWrap: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginTop: 4,
+    backgroundColor: '#F6F7F8',
+    paddingVertical: 8,
+    paddingHorizontal: 14,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 3,
+    elevation: 2,
+  },
+  foundText: {
+    color: '#6B7280',
+    marginLeft: 6,
+    fontSize: 15,
+    fontFamily: Fonts.LeagueSpartanRegular,
+  },
+  foundNum: {
+    color: '#111827',
+    fontFamily: Fonts.LeagueSpartanBold,
+  },
+
+  // Menu List
+  menuScrollView: {
     flex: 1,
   },
-  menuListTitle: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    marginHorizontal: 18,
-    marginBottom: 12,
-    color: '#1f2937',
+  menuScrollContent: {
+    paddingHorizontal: 16,
+    paddingTop: 8,
+    paddingBottom: 100,
   },
   emptyContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    paddingVertical: 60,
+    paddingVertical: 80,
   },
   emptyText: {
     fontSize: 18,
-    fontWeight: 'bold',
-    color: '#64748b',
-    marginBottom: 8,
+    color: '#9ca3af',
+    marginBottom: 6,
+    fontFamily: Fonts.LeagueSpartanSemiBold,
   },
   emptySubText: {
     fontSize: 14,
-    color: '#9ca3af',
+    color: '#d1d5db',
     textAlign: 'center',
+    fontFamily: Fonts.LeagueSpartanRegular,
   },
   menuCard: { 
     flexDirection: 'row', 
     backgroundColor: '#fff', 
     borderRadius: 16, 
-    padding: 16, 
-    marginHorizontal: 18, 
-    marginBottom: 10, 
+    padding: 14,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: '#f3f4f6',
     shadowColor: '#000', 
-    shadowOpacity: 0.03, 
-    shadowRadius: 4, 
-    elevation: 1 
+    shadowOpacity: 0.04, 
+    shadowRadius: 6, 
+    elevation: 2,
   },
-  menuLeft: { marginRight: 12 },
   menuImage: { 
-    width: 54, 
-    height: 54, 
+    width: 68, 
+    height: 68, 
     borderRadius: 12, 
-    backgroundColor: '#fffde7' 
+    backgroundColor: '#f9fafb',
+    marginRight: 12,
   },
-  menuCenter: { flex: 1 },
-  menuName: { fontWeight: 'bold', fontSize: 15, color: '#1e293b' },
-  menuDesc: { fontSize: 13, color: '#6b7280', marginTop: 2 },
-  menuPrice: { fontSize: 15, color: '#ea580c', fontWeight: 'bold', marginTop: 4 },
-  menuInfoRow: { flexDirection: 'row', alignItems: 'center', marginTop: 6, gap: 12 },
-  menuStar: { fontSize: 13, color: '#f59e0b' },
-  menuOrders: { fontSize: 13, color: '#64748b' },
-  dot: { 
-    color: '#d1d5db', 
-    fontSize: 16 
+  menuInfo: { 
+    flex: 1,
+    justifyContent: 'space-between',
   },
-  categoryText: { 
-    fontSize: 12, 
-    color: '#6366f1',
-    fontWeight: '500'
-  },
-  menuRight: { 
-    alignItems: 'center', 
-    justifyContent: 'space-between', 
-    marginLeft: 12 
-  },
-  editBtn: { marginTop: 12 },
-  editIcon: { fontSize: 20 },
-  deleteBtn: { 
-    backgroundColor: '#ea580c', 
-    justifyContent: 'center', 
-    alignItems: 'center', 
-    width: 100, 
-    height: '90%', 
-    borderRadius: 16, 
-    marginRight: 10 
-  },
-  overlay: { 
-    position: 'absolute', 
-    top: 0, 
-    left: 0, 
-    right: 0, 
-    bottom: 0, 
-    backgroundColor: 'rgba(0,0,0,0.5)', 
-    zIndex: 1 
-  },
-  sidebar: { 
-    position: 'absolute', 
-    left: 0, 
-    top: 0, 
-    bottom: 0, 
-    width: 260, 
-    backgroundColor: '#f5f2f0ff', 
-    borderRightWidth: 0, 
-    zIndex: 2, 
-    shadowColor: '#000', 
-    shadowOffset: { width: 2, height: 0 }, 
-    shadowOpacity: 0.18, 
-    shadowRadius: 10, 
-    elevation: 10 
-  },
-  logoContainer: { 
-    paddingTop: 24, 
-    paddingBottom: 16, 
-    borderBottomWidth: 0, 
-    alignItems: 'center', 
-    backgroundColor: '#ea580c', 
-    height: 160
-  },
-  logoHeader: { 
-    flexDirection: 'row', 
-    justifyContent: 'flex-end', 
-    width: '100%', 
-    paddingRight: 16 
-  },
-  closeButton: { 
-    padding: 6, 
-    backgroundColor: '#ea580c', 
-    borderRadius: 16, 
-    marginTop: 20
-  },
-  logoBox: { 
-    alignItems: 'center', 
-    marginTop: -30 
-  },
-  logoCircle: { 
-    width: 56, 
-    height: 56, 
-    borderRadius: 28, 
-    backgroundColor: '#fff', 
-    alignItems: 'center', 
-    justifyContent: 'center', 
-    marginBottom: 8, 
-    shadowColor: '#ea580c', 
-    shadowOpacity: 0.15, 
-    shadowRadius: 8, 
-    elevation: 4 
-  },
-  logoEmoji: { 
-    fontSize: 32 
-  },
-  logoText: { 
-    fontSize: 18, 
-    color: '#fff', 
-    fontWeight: 'bold', 
-    letterSpacing: 1 
-  },
-  menuContainer: { 
-    flex: 1, 
-    paddingVertical: 16 
-  },
-  menuItem: { 
-    flexDirection: 'row', 
-    alignItems: 'center', 
-    paddingHorizontal: 20, 
-    paddingVertical: 14, 
-    marginHorizontal: 12, 
-    borderRadius: 10, 
-    marginBottom: 8 
-  },
-  menuItemActive: { 
-    backgroundColor: '#fff', 
-    borderWidth: 0 
-  },
-  menuText: { 
-    marginLeft: 14, 
+  menuName: { 
     fontSize: 15, 
-    color: '#fff', 
-    fontWeight: '500' 
+    color: '#1f2937',
+    fontFamily: Fonts.LeagueSpartanBold,
+    marginBottom: 4,
   },
-  menuTextActive: { 
-    color: '#ea580c', 
-    fontWeight: 'bold' 
+  menuPrice: { 
+    fontSize: 16, 
+    color: '#ea580c',
+    fontFamily: Fonts.LeagueSpartanBold,
+    marginBottom: 4,
+  },
+  menuMeta: { 
+    flexDirection: 'row', 
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    gap: 6,
+  },
+  menuRating: { 
+    fontSize: 13, 
+    color: '#f59e0b',
+    fontFamily: Fonts.LeagueSpartanMedium,
+  },
+  menuDivider: { 
+    color: '#d1d5db', 
+    fontSize: 14,
+  },
+  menuReviews: { 
+    fontSize: 12, 
+    color: '#9ca3af',
+    fontFamily: Fonts.LeagueSpartanRegular,
+  },
+  categoryBadge: { 
+    fontSize: 11, 
+    color: '#6366f1',
+    backgroundColor: '#e0e7ff',
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 8,
+    fontFamily: Fonts.LeagueSpartanMedium,
+    maxWidth: 80,
+  },
+  menuActions: { 
+    alignItems: 'center', 
+    justifyContent: 'space-between',
+    marginLeft: 8,
+  },
+  editBtn: { 
+    marginTop: 8,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: '#fef3e2',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  deleteBtn: { 
+    backgroundColor: '#eb5523', 
+    justifyContent: 'center', 
+    alignItems: 'center', 
+    width: 90,
+    borderRadius: 16, 
+    marginLeft: 8,
+    marginBottom: 12,
   },
 });
 

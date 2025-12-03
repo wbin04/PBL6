@@ -100,7 +100,7 @@ export default function RestaurantsIndex() {
         <View style={styles.headerWrap}>
           <View style={styles.headerTopRow}>
             <TouchableOpacity onPress={() => navigation.goBack()} style={styles.roundIconBtn}>
-              <ArrowLeft size={18} color="#3a1a12" />
+              <ArrowLeft size={24} color="#eb552d" />
             </TouchableOpacity>
 
             <Text style={styles.headerTitle}>Cửa hàng</Text>
@@ -110,13 +110,13 @@ export default function RestaurantsIndex() {
                 style={styles.roundIconBtn}
                 onPress={() => navigation.navigate("Cart")}
               >
-                <ShoppingCart size={18} color="#3a1a12" />
+                <ShoppingCart size={24} color="#eb552d" />
               </TouchableOpacity>
               <TouchableOpacity
                 style={styles.roundIconBtn}
                 onPress={() => navigation.navigate("Support" as any)} 
               >
-                <User size={18} color="#3a1a12" />
+                <User size={24} color="#eb552d" />
               </TouchableOpacity>
             </View>
           </View>
@@ -248,7 +248,7 @@ const styles = StyleSheet.create({
   },
   headerTitle: {
     fontSize: 20,
-    color: "#3a1a12",
+    color: "#ffffff",
     fontFamily: Fonts.LeagueSpartanExtraBold,
   },
   searchRow: {

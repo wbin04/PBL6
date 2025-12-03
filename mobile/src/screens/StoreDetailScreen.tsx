@@ -206,7 +206,6 @@ export const StoreDetailScreen: React.FC<StoreDetailProps> = () => {
     );
   };
 
-  // Dùng trực tiếp FoodCard, không tự tạo component card riêng
   const renderFood = ({ item }: { item: Food }) => (
     <FoodCard
       food={item}
@@ -218,16 +217,16 @@ export const StoreDetailScreen: React.FC<StoreDetailProps> = () => {
 
   if (loading && !currentStore) {
     return (
-      <SafeAreaView style={[styles.container, styles.centerContent]} edges={['top', 'bottom']}>
+      <View style={[styles.container, styles.centerContent]}>
         <StatusBar barStyle="light-content" backgroundColor={COLORS.primary} />
         <Text>Đang tải...</Text>
-      </SafeAreaView>
+      </View>
     );
   }
 
   if (!currentStore) {
     return (
-      <SafeAreaView style={[styles.container, styles.centerContent]} edges={['top', 'bottom']}>
+      <View style={[styles.container, styles.centerContent]}>
         <StatusBar barStyle="light-content" backgroundColor={COLORS.primary} />
         <Text>Không tìm thấy cửa hàng</Text>
         <TouchableOpacity 
@@ -236,7 +235,7 @@ export const StoreDetailScreen: React.FC<StoreDetailProps> = () => {
         >
           <Text style={styles.retryButtonText}>Thử lại</Text>
         </TouchableOpacity>
-      </SafeAreaView>
+      </View>
     );
   }
 
@@ -478,125 +477,125 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     color: COLORS.text,
     marginTop: 4,
-  },fontFamily: Fonts.LeagueSpartanBold,
+    fontFamily: Fonts.LeagueSpartanBold,
   },
+
   storeDescription: {
-    fontSize: 15,n: {
+    fontSize: 15,
     color: COLORS.textSecondary,
-    lineHeight: 22,extSecondary,
-    marginTop: 4,2,
+    lineHeight: 22,
+    marginTop: 4,
     fontFamily: Fonts.LeagueSpartanRegular,
-  },fontFamily: Fonts.LeagueSpartanRegular,
   },
+
   // === Categories section ===
-  categoriesSection: {ction ===
+  categoriesSection: {
     backgroundColor: COLORS.white,
     paddingHorizontal: SPACING.lg,
-    paddingBottom: SPACING.md,.lg,
-    paddingTop: SPACING.sm,md,
+    paddingBottom: SPACING.md,
+    paddingTop: SPACING.sm,
     marginBottom: SPACING.xs,
-  },marginBottom: SPACING.xs,
   },
+
   sectionTitle: {
     fontSize: 18,
     fontWeight: 'bold',
     color: COLORS.text,
     fontFamily: Fonts.LeagueSpartanSemiBold,
-  },fontFamily: Fonts.LeagueSpartanSemiBold,
   },
+
   categoriesContainer: {
     paddingVertical: SPACING.sm,
-  },paddingVertical: SPACING.sm,
   },
+
   categoryChip: {
     backgroundColor: COLORS.gray100,
     borderRadius: BORDER_RADIUS.full,
-    paddingVertical: SPACING.sm,full,
+    paddingVertical: SPACING.sm,
     paddingHorizontal: SPACING.md,
-    marginRight: SPACING.sm,NG.md,
-    borderWidth: 1,ACING.sm,
+    marginRight: SPACING.sm,
+    borderWidth: 1,
     borderColor: COLORS.border,
-  },borderColor: COLORS.border,
   },
+
   categoryChipSelected: {
     backgroundColor: COLORS.primary,
-    borderColor: COLORS.primary,ary,
-  },borderColor: COLORS.primary,
+    borderColor: COLORS.primary,
   },
+
   categoryChipText: {
-    fontSize: 14,t: {
+    fontSize: 14,
     fontWeight: '500',
     color: COLORS.text,
     fontFamily: Fonts.LeagueSpartanMedium,
-  },fontFamily: Fonts.LeagueSpartanMedium,
   },
+
   categoryChipTextSelected: {
-    color: COLORS.white,ed: {
+    color: COLORS.white,
     fontFamily: Fonts.LeagueSpartanSemiBold,
-  },fontFamily: Fonts.LeagueSpartanSemiBold,
   },
+
   clearFilterButton: {
     padding: SPACING.xs,
-  },padding: SPACING.xs,
   },
+
   clearFilterText: {
-    fontSize: 14,: {
+    fontSize: 14,
     color: COLORS.primary,
-    fontWeight: '500',ary,
+    fontWeight: '500',
     fontFamily: Fonts.LeagueSpartanMedium,
-  },fontFamily: Fonts.LeagueSpartanMedium,
   },
+
   // === List header cho phần món ăn ===
-  foodHeaderRow: {er cho phần món ăn ===
+  foodHeaderRow: {
     backgroundColor: COLORS.white,
     paddingHorizontal: SPACING.lg,
-    paddingVertical: SPACING.md,g,
-    flexDirection: 'row',ING.md,
+    paddingVertical: SPACING.md,
+    flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'center',e-between',
+    alignItems: 'center',
     marginBottom: SPACING.xs,
-  },marginBottom: SPACING.xs,
   },
+
   // === Foods grid ===
-  listContent: {rid ===
+  listContent: {
     paddingBottom: SPACING.xl,
-  },paddingBottom: SPACING.xl,
   },
+
   foodsRow: {
     justifyContent: 'space-between',
-    paddingHorizontal: SPACING.lg,',
-  },paddingHorizontal: SPACING.lg,
+    paddingHorizontal: SPACING.lg,
   },
+
   foodCard: {
     width: '48%',
     marginBottom: SPACING.md,
-  },marginBottom: SPACING.md,
   },
+
   loadingFooter: {
     padding: SPACING.lg,
     alignItems: 'center',
-  },alignItems: 'center',
   },
+
   emptyState: {
     padding: SPACING.lg,
     alignItems: 'center',
     justifyContent: 'center',
-    minHeight: 100, 'center',
-  },minHeight: 100,
+    minHeight: 100,
   },
+
   retryButton: {
     backgroundColor: COLORS.primary,
-    borderRadius: BORDER_RADIUS.md,,
-    paddingVertical: SPACING.sm,md,
+    borderRadius: BORDER_RADIUS.md,
+    paddingVertical: SPACING.sm,
     paddingHorizontal: SPACING.lg,
-    marginTop: SPACING.md,CING.lg,
-  },marginTop: SPACING.md,
+    marginTop: SPACING.md,
   },
+
   retryButtonText: {
     color: COLORS.white,
-    fontSize: 16,.white,
+    fontSize: 16,
     fontWeight: '600',
     fontFamily: Fonts.LeagueSpartanSemiBold,
-  },fontFamily: Fonts.LeagueSpartanSemiBold,
-});,
+  },
 });

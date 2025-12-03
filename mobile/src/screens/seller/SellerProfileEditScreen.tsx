@@ -1,12 +1,14 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, TextInput, ScrollView, Alert, ActivityIndicator } from 'react-native';
-import { X, MapPin } from 'lucide-react-native';
+import { ArrowLeft, MapPin } from 'lucide-react-native';
 import { useDispatch, useSelector } from 'react-redux';
 import { AddressPickerModal } from '@/components';
 import { RootState, AppDispatch } from '@/store';
 import { storesService, StoreUpdatePayload } from '@/services';
 import { Store, User } from '@/types';
 import { updateProfile } from '@/store/slices/authSlice';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { Fonts } from '@/constants/Fonts';
 
 type SellerProfileEditScreenProps = {
   navigation: any;
@@ -41,6 +43,9 @@ const normalizeCoordinate = (value?: number | string | null): number | null => {
   const parsed = parseFloat(value);
   return Number.isNaN(parsed) ? null : parsed;
 };
+
+const ORANGE = '#e95322';
+const BORDER = '#e5e7eb';
 
 const SellerProfileEditScreen: React.FC<SellerProfileEditScreenProps> = ({ navigation, route }) => {
   const dispatch = useDispatch<AppDispatch>();
@@ -251,111 +256,158 @@ const SellerProfileEditScreen: React.FC<SellerProfileEditScreenProps> = ({ navig
   };
 
   return (
-    <View style={styles.container}>
+    <SafeAreaView style={{ flex: 1, backgroundColor: '#fff' }} edges={['top', 'bottom']}>
+      {/* Header giống AddFoodScreen / EditFood */}
       <View style={styles.header}>
-        <Text style={styles.headerTitle}>Chỉnh sửa hồ sơ</Text>
-        <TouchableOpacity style={styles.closeBtn} onPress={() => navigation.goBack()}>
-          <X size={28} color="#222" />
+        <TouchableOpacity onPress={() => navigation.goBack()} style={{ padding: 6 }}>
+          <ArrowLeft size={24} color="#374151" />
         </TouchableOpacity>
+        <Text style={styles.headerTitle}>Chỉnh sửa hồ sơ</Text>
+        <View style={{ width: 24 }} />
       </View>
 
-      <ScrollView contentContainerStyle={{ paddingBottom: 32 }} showsVerticalScrollIndicator={false}>
-        <View style={styles.sectionBox}>
-          <Text style={styles.sectionTitle}>Thông tin cá nhân</Text>
-          <Text style={styles.inputLabel}>Họ và tên *</Text>
-          <TextInput
-            style={styles.input}
-            value={profileForm.fullname}
-            onChangeText={value => handleProfileChange('fullname', value)}
-            placeholder="Nhập họ tên"
-          />
-          <Text style={styles.inputLabel}>Email *</Text>
-          <TextInput
-            style={styles.input}
-            value={profileForm.email}
-            onChangeText={value => handleProfileChange('email', value)}
-            keyboardType="email-address"
-            autoCapitalize="none"
-            placeholder="seller@example.com"
-          />
-          <Text style={styles.inputLabel}>Số điện thoại</Text>
-          <TextInput
-            style={styles.input}
-            value={profileForm.phone_number}
-            onChangeText={value => handleProfileChange('phone_number', value)}
-            keyboardType="phone-pad"
-            placeholder="0901234567"
-          />
-          <View style={styles.labelRow}>
-            <Text style={styles.inputLabel}>Địa chỉ</Text>
-            <TouchableOpacity style={styles.mapPickerButton} onPress={() => setActivePicker('user')}>
-              <MapPin size={16} color="#ea580c" />
-              <Text style={styles.mapPickerText}>Chọn trên bản đồ</Text>
-            </TouchableOpacity>
+      <ScrollView
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={{ padding: 16, paddingBottom: 120 }}
+      >
+        {/* Thông tin cá nhân */}
+        <View style={styles.card}>
+          <Text style={styles.sectionLabel}>Thông tin cá nhân</Text>
+
+          <View style={{ marginBottom: 12 }}>
+            <Text style={styles.label}>Họ và tên *</Text>
+            <TextInput
+              style={styles.input}
+              value={profileForm.fullname}
+              onChangeText={value => handleProfileChange('fullname', value)}
+              placeholder="Nhập họ tên"
+              placeholderTextColor="#9ca3af"
+            />
           </View>
-          <TextInput
-            style={styles.input}
-            value={profileForm.address}
-            onChangeText={value => handleProfileChange('address', value)}
-            placeholder="Nhập địa chỉ cá nhân"
-            multiline
-          />
-          {renderCoordinateMeta(profileForm.latitude, profileForm.longitude)}
+
+          <View style={{ marginBottom: 12 }}>
+            <Text style={styles.label}>Email *</Text>
+            <TextInput
+              style={styles.input}
+              value={profileForm.email}
+              onChangeText={value => handleProfileChange('email', value)}
+              keyboardType="email-address"
+              autoCapitalize="none"
+              placeholder="seller@example.com"
+              placeholderTextColor="#9ca3af"
+            />
+          </View>
+
+          <View style={{ marginBottom: 12 }}>
+            <Text style={styles.label}>Số điện thoại</Text>
+            <TextInput
+              style={styles.input}
+              value={profileForm.phone_number}
+              onChangeText={value => handleProfileChange('phone_number', value)}
+              keyboardType="phone-pad"
+              placeholder="0901234567"
+              placeholderTextColor="#9ca3af"
+            />
+          </View>
+
+          <View style={{ marginBottom: 4 }}>
+            <View style={styles.labelRow}>
+              <Text style={styles.label}>Địa chỉ</Text>
+              <TouchableOpacity
+                style={styles.mapPickerButton}
+                onPress={() => setActivePicker('user')}
+              >
+                <MapPin size={16} color={ORANGE} />
+                <Text style={styles.mapPickerText}>Chọn trên bản đồ</Text>
+              </TouchableOpacity>
+            </View>
+            <TextInput
+              style={[styles.input, { height: 80, textAlignVertical: 'top', marginTop: 6 }]}
+              value={profileForm.address}
+              onChangeText={value => handleProfileChange('address', value)}
+              placeholder="Nhập địa chỉ cá nhân"
+              placeholderTextColor="#9ca3af"
+              multiline
+            />
+            {renderCoordinateMeta(profileForm.latitude, profileForm.longitude)}
+          </View>
         </View>
 
-        <View style={styles.sectionBox}>
-          <Text style={styles.sectionTitle}>Thông tin cửa hàng</Text>
+        {/* Thông tin cửa hàng */}
+        <View style={styles.card}>
+          <Text style={styles.sectionLabel}>Thông tin cửa hàng</Text>
+
           {loadingStore ? (
             <View style={styles.loadingBox}>
-              <ActivityIndicator color="#ea580c" />
+              <ActivityIndicator color={ORANGE} />
               <Text style={styles.loadingText}>Đang tải dữ liệu cửa hàng...</Text>
             </View>
           ) : (
             <>
-              <Text style={styles.inputLabel}>Tên cửa hàng *</Text>
-              <TextInput
-                style={styles.input}
-                value={storeForm.store_name}
-                onChangeText={value => handleStoreChange('store_name', value)}
-                placeholder="Nhập tên cửa hàng"
-              />
-              <Text style={styles.inputLabel}>Mô tả</Text>
-              <TextInput
-                style={[styles.input, styles.multilineInput]}
-                value={storeForm.description}
-                onChangeText={value => handleStoreChange('description', value)}
-                placeholder="Giới thiệu ngắn về cửa hàng"
-                multiline
-              />
-              <View style={styles.labelRow}>
-                <Text style={styles.inputLabel}>Địa chỉ *</Text>
-                <TouchableOpacity style={styles.mapPickerButton} onPress={() => setActivePicker('store')}>
-                  <MapPin size={16} color="#ea580c" />
-                  <Text style={styles.mapPickerText}>Chọn trên bản đồ</Text>
-                </TouchableOpacity>
+              <View style={{ marginBottom: 12 }}>
+                <Text style={styles.label}>Tên cửa hàng *</Text>
+                <TextInput
+                  style={styles.input}
+                  value={storeForm.store_name}
+                  onChangeText={value => handleStoreChange('store_name', value)}
+                  placeholder="Nhập tên cửa hàng"
+                  placeholderTextColor="#9ca3af"
+                />
               </View>
-              <TextInput
-                style={styles.input}
-                value={storeForm.address}
-                onChangeText={value => handleStoreChange('address', value)}
-                placeholder="Địa chỉ cửa hàng"
-                multiline
-              />
-              {renderCoordinateMeta(storeForm.latitude, storeForm.longitude)}
+
+              <View style={{ marginBottom: 12 }}>
+                <Text style={styles.label}>Mô tả</Text>
+                <TextInput
+                  style={[styles.input, { height: 100, textAlignVertical: 'top' }]}
+                  value={storeForm.description}
+                  onChangeText={value => handleStoreChange('description', value)}
+                  placeholder="Giới thiệu ngắn về cửa hàng"
+                  placeholderTextColor="#9ca3af"
+                  multiline
+                />
+              </View>
+
+              <View style={{ marginBottom: 4 }}>
+                <View style={styles.labelRow}>
+                  <Text style={styles.label}>Địa chỉ *</Text>
+                  <TouchableOpacity
+                    style={styles.mapPickerButton}
+                    onPress={() => setActivePicker('store')}
+                  >
+                    <MapPin size={16} color={ORANGE} />
+                    <Text style={styles.mapPickerText}>Chọn trên bản đồ</Text>
+                  </TouchableOpacity>
+                </View>
+                <TextInput
+                  style={[styles.input, { height: 80, textAlignVertical: 'top', marginTop: 6 }]}
+                  value={storeForm.address}
+                  onChangeText={value => handleStoreChange('address', value)}
+                  placeholder="Địa chỉ cửa hàng"
+                  placeholderTextColor="#9ca3af"
+                  multiline
+                />
+                {renderCoordinateMeta(storeForm.latitude, storeForm.longitude)}
+              </View>
             </>
           )}
         </View>
-
-        <View style={{ alignItems: 'center', marginTop: 24 }}>
-          <TouchableOpacity
-            style={[styles.saveBtn, (saving || loadingStore) && styles.saveBtnDisabled]}
-            onPress={handleSave}
-            disabled={saving || loadingStore}
-          >
-            {saving ? <ActivityIndicator color="#fff" /> : <Text style={styles.saveBtnText}>Lưu</Text>}
-          </TouchableOpacity>
-        </View>
       </ScrollView>
+
+      {/* Bottom bar giống AddFoodScreen */}
+      <View style={styles.bottomBar}>
+        <TouchableOpacity
+          style={[styles.saveBtn, (saving || loadingStore) && { opacity: 0.7 }]}
+          onPress={handleSave}
+          disabled={saving || loadingStore}
+          activeOpacity={0.9}
+        >
+          {saving ? (
+            <ActivityIndicator color="#fff" />
+          ) : (
+            <Text style={styles.saveText}>Lưu thay đổi</Text>
+          )}
+        </TouchableOpacity>
+      </View>
 
       <AddressPickerModal
         visible={!!activePicker}
@@ -364,29 +416,118 @@ const SellerProfileEditScreen: React.FC<SellerProfileEditScreenProps> = ({ navig
         initialAddress={currentPickerAddress}
         initialCoords={currentPickerCoords}
       />
-    </View>
+    </SafeAreaView>
   );
 };
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#fff', padding: 0 },
-  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 18, paddingTop: 18, paddingBottom: 8, backgroundColor: '#fff7ed', borderBottomWidth: 0, marginTop: 30 },
-  headerTitle: { fontSize: 20, fontWeight: 'bold', color: '#222' },
-  closeBtn: { padding: 6 },
-  sectionBox: { backgroundColor: '#fff7ed', borderRadius: 12, marginHorizontal: 18, marginTop: 18, padding: 16 },
-  sectionTitle: { fontSize: 16, fontWeight: 'bold', color: '#ea580c', marginBottom: 8 },
-  inputLabel: { fontSize: 13, color: '#888', marginTop: 10 },
-  input: { backgroundColor: '#fff', borderRadius: 8, borderWidth: 1, borderColor: '#e5e7eb', paddingHorizontal: 12, paddingVertical: 10, fontSize: 15, color: '#222', marginTop: 4 },
-  multilineInput: { minHeight: 60, textAlignVertical: 'top' },
-  labelRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 10 },
-  mapPickerButton: { flexDirection: 'row', alignItems: 'center' },
-  mapPickerText: { color: '#ea580c', marginLeft: 4, fontWeight: '600' },
-  saveBtn: { backgroundColor: '#ea580c', paddingHorizontal: 32, paddingVertical: 12, borderRadius: 24, shadowColor: '#ea580c', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.2, shadowRadius: 4, minWidth: 160, alignItems: 'center' },
-  saveBtnDisabled: { opacity: 0.7 },
-  saveBtnText: { color: '#fff', fontWeight: 'bold', fontSize: 16, letterSpacing: 1 },
-  locationMeta: { fontSize: 12, color: '#6b7280', marginTop: 6 },
-  loadingBox: { alignItems: 'center', paddingVertical: 12 },
-  loadingText: { marginTop: 8, color: '#6b7280' },
+  header: {
+    backgroundColor: '#fff',
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: '#f3f4f6',
+  },
+  headerTitle: {
+    flex: 1,
+    textAlign: 'center',
+    fontFamily: Fonts.LeagueSpartanSemiBold,
+    fontSize: 18,
+    color: '#111827',
+  },
+
+  card: {
+    backgroundColor: '#fff',
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: BORDER,
+  },
+  sectionLabel: {
+    fontFamily: Fonts.LeagueSpartanSemiBold,
+    fontSize: 14,
+    color: '#111827',
+    marginBottom: 8,
+  },
+  label: {
+    fontFamily: Fonts.LeagueSpartanMedium,
+    fontSize: 13,
+    color: '#374151',
+    marginBottom: 6,
+  },
+  input: {
+    borderWidth: 1,
+    borderColor: BORDER,
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    fontFamily: Fonts.LeagueSpartanRegular,
+    fontSize: 14,
+    color: '#111827',
+    backgroundColor: '#fff',
+  },
+
+  labelRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  mapPickerButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  mapPickerText: {
+    marginLeft: 4,
+    color: ORANGE,
+    fontFamily: Fonts.LeagueSpartanSemiBold,
+    fontSize: 12,
+  },
+
+  locationMeta: {
+    fontFamily: Fonts.LeagueSpartanRegular,
+    fontSize: 12,
+    color: '#6b7280',
+    marginTop: 6,
+  },
+
+  loadingBox: {
+    alignItems: 'center',
+    paddingVertical: 12,
+  },
+  loadingText: {
+    marginTop: 8,
+    color: '#6b7280',
+    fontFamily: Fonts.LeagueSpartanRegular,
+    fontSize: 13,
+  },
+
+  bottomBar: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: 0,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: '#f3f4f6',
+    backgroundColor: '#fff',
+    padding: 12,
+    paddingBottom: 40,
+  },
+  saveBtn: {
+    backgroundColor: ORANGE,
+    borderRadius: 12,
+    paddingVertical: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  saveText: {
+    color: '#fff',
+    fontFamily: Fonts.LeagueSpartanSemiBold,
+    fontSize: 15,
+  },
 });
 
 export default SellerProfileEditScreen;
