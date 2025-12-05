@@ -37,7 +37,7 @@ import { API_CONFIG } from "@/constants";
 import { formatPriceWithCurrency } from "@/utils/priceUtils";
 import Sidebar from "@/components/sidebar";
 import db from "@/assets/database.json";
-const copilotIcon = require('../../assets/images/CopilotIcon.png');
+const copilotIcon = require('../../assets/images/copilot-logo.png');
 
 const { width } = Dimensions.get("window");
 const SESSION_KEY = "auth.session";

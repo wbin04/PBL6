@@ -23,7 +23,7 @@ import { Fonts } from "@/constants/Fonts";
 import { RootState, AppDispatch } from '@/store';
 import { fetchStoresWithStats } from '@/store/slices/storesSlice';
 import { Store } from '@/types';
-const CopilotIcon = require('@/assets/images/CopilotIcon.png');
+const CopilotIcon = require('@/assets/images/copilot-logo.png');
 const TABS = ["Tất cả", "Burger", "Pizza", "Lành mạnh"] as const;
 
 const CONTENT_PADDING = 16;
