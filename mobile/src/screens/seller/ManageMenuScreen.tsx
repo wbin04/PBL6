@@ -15,6 +15,15 @@ import { IMAGE_MAP, type ImageName } from "@/assets/imageMap";
 import { Fonts } from '@/constants/Fonts';
 import Sidebar from '@/components/sidebar';
 
+const menuItems = [
+  { title: 'Trang chủ', icon: Menu, section: 'dashboard' },
+  { title: 'Mua hàng', icon: ShoppingBag, section: 'buy' },
+  { title: 'Quản lí món ăn', icon: ShoppingBag, section: 'foods' },
+  { title: 'Quản lí đơn hàng', icon: ShoppingBag, section: 'orders' },
+  { title: 'Quản lí khuyến mãi', icon: ShoppingBag, section: 'promotions' },
+  { title: 'Thống kê', icon: Menu, section: 'analytics' },
+];
+
 const { width: screenWidth } = Dimensions.get('window');
 
 interface ManageMenuScreenProps {
@@ -354,6 +363,24 @@ const ManageMenuScreen: React.FC<ManageMenuScreenProps> = ({ navigation }) => {
       <Sidebar
         isOpen={sidebarVisible}
         onClose={() => setSidebarVisible(false)}
+        menuItems={menuItems}
+        onMenuItemPress={(section) => {
+          setSidebarVisible(false);
+          
+          if (section === 'dashboard') {
+            navigation.navigate('SellerDashboard');
+          } else if (section === 'foods') {
+            // Already on this screen
+          } else if (section === 'promotions') {
+            navigation.navigate('SellerVoucherManagementScreen');
+          } else if (section === 'orders') {
+            navigation.navigate('NewOrderListScreen');
+          } else if (section === 'analytics') {
+            navigation.navigate('SellerDashboard', { section: 'analytics' });
+          } else if (section === 'buy') {
+            navigation.reset({ index: 0, routes: [{ name: 'MainTabs' }] });
+          }
+        }}
       />
 
       {/* Header */}
@@ -443,6 +470,9 @@ const ManageMenuScreen: React.FC<ManageMenuScreenProps> = ({ navigation }) => {
           {/* Category tabs */}
           {categories.length > 0 &&
             categories.map((category) => {
+              if (!category || !category.id || !category.name) {
+                return null;
+              }
               const count = menu.filter(
                 (item) => item.category?.id === category.id
               ).length;
@@ -466,7 +496,7 @@ const ManageMenuScreen: React.FC<ManageMenuScreenProps> = ({ navigation }) => {
                     style={[styles.tabText, isActive && styles.tabTextActive]}
                     numberOfLines={1}
                   >
-                    {category.name}
+                    {String(category.name)}
                   </Text>
                   <View
                     style={[
@@ -480,7 +510,7 @@ const ManageMenuScreen: React.FC<ManageMenuScreenProps> = ({ navigation }) => {
                         isActive && styles.countTextActive,
                       ]}
                     >
-                      {count}
+                      {typeof count === 'number' ? count : 0}
                     </Text>
                   </View>
                 </TouchableOpacity>
@@ -575,14 +605,14 @@ const ManageMenuScreen: React.FC<ManageMenuScreenProps> = ({ navigation }) => {
                       <Text style={styles.menuReviews}>
                         {item.rating_count || 0} đánh giá
                       </Text>
-                      {item.category && (
+                      {item.category && item.category.name && (
                         <>
                           <Text style={styles.menuDivider}>•</Text>
                           <Text
                             style={styles.categoryBadge}
                             numberOfLines={1}
                           >
-                            {item.category.name}
+                            {String(item.category.name)}
                           </Text>
                         </>
                       )}

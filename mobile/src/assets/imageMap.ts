@@ -1,5 +1,5 @@
 export const IMAGE_MAP: Record<string, any> = {
-  "CopilotIcon.png": require("./images/CopilotIcon.png"),
+  "CopilotIcon.png": require("./images/copilot-logo.png"),
   "adaptive-icon.png": require("./images/adaptive-icon.png"),
   "assorted-sushi.png": require("./images/assorted-sushi.png"),
   "burger-palace.png": require("./images/burger-palace.png"),

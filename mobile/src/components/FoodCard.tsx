@@ -18,6 +18,17 @@ export const FoodCard: React.FC<FoodCardProps> = ({
   onAddToCart,
   style,
 }) => {
+  // Debug logging
+  React.useEffect(() => {
+    console.log('FoodCard - Food data:', {
+      id: food.id,
+      title: food.title,
+      average_rating: food.average_rating,
+      rating_count: food.rating_count,
+      average_rating_type: typeof food.average_rating,
+    });
+  }, [food]);
+
   const formatPrice = (price: string) => {
     return new Intl.NumberFormat('vi-VN', {
       style: 'currency',

@@ -12,11 +12,13 @@ import {
   TextInput,
 } from 'react-native';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
-import { Phone, UserCheck, UserX, ArrowLeft } from 'lucide-react-native';
+import { Phone, UserCheck, UserX, Menu, BarChart3, ShoppingBag, Package, Users, Star } from 'lucide-react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { shipperApi, authApi } from '../services/api';
 import { Fonts } from '../constants/Fonts';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useAdmin } from '@/contexts/AdminContext';
+import Sidebar from '@/components/sidebar';
 
 interface Shipper {
   id: number;
@@ -45,7 +47,21 @@ interface ShipperApplication {
   is_shipper_registered: boolean;
 }
 
-const ShipperListScreen: React.FC = () => {
+const menuItems = [
+  { title: 'Trang chủ', icon: BarChart3, section: 'dashboard' },
+  // { title: 'Mua hàng', icon: ShoppingBag, section: 'buy' },
+  { title: 'Quản lý tài khoản', icon: Users, section: 'customers' },
+  { title: 'Quản lý cửa hàng', icon: ShoppingBag, section: 'stores' },
+  { title: 'Quản lý đơn hàng', icon: Package, section: 'orders' },
+  { title: 'Quản lý shipper', icon: Users, section: 'shippers' },
+  { title: 'Khuyến mãi hệ thống', icon: Star, section: 'promotions' },
+];
+
+interface ShipperListScreenProps {
+  onMenuPress?: () => void;
+}
+
+const ShipperListScreen: React.FC<ShipperListScreenProps> = ({ onMenuPress }) => {
   const navigation = useNavigation<any>();
   const [activeTab, setActiveTab] = useState<'list' | 'applications'>('list');
   const [shippers, setShippers] = useState<Shipper[]>([]);
@@ -55,6 +71,25 @@ const ShipperListScreen: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [statistics, setStatistics] = useState<any>(null);
   const [searchText, setSearchText] = useState('');
+
+  // Try to use admin context if available
+  let adminContext: ReturnType<typeof useAdmin> | undefined;
+  try {
+    adminContext = useAdmin();
+  } catch (e) {
+    // Not in admin context
+    adminContext = undefined;
+  }
+
+  const handleMenuPress = () => {
+    if (onMenuPress) {
+      onMenuPress();
+    } else if (adminContext) {
+      adminContext.openSidebar();
+    } else if (navigation.canGoBack()) {
+      navigation.goBack();
+    }
+  };
 
   // Fetch shippers from API
   const fetchShippers = async (showLoading = true) => {
@@ -401,14 +436,40 @@ const ShipperListScreen: React.FC = () => {
     activeTab === 'list' ? filteredShippers.length : filteredApplications.length;
 
   return (
-    <SafeAreaView style={styles.safeArea} edges={['top']}>
+    <>
+      <Sidebar
+        isOpen={adminContext?.isSidebarOpen || false}
+        onClose={() => adminContext?.closeSidebar()}
+        menuItems={menuItems}
+        hitSlop={{ top: 50, bottom: 10, left: 10, right: 10 }}
+        onMenuItemPress={(section) => {
+          adminContext?.closeSidebar();
+          
+          if (section === 'buy') {
+            navigation.reset({ index: 0, routes: [{ name: 'MainTabs' }] });
+          } else if (section === 'dashboard') {
+            navigation.navigate('AdminDashboard');
+          } else if (section === 'customers') {
+            navigation.navigate('CustomerListScreen');
+          } else if (section === 'stores') {
+            navigation.navigate('StoreListScreen');
+          } else if (section === 'orders') {
+            navigation.navigate('OrderListScreen');
+          } else if (section === 'shippers') {
+            // Stay on current screen
+          } else if (section === 'promotions') {
+            navigation.navigate('VoucherManagementScreen');
+          }
+        }}
+      />
+      <SafeAreaView style={styles.safeArea} edges={['top']}>
       <View style={styles.headerWrap}>
         <View style={styles.headerTopRow}>
           <TouchableOpacity
-            onPress={() => navigation.goBack()}
+            onPress={handleMenuPress}
             style={styles.roundIconBtn}
           >
-            <ArrowLeft size={18} color="#3a1a12" />
+            <Menu size={24} color="#eb552d" />
           </TouchableOpacity>
 
           <Text style={styles.headerTitle}>Shipper</Text>
@@ -572,6 +633,7 @@ const ShipperListScreen: React.FC = () => {
         />
       )}
     </SafeAreaView>
+    </>
   );
 };
 

@@ -11,6 +11,15 @@ import { useSelector } from 'react-redux';
 import { RootState } from '@/store';
 import Sidebar from '@/components/sidebar';
 
+const menuItems = [
+  { title: 'Trang chủ', icon: Menu, section: 'dashboard' },
+  { title: 'Mua hàng', icon: ShoppingBag, section: 'buy' },
+  { title: 'Quản lí món ăn', icon: ShoppingBag, section: 'foods' },
+  { title: 'Quản lí đơn hàng', icon: ShoppingBag, section: 'orders' },
+  { title: 'Quản lí khuyến mãi', icon: ShoppingBag, section: 'promotions' },
+  { title: 'Thống kê', icon: Menu, section: 'analytics' },
+];
+
 type DisplayOrderItem = {
   name: string;
   qty: number;
@@ -238,6 +247,24 @@ const NewOrderListScreen = ({ navigation }: any) => {
       <Sidebar
         isOpen={sidebarVisible}
         onClose={() => setSidebarVisible(false)}
+        menuItems={menuItems}
+        onMenuItemPress={(section) => {
+          setSidebarVisible(false);
+          
+          if (section === 'dashboard') {
+            navigation.navigate('SellerDashboard');
+          } else if (section === 'foods') {
+            navigation.navigate('SellerManageMenuScreen');
+          } else if (section === 'promotions') {
+            navigation.navigate('SellerVoucherManagementScreen');
+          } else if (section === 'orders') {
+            // Already on this screen
+          } else if (section === 'analytics') {
+            navigation.navigate('SellerDashboard', { section: 'analytics' });
+          } else if (section === 'buy') {
+            navigation.reset({ index: 0, routes: [{ name: 'MainTabs' }] });
+          }
+        }}
       />
 
       {/* Header giống ManageMenuScreen */}
@@ -465,8 +492,8 @@ const NewOrderListScreen = ({ navigation }: any) => {
                         <Text style={{ fontSize: 22 }}>{idx === 0 ? '🧑‍🦱' : idx === 1 ? '👩' : '🧑'}</Text>
                       </View>
                       <View>
-                        <Text style={styles.customer}>{order.customer}</Text>
-                        <Text style={styles.phone}>{order.phone}</Text>
+                        <Text style={styles.customer}>{order.customer || 'Khách vãng lai'}</Text>
+                        <Text style={styles.phone}>{order.phone || 'N/A'}</Text>
                       </View>
                     </View>
                     <View style={{ alignItems: 'flex-end' }}>
@@ -480,19 +507,19 @@ const NewOrderListScreen = ({ navigation }: any) => {
                     <View key={i}>
                       <View style={styles.itemRow}>
                         <View style={{ flex: 1 }}>
-                          <Text style={styles.itemName}>{item.name}</Text>
+                          <Text style={styles.itemName}>{item.name || 'N/A'}</Text>
                           {item.size_display && (
                             <Text style={{ color: '#6b7280', fontSize: 11, marginTop: 1 }}>
                               Size: {item.size_display}
                             </Text>
                           )}
                         </View>
-                        <Text style={styles.itemQty}>x{item.qty}</Text>
+                        <Text style={styles.itemQty}>x{typeof item.qty === 'number' ? item.qty : 0}</Text>
                         <View style={{ alignItems: 'flex-end' }}>
-                          <Text style={styles.itemPrice}>{item.price.toLocaleString()} đ</Text>
+                          <Text style={styles.itemPrice}>{(typeof item.price === 'number' ? item.price : 0).toLocaleString()} đ</Text>
                           {item.food_option_price && item.food_option_price > 0 && (
                             <Text style={{ color: '#6b7280', fontSize: 10, marginTop: 1 }}>
-                              +{item.food_option_price.toLocaleString()} đ
+                              +{(typeof item.food_option_price === 'number' ? item.food_option_price : 0).toLocaleString()} đ
                             </Text>
                           )}
                         </View>
@@ -513,16 +540,16 @@ const NewOrderListScreen = ({ navigation }: any) => {
                       <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 2 }}>
                         <Text style={{ color: '#6b7280', fontSize: 13 }}>Tạm tính:</Text>
                         <Text style={{ color: '#1e293b', fontSize: 13 }}>
-                          {order.subtotal.toLocaleString()} đ
+                          {(typeof order.subtotal === 'number' ? order.subtotal : 0).toLocaleString()} đ
                         </Text>
                       </View>
                       <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 2 }}>
                         <Text style={{ color: '#6b7280', fontSize: 13 }}>Phí vận chuyển:</Text>
                         <Text style={{ color: '#1e293b', fontSize: 13 }}>
-                          {order.shipping_fee.toLocaleString()} đ
+                          {(typeof order.shipping_fee === 'number' ? order.shipping_fee : 0).toLocaleString()} đ
                         </Text>
                       </View>
-                      {order.promo_discount > 0 && (
+                      {(typeof order.promo_discount === 'number' && order.promo_discount > 0) && (
                         <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 2 }}>
                           <Text style={{ color: '#10b981', fontSize: 13 }}>Giảm giá:</Text>
                           <Text style={{ color: '#10b981', fontSize: 13, fontWeight: 'bold' }}>
@@ -534,14 +561,14 @@ const NewOrderListScreen = ({ navigation }: any) => {
                       <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
                         <Text style={{ fontWeight: 'bold', fontSize: 15, color: '#1e293b' }}>Tổng cộng:</Text>
                         <Text style={{ color: '#ea580c', fontWeight: 'bold', fontSize: 16 }}>
-                          {order.total.toLocaleString()} đ
+                          {(typeof order.total === 'number' ? order.total : 0).toLocaleString()} đ
                         </Text>
                       </View>
                     </View>
                   </View>
 
                   <View style={[styles.totalRow, { marginTop: 8 }]}>
-                    <Text style={styles.payment}>{order.payment === 'COD' ? '💰 COD' : '💳 Online'}</Text>
+                    <Text style={styles.payment}>{order.payment === 'COD' ? '💰 COD' : order.payment ? '💳 Online' : 'N/A'}</Text>
                     {order.status === 'pending' ? (
                       <View style={[styles.statusBadge, { backgroundColor: '#f59e0b' }]}><Text style={styles.statusBadgeText}>Chờ xác nhận</Text></View>
                     ) : order.status === 'preparing' ? (
@@ -633,16 +660,16 @@ const NewOrderListScreen = ({ navigation }: any) => {
                       </Text>
                     </View>
                     <View style={styles.customerDetails}>
-                      <Text style={styles.customerName}>{selectedOrder.customer}</Text>
+                      <Text style={styles.customerName}>{selectedOrder.customer || 'Khách vãng lai'}</Text>
                       <TouchableOpacity 
-                        onPress={() => Linking.openURL(`tel:${selectedOrder.phone}`)}
+                        onPress={() => Linking.openURL(`tel:${selectedOrder.phone || ''}`)}
                         style={styles.phoneRow}
                       >
                         <Phone size={14} color="#ea580c" />
-                        <Text style={styles.customerPhone}>{selectedOrder.phone}</Text>
+                        <Text style={styles.customerPhone}>{selectedOrder.phone || 'N/A'}</Text>
                       </TouchableOpacity>
                       <Text style={styles.customerAddress} numberOfLines={2}>
-                        📍 {selectedOrder.address}
+                        📍 {selectedOrder.address || 'Chưa có địa chỉ'}
                       </Text>
                     </View>
                   </View>
@@ -659,14 +686,14 @@ const NewOrderListScreen = ({ navigation }: any) => {
                     <View style={styles.infoDivider} />
                     <View style={styles.infoRow}>
                       <Text style={styles.infoLabel}>Thời gian đặt</Text>
-                      <Text style={styles.infoValue}>{selectedOrder.time}</Text>
+                      <Text style={styles.infoValue}>{selectedOrder.time || 'N/A'}</Text>
                     </View>
                     <View style={styles.infoDivider} />
                     <View style={styles.infoRow}>
                       <Text style={styles.infoLabel}>Thanh toán</Text>
                       <View style={styles.paymentBadge}>
                         <Text style={styles.paymentBadgeText}>
-                          {selectedOrder.payment === 'COD' ? '💰 Tiền mặt' : '💳 Online'}
+                          {selectedOrder.payment === 'COD' ? '💰 Tiền mặt' : selectedOrder.payment ? '💳 Online' : 'N/A'}
                         </Text>
                       </View>
                     </View>
@@ -712,14 +739,14 @@ const NewOrderListScreen = ({ navigation }: any) => {
                       <View key={idx}>
                         <View style={styles.foodItemRow}>
                           <View style={styles.foodItemLeft}>
-                            <Text style={styles.foodItemName}>{item.name}</Text>
+                            <Text style={styles.foodItemName}>{item.name || 'N/A'}</Text>
                             {item.size_display && (
-                              <Text style={styles.foodItemSize}>Size: {item.size_display}</Text>
+                              <Text style={styles.foodItemSize}>Size: {String(item.size_display)}</Text>
                             )}
                             <Text style={styles.foodItemPrice}>
-                              {item.price.toLocaleString()}đ
+                              {(typeof item.price === 'number' ? item.price : 0).toLocaleString()}đ
                               {item.food_option_price && item.food_option_price > 0 && (
-                                <Text style={styles.foodItemExtra}> +{item.food_option_price.toLocaleString()}đ</Text>
+                                <Text style={styles.foodItemExtra}> +{(typeof item.food_option_price === 'number' ? item.food_option_price : 0).toLocaleString()}đ</Text>
                               )}
                             </Text>
                             {item.food_note && item.food_note.trim() !== '' && (
@@ -729,9 +756,9 @@ const NewOrderListScreen = ({ navigation }: any) => {
                             )}
                           </View>
                           <View style={styles.foodItemRight}>
-                            <Text style={styles.foodItemQty}>x{item.qty}</Text>
+                            <Text style={styles.foodItemQty}>x{typeof item.qty === 'number' ? item.qty : 0}</Text>
                             <Text style={styles.foodItemTotal}>
-                              {((item.price + (item.food_option_price || 0)) * item.qty).toLocaleString()}đ
+                              {(((typeof item.price === 'number' ? item.price : 0) + (typeof item.food_option_price === 'number' ? item.food_option_price : 0)) * (typeof item.qty === 'number' ? item.qty : 0)).toLocaleString()}đ
                             </Text>
                           </View>
                         </View>
@@ -747,16 +774,16 @@ const NewOrderListScreen = ({ navigation }: any) => {
                     <View style={styles.summaryRow}>
                       <Text style={styles.summaryLabel}>Tạm tính</Text>
                       <Text style={styles.summaryValue}>
-                        {selectedOrder.subtotal.toLocaleString()}đ
+                        {(typeof selectedOrder.subtotal === 'number' ? selectedOrder.subtotal : 0).toLocaleString()}đ
                       </Text>
                     </View>
                     <View style={styles.summaryRow}>
                       <Text style={styles.summaryLabel}>Phí vận chuyển</Text>
                       <Text style={styles.summaryValue}>
-                        +{selectedOrder.shipping_fee.toLocaleString()}đ
+                        +{(typeof selectedOrder.shipping_fee === 'number' ? selectedOrder.shipping_fee : 0).toLocaleString()}đ
                       </Text>
                     </View>
-                    {selectedOrder.promo_discount > 0 && (
+                    {(typeof selectedOrder.promo_discount === 'number' && selectedOrder.promo_discount > 0) && (
                       <View style={styles.summaryRow}>
                         <Text style={[styles.summaryLabel, { color: '#10b981' }]}>
                           🎁 Giảm giá
@@ -770,7 +797,7 @@ const NewOrderListScreen = ({ navigation }: any) => {
                     <View style={styles.summaryTotalRow}>
                       <Text style={styles.summaryTotalLabel}>Tổng thanh toán</Text>
                       <Text style={styles.summaryTotalValue}>
-                        {selectedOrder.total.toLocaleString()}đ
+                        {(typeof selectedOrder.total === 'number' ? selectedOrder.total : 0).toLocaleString()}đ
                       </Text>
                     </View>
                   </View>

@@ -15,7 +15,9 @@ import { apiClient } from '@/services/api';
 import { Fonts } from '@/constants/Fonts';
 import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { ArrowLeft } from 'lucide-react-native';
+import { Menu, BarChart3, ShoppingBag, Package, Users, Star } from 'lucide-react-native';
+import { useAdmin } from '@/contexts/AdminContext';
+import Sidebar from '@/components/sidebar';
 
 type Customer = {
   id: number;
@@ -39,12 +41,23 @@ type RootStackParamList = {
 
 const initialCustomers: Customer[] = [];
 
+const menuItems = [
+  { title: 'Trang chủ', icon: BarChart3, section: 'dashboard' },
+  // { title: 'Mua hàng', icon: ShoppingBag, section: 'buy' },
+  { title: 'Quản lý tài khoản', icon: Users, section: 'customers' },
+  { title: 'Quản lý cửa hàng', icon: ShoppingBag, section: 'stores' },
+  { title: 'Quản lý đơn hàng', icon: Package, section: 'orders' },
+  { title: 'Quản lý shipper', icon: Users, section: 'shippers' },
+  { title: 'Khuyến mãi hệ thống', icon: Star, section: 'promotions' },
+];
+
 type CustomerListScreenProps = {
   searchQuery?: string;
+  onMenuPress?: () => void;
 };
 
-export default function CustomerListScreen({ searchQuery = '' }: CustomerListScreenProps) {
-  const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
+export default function CustomerListScreen({ searchQuery = '', onMenuPress }: CustomerListScreenProps) {
+  const navigation = useNavigation<any>();
   const [customers, setCustomers] = useState<Customer[]>(initialCustomers);
   const [allCustomers, setAllCustomers] = useState<Customer[]>([]);
   const [editId, setEditId] = useState<number | null>(null);
@@ -55,6 +68,25 @@ export default function CustomerListScreen({ searchQuery = '' }: CustomerListScr
   const [loading, setLoading] = useState(false);
   const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'locked'>('all');
   const [localSearchText, setLocalSearchText] = useState('');
+
+  // Try to use admin context if available
+  let adminContext: ReturnType<typeof useAdmin> | undefined;
+  try {
+    adminContext = useAdmin();
+  } catch (e) {
+    // Not in admin context
+    adminContext = undefined;
+  }
+
+  const handleMenuPress = () => {
+    if (onMenuPress) {
+      onMenuPress();
+    } else if (adminContext) {
+      adminContext.openSidebar();
+    } else if (navigation.canGoBack()) {
+      navigation.goBack();
+    }
+  };
 
   // Fetch customers from API
   const fetchCustomers = async () => {
@@ -252,14 +284,40 @@ export default function CustomerListScreen({ searchQuery = '' }: CustomerListScr
   const totalFound = customers.length;
 
   return (
-    <SafeAreaView style={styles.safeArea} edges={['top']}>
+    <>
+      <Sidebar
+        isOpen={adminContext?.isSidebarOpen || false}
+        onClose={() => adminContext?.closeSidebar()}
+        menuItems={menuItems}
+        hitSlop={{ top: 50, bottom: 10, left: 10, right: 10 }}
+        onMenuItemPress={(section) => {
+          adminContext?.closeSidebar();
+          
+          if (section === 'buy') {
+            navigation.reset({ index: 0, routes: [{ name: 'MainTabs' }] });
+          } else if (section === 'dashboard') {
+            navigation.navigate('AdminDashboard');
+          } else if (section === 'customers') {
+            // Stay on current screen
+          } else if (section === 'stores') {
+            navigation.navigate('StoreListScreen');
+          } else if (section === 'orders') {
+            navigation.navigate('OrderListScreen');
+          } else if (section === 'shippers') {
+            navigation.navigate('ShipperListScreen');
+          } else if (section === 'promotions') {
+            navigation.navigate('VoucherManagementScreen');
+          }
+        }}
+      />
+      <SafeAreaView style={styles.safeArea} edges={['top']}>
       <View style={styles.headerWrap}>
         <View style={styles.headerTopRow}>
           <TouchableOpacity
-            onPress={() => navigation.goBack()}
+            onPress={handleMenuPress}
             style={styles.roundIconBtn}
           >
-            <ArrowLeft size={18} color="#eb5523" />
+            <Menu size={24} color="#eb552d" />
           </TouchableOpacity>
 
           <Text style={styles.headerTitle}>Khách hàng</Text>
@@ -545,6 +603,7 @@ export default function CustomerListScreen({ searchQuery = '' }: CustomerListScr
         )}
       </ScrollView>
     </SafeAreaView>
+    </>
   );
 }
 

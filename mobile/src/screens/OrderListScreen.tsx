@@ -2,13 +2,17 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { View, Text, TouchableOpacity, FlatList, ScrollView, Modal, KeyboardAvoidingView, Platform, StyleSheet, Image, ActivityIndicator, RefreshControl, Alert, Animated, TextInput } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { IMAGE_MAP } from '../assets/imageMap';
-import { X, ArrowLeft } from 'lucide-react-native';
+import { X, Menu } from 'lucide-react-native';
 import { Fonts } from '../constants/Fonts';
 import { ordersApi, apiClient } from '@/services/api';
 import { API_CONFIG } from "@/constants";
 import * as SecureStore from 'expo-secure-store';
 import { STORAGE_KEYS } from '@/constants';
 import { Ionicons } from '@expo/vector-icons';
+import { useNavigation } from '@react-navigation/native';
+import { useAdmin } from '@/contexts/AdminContext';
+import Sidebar from '@/components/sidebar';
+import { BarChart3, ShoppingBag, Package, Users, Star } from 'lucide-react-native';
 
 const getStatusColor = (status: string) => {
   switch (status) {
@@ -61,6 +65,16 @@ const getImageSource = (imageValue: any) => {
   return imageValue;
 };
 
+const menuItems = [
+  { title: 'Trang chủ', icon: BarChart3, section: 'dashboard' },
+  // { title: 'Mua hàng', icon: ShoppingBag, section: 'buy' },
+  { title: 'Quản lý tài khoản', icon: Users, section: 'customers' },
+  { title: 'Quản lý cửa hàng', icon: ShoppingBag, section: 'stores' },
+  { title: 'Quản lý đơn hàng', icon: Package, section: 'orders' },
+  { title: 'Quản lý shipper', icon: Users, section: 'shippers' },
+  { title: 'Khuyến mãi hệ thống', icon: Star, section: 'promotions' },
+];
+
 const statusTabs = [
   { key: 'all', label: 'Tất cả' },
   { key: 'Chờ xác nhận', label: 'Chờ xác nhận' },
@@ -73,7 +87,12 @@ const statusTabs = [
   { key: 'Đã huỷ', label: 'Đã huỷ' },
 ];
 
-export default function OrderListScreen() {
+type OrderListScreenProps = {
+  onMenuPress?: () => void;
+};
+
+export default function OrderListScreen({ onMenuPress }: OrderListScreenProps = {}) {
+  const navigation = useNavigation<any>();
   const [orders, setOrders] = useState<any[]>([]);
   const [allOrders, setAllOrders] = useState<any[]>([]);
   const [orderFilter, setOrderFilter] = useState('all');
@@ -86,6 +105,25 @@ export default function OrderListScreen() {
   const [currentUser, setCurrentUser] = useState<any>(null);
   const [statusCounts, setStatusCounts] = useState<Record<string, number>>({});
   const [localSearchText, setLocalSearchText] = useState('');
+
+  // Try to use admin context if available
+  let adminContext: ReturnType<typeof useAdmin> | undefined;
+  try {
+    adminContext = useAdmin();
+  } catch (e) {
+    // Not in admin context
+    adminContext = undefined;
+  }
+
+  const handleMenuPress = () => {
+    if (onMenuPress) {
+      onMenuPress();
+    } else if (adminContext) {
+      adminContext.openSidebar();
+    } else if (navigation.canGoBack()) {
+      navigation.goBack();
+    }
+  };
 
   const ITEMS_PER_LOAD = 10;
   const [displayCount, setDisplayCount] = useState(ITEMS_PER_LOAD);
@@ -111,39 +149,28 @@ export default function OrderListScreen() {
       }
       setError(null);
 
-      let allOrdersData: any[] = [];
-      let currentPage = 1;
-      let totalPages = 1;
+      const params: any = {
+        page: 1,
+        per_page: 50  // Increase to get more initial results
+      };
 
-      do {
-        const params: any = {
-          page: currentPage,
-          per_page: 20
-        };
+      if (localSearchText) {
+        params.search = localSearchText;
+      }
 
-        if (localSearchText) {
-          params.search = localSearchText;
-        }
+      const response = await ordersApi.admin.getOrders(params) as any;
 
-        const response = await ordersApi.admin.getOrders(params) as any;
+      let ordersData: any[] = [];
+      if (response.orders && Array.isArray(response.orders)) {
+        ordersData = response.orders;
+      } else if (Array.isArray(response)) {
+        ordersData = response;
+      }
 
-        if (response.orders && Array.isArray(response.orders)) {
-          allOrdersData = [...allOrdersData, ...response.orders];
-          totalPages = response.total_pages || 1;
-        } else if (Array.isArray(response)) {
-          allOrdersData = [...allOrdersData, ...response];
-          break;
-        } else {
-          break;
-        }
+      setAllOrders(ordersData);
 
-        currentPage++;
-      } while (currentPage <= totalPages);
-
-      setAllOrders(allOrdersData);
-
-      const counts: Record<string, number> = { all: allOrdersData.length };
-      allOrdersData.forEach((order: any) => {
+      const counts: Record<string, number> = { all: ordersData.length };
+      ordersData.forEach((order: any) => {
         const status = order.order_status;
         counts[status] = (counts[status] || 0) + 1;
       });
@@ -370,13 +397,40 @@ export default function OrderListScreen() {
   const totalFound = filteredOrdersForDisplay.length;
 
   return (
-    <SafeAreaView style={styles.safeArea} edges={['top']}>
+    <>
+      <Sidebar
+        isOpen={adminContext?.isSidebarOpen || false}
+        onClose={() => adminContext?.closeSidebar()}
+        menuItems={menuItems}
+        hitSlop={{ top: 50, bottom: 10, left: 10, right: 10 }}
+        onMenuItemPress={(section) => {
+          adminContext?.closeSidebar();
+          
+          if (section === 'buy') {
+            navigation.reset({ index: 0, routes: [{ name: 'MainTabs' }] });
+          } else if (section === 'dashboard') {
+            navigation.navigate('AdminDashboard');
+          } else if (section === 'customers') {
+            navigation.navigate('CustomerListScreen');
+          } else if (section === 'stores') {
+            navigation.navigate('StoreListScreen');
+          } else if (section === 'orders') {
+            // Stay on current screen
+          } else if (section === 'shippers') {
+            navigation.navigate('ShipperListScreen');
+          } else if (section === 'promotions') {
+            navigation.navigate('VoucherManagementScreen');
+          }
+        }}
+      />
+      <SafeAreaView style={styles.safeArea} edges={['top']}>
       <View style={styles.headerWrap}>
         <View style={styles.headerTopRow}>
           <TouchableOpacity
             style={styles.roundIconBtn}
+            onPress={handleMenuPress}
           >
-            <ArrowLeft size={18} color="#eb5523" />
+            <Menu size={24} color="#eb552d" />
           </TouchableOpacity>
 
           <Text style={styles.headerTitle}>Đơn hàng</Text>
@@ -661,6 +715,7 @@ export default function OrderListScreen() {
         </View>
       </Modal>
     </SafeAreaView>
+    </>
   );
 }
 

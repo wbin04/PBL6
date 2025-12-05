@@ -24,18 +24,27 @@ import { Alert } from "react-native";
 
 type Role = "customer" | "shipper" | "seller" | "admin";
 
+type MenuItem = {
+  title: string;
+  icon: any;
+  section: string;
+};
+
 interface SidebarProps {
   isOpen: boolean;
   onClose: () => void;
   currentRole?: Role;
   onSwitchRole?: (next: Role) => void;
+  menuItems?: MenuItem[];
+  onMenuItemPress?: (section: string) => void;
+  hitSlop?: { top?: number; bottom?: number; left?: number; right?: number };
 }
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
 const PANEL_WIDTH = Math.min(320, Math.round(SCREEN_WIDTH * 0.82));
 const APP_ORANGE = "#e95322";
 
-export default function Sidebar({ isOpen, onClose, currentRole, onSwitchRole }: SidebarProps) {
+export default function Sidebar({ isOpen, onClose, currentRole, onSwitchRole, menuItems, onMenuItemPress, hitSlop }: SidebarProps) {
   const translateX = useRef(new Animated.Value(-PANEL_WIDTH)).current;
   const navigation = useNavigation<any>();
   const dispatch = useDispatch<AppDispatch>();
@@ -55,14 +64,14 @@ export default function Sidebar({ isOpen, onClose, currentRole, onSwitchRole }: 
   // Determine if user can access shipper features
   const canAccessShipper = useMemo(() => {
     if (!user) return false;
-    // Only "Người vận chuyển" can access both customer and shipper features
-    return user.role === 'Người vận chuyển';
+    // Check both role name and role_id (4 = Người vận chuyển)
+    return user.role === 'Người vận chuyển' || user.role_id === 4;
   }, [user]);
 
   const canAccessSeller = useMemo(() => {
     if (!user) return false;
-    // Only "Chủ cửa hàng" can access seller features
-    return user.role === 'Chủ cửa hàng';
+    // Check both role name and role_id (3 = Chủ cửa hàng)
+    return user.role === 'Chủ cửa hàng' || user.role_id === 3;
   }, [user]);
 
   useEffect(() => {
@@ -77,15 +86,16 @@ export default function Sidebar({ isOpen, onClose, currentRole, onSwitchRole }: 
         return;
       }
       
-      if (user?.role === 'Chủ cửa hàng') {
+      // Check both role name and role_id
+      if (user?.role === 'Chủ cửa hàng' || user?.role_id === 3) {
         setRoleState("seller");
         return;
       }
-      if (user?.role === 'Người vận chuyển') {
+      if (user?.role === 'Người vận chuyển' || user?.role_id === 4) {
         setRoleState("shipper");
         return;
       }
-      if (user?.role === 'Quản lý') {
+      if (user?.role === 'Quản lý' || user?.role_id === 2) {
         setRoleState("admin");
         return;
       }
@@ -123,9 +133,16 @@ export default function Sidebar({ isOpen, onClose, currentRole, onSwitchRole }: 
     await AsyncStorage.setItem("activeRole", next);
     onClose();
     
-    // Add a small delay to ensure AsyncStorage is updated before navigation
+    // Navigate based on role
     setTimeout(() => {
-      navigation.reset({ index: 0, routes: [{ name: "MainTabs" }] });
+      if (next === 'seller') {
+        navigation.reset({ index: 0, routes: [{ name: "SellerDashboard" }] });
+      } else if (next === 'admin') {
+        navigation.reset({ index: 0, routes: [{ name: "AdminDashboard" }] });
+      } else {
+        // For customer and shipper, go to MainTabs
+        navigation.reset({ index: 0, routes: [{ name: "MainTabs" }] });
+      }
     }, 100);
   };
 
@@ -254,13 +271,41 @@ export default function Sidebar({ isOpen, onClose, currentRole, onSwitchRole }: 
           <SafeAreaView style={{ flex: 1 }}>
             <View style={styles.header}>
               <Text style={styles.title}>Menu</Text>
-              <TouchableOpacity onPress={onClose} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+              <TouchableOpacity onPress={onClose} hitSlop={hitSlop || { top: 50, bottom: 10, left: 10, right: 10 }}>
                 <X size={22} color="#fff" />
               </TouchableOpacity>
             </View>
 
+            {/* Custom Menu Items */}
+            {menuItems && menuItems.length > 0 && (
+              <>
+                <View style={styles.menuSection}>
+                  <Text style={styles.menuSectionTitle}>Chức năng</Text>
+                  {menuItems.map((item, index) => {
+                    const IconComponent = item.icon;
+                    return (
+                      <TouchableOpacity
+                        key={index}
+                        style={styles.menuItem}
+                        activeOpacity={0.7}
+                        onPress={() => {
+                          onMenuItemPress?.(item.section);
+                        }}
+                      >
+                        <View style={styles.menuItemIconWrap}>
+                          <IconComponent size={20} color={APP_ORANGE} />
+                        </View>
+                        <Text style={styles.menuItemText}>{item.title}</Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+                <View style={styles.divider} />
+              </>
+            )}
+
             {/* Admin */}
-            {user?.role === 'Quản lý' && (
+            {(user?.role === 'Quản lý' || user?.role_id === 2) && (
               <TouchableOpacity
                 style={[styles.card, isAdmin ? styles.cardActive : styles.cardInactive]}
                 activeOpacity={0.9}
@@ -294,7 +339,7 @@ export default function Sidebar({ isOpen, onClose, currentRole, onSwitchRole }: 
             )}
 
             {/* Registration Options - Only show if user is customer */}
-            {user?.role === 'Khách hàng' && (
+            {(user?.role === 'Khách hàng' || user?.role_id === 1) && (
               <>
                 {/* Shipper Registration */}
                 <TouchableOpacity
@@ -401,11 +446,11 @@ export default function Sidebar({ isOpen, onClose, currentRole, onSwitchRole }: 
             <View style={styles.footerWrap}>
               <View style={styles.footerLine} />
               <Text style={styles.footerText}>
-                {user?.role === 'Quản lý'
+                {(user?.role === 'Quản lý' || user?.role_id === 2)
                   ? 'Bạn đang ở chế độ Quản lý'
-                  : user?.role === 'Chủ cửa hàng'
+                  : (user?.role === 'Chủ cửa hàng' || user?.role_id === 3)
                   ? (isCustomer ? 'Đang mua hàng như khách' : 'Đang quản lý cửa hàng')
-                  : user?.role === 'Người vận chuyển'
+                  : (user?.role === 'Người vận chuyển' || user?.role_id === 4)
                   ? (isCustomer ? 'Đang mua hàng như khách' : 'Đang giao hàng')
                   : 'Bạn đang ở chế độ Khách hàng'}
               </Text>
@@ -534,5 +579,43 @@ const styles = StyleSheet.create({
   },
   logoutDesc: {
     color: "rgba(255,255,255,0.7)",
+  },
+  menuSection: {
+    marginBottom: 8,
+  },
+  menuSectionTitle: {
+    fontSize: 14,
+    color: "rgba(255,255,255,0.8)",
+    fontFamily: Fonts.LeagueSpartanBold,
+    marginBottom: 8,
+    marginLeft: 4,
+  },
+  menuItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    borderRadius: 12,
+    paddingVertical: 12,
+    paddingHorizontal: 12,
+    marginBottom: 6,
+    backgroundColor: "rgba(255,255,255,0.1)",
+  },
+  menuItemIconWrap: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: "rgba(255,255,255,0.95)",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  menuItemText: {
+    fontSize: 15,
+    color: "#fff",
+    fontFamily: Fonts.LeagueSpartanSemiBold,
+  },
+  divider: {
+    height: 1,
+    backgroundColor: "rgba(255,255,255,0.2)",
+    marginVertical: 12,
   },
 });

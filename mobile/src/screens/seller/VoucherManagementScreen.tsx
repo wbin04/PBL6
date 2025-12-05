@@ -20,6 +20,16 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { Fonts } from '@/constants/Fonts';
 import Sidebar from '@/components/sidebar';
+import { ShoppingBag } from 'lucide-react-native';
+
+const menuItems = [
+  { title: 'Trang chủ', icon: Menu, section: 'dashboard' },
+  { title: 'Mua hàng', icon: ShoppingBag, section: 'buy' },
+  { title: 'Quản lí món ăn', icon: ShoppingBag, section: 'foods' },
+  { title: 'Quản lí đơn hàng', icon: ShoppingBag, section: 'orders' },
+  { title: 'Quản lí khuyến mãi', icon: ShoppingBag, section: 'promotions' },
+  { title: 'Thống kê', icon: Menu, section: 'analytics' },
+];
 
 const VoucherManagementScreen: React.FC = () => {
   const navigation = useNavigation<any>();
@@ -173,6 +183,24 @@ const VoucherManagementScreen: React.FC = () => {
       <Sidebar
         isOpen={sidebarVisible}
         onClose={() => setSidebarVisible(false)}
+        menuItems={menuItems}
+        onMenuItemPress={(section) => {
+          setSidebarVisible(false);
+          
+          if (section === 'dashboard') {
+            navigation.navigate('SellerDashboard');
+          } else if (section === 'foods') {
+            navigation.navigate('SellerManageMenuScreen');
+          } else if (section === 'promotions') {
+            // Already on this screen
+          } else if (section === 'orders') {
+            navigation.navigate('NewOrderListScreen');
+          } else if (section === 'analytics') {
+            navigation.navigate('SellerDashboard', { section: 'analytics' });
+          } else if (section === 'buy') {
+            navigation.reset({ index: 0, routes: [{ name: 'MainTabs' }] });
+          }
+        }}
       />
 
       {/* Header giống NewOrderListScreen */}
@@ -219,14 +247,6 @@ const VoucherManagementScreen: React.FC = () => {
             </TouchableOpacity>
           </View>
         </View>
-      </View>
-
-      {/* Section title + button */}
-      <View style={styles.sectionTitleRow}>
-        <Text style={styles.menuSectionTitle}>Danh sách khuyến mãi</Text>
-        <TouchableOpacity style={styles.addBtn} onPress={handleAdd}>
-          <Text style={styles.addBtnText}>+ Thêm</Text>
-        </TouchableOpacity>
       </View>
 
       {/* Tabs horizontal scroll */}

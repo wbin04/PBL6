@@ -44,13 +44,23 @@ class StoreViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=['get'])
     def foods(self, request, pk=None):
         """Get all foods for this store with pagination"""
+        from django.db.models import Avg, Count, Value
+        from django.db.models.functions import Coalesce
+        
         store = self.get_object()
-        foods = Food.objects.filter(store=store)
+        foods = Food.objects.filter(store=store)\
+            .select_related('category', 'store')\
+            .annotate(
+                avg_rating=Coalesce(Avg('ratings__rating'), Value(0.0)),
+                rating_count_annotated=Count('ratings')
+            )
         
         # Add pagination
         from django.core.paginator import Paginator
         page_number = request.GET.get('page', 1)
-        paginator = Paginator(foods, 12)  # 12 items per page
+        # Convert to list to preserve annotations before pagination
+        foods_list = list(foods)
+        paginator = Paginator(foods_list, 12)  # 12 items per page
         page_obj = paginator.get_page(page_number)
         
         # Use FoodSerializer with request context so image_url is built correctly

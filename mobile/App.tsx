@@ -13,6 +13,7 @@ import { SafeAreaProvider, useSafeAreaInsets } from "react-native-safe-area-cont
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { VoucherProvider } from "./src/contexts/VoucherContext";
 import { ShipperProvider } from "./src/context/ShipperContext";
+import { AdminProvider } from "./src/contexts/AdminContext";
 import { fontAssets } from "@/constants/Fonts";
 
 // ICONS
@@ -90,19 +91,34 @@ function MainTabs() {
   const readMode = useCallback(async () => {
     const activeRole = await AsyncStorage.getItem("activeRole");
     console.log('MainTabs - activeRole from storage:', activeRole);
-    console.log('MainTabs - user role:', user?.role);
+    console.log('MainTabs - user role:', user?.role, 'role_id:', user?.role_id);
     
-    if (user?.role === 'Người vận chuyển') {
+    // Check both role name and role_id (4 = Người vận chuyển)
+    const isShipper = user?.role === 'Người vận chuyển' || user?.role_id === 4;
+    const isSeller = user?.role === 'Chủ cửa hàng' || user?.role_id === 3;
+    
+    if (isShipper) {
+      // If no activeRole is set, default to shipper for "Người vận chuyển"
       if (!activeRole) {
+        console.log('MainTabs - Setting default activeRole to shipper');
         await AsyncStorage.setItem("activeRole", "shipper");
         setMode("shipper");
         return;
       }
-      setMode(activeRole === "shipper" ? "shipper" : "customer");
+      // Use the stored activeRole
+      const newMode = activeRole === "shipper" ? "shipper" : "customer";
+      console.log('MainTabs - Setting mode to:', newMode);
+      setMode(newMode);
+    } else if (isSeller) {
+      // Seller can only be customer when shopping
+      console.log('MainTabs - Seller role, setting mode to customer');
+      setMode("customer");
     } else {
+      // Regular customer
+      console.log('MainTabs - Regular customer, setting mode to customer');
       setMode("customer");
     }
-  }, [user?.role]);
+  }, [user?.role, user?.role_id]);
 
   useEffect(() => {
     readMode();
@@ -221,31 +237,30 @@ function AppNavigator() {
   // Determine initial route based on auth state and user role
   let initialRouteName = "Login";
   // Ensure role is loaded before determining initial route
-  if (!isAuthenticated || !user?.role) {
+  if (!isAuthenticated || (!user?.role && !user?.role_id)) {
     initialRouteName = "Login";
   } else {
-    switch (user.role) {
-      case 'Chủ cửa hàng':
-        initialRouteName = "SellerDashboard";
-        break;
-      case 'Quản lý':
-        initialRouteName = "AdminDashboard";
-        break;
-      default:
-        initialRouteName = "MainTabs";
-        break;
+    // Check both role name and role_id for better compatibility
+    if (user.role === 'Chủ cửa hàng' || user.role_id === 3) {
+      initialRouteName = "SellerDashboard";
+    } else if (user.role === 'Quản lý' || user.role_id === 2) {
+      initialRouteName = "AdminDashboard";
+    } else {
+      // Default to MainTabs for customers and shippers
+      initialRouteName = "MainTabs";
     }
   }
 
   return (
     <VoucherProvider>
       <ShipperProvider>
-        <NavigationContainer>
-          <StatusBar style="auto" />
-          <Stack.Navigator 
-            screenOptions={{ headerShown: false }} 
-            initialRouteName={initialRouteName}
-          >
+        <AdminProvider>
+          <NavigationContainer>
+            <StatusBar style="auto" />
+            <Stack.Navigator 
+              screenOptions={{ headerShown: false }} 
+              initialRouteName={initialRouteName}
+            >
             {!isAuthenticated ? (
               // Auth screens - show when not authenticated
               <>
@@ -260,7 +275,7 @@ function AppNavigator() {
               // Main app screens - show when authenticated
               <>
                 {/* Admin Dashboard */}
-                {user?.role === 'Quản lý' && (
+                {(user?.role === 'Quản lý' || user?.role_id === 2) && (
                   <Stack.Screen 
                     name="AdminDashboard" 
                     component={require('./src/screens/AdminDashboardScreen').default}
@@ -268,8 +283,14 @@ function AppNavigator() {
                   />
                 )}
                 
+                {/* Admin screens */}
+                <Stack.Screen name="CustomerListScreen" component={require('./src/screens/CustomerListScreen').default} />
+                <Stack.Screen name="StoreListScreen" component={require('./src/screens/StoreListScreen').default} />
+                <Stack.Screen name="OrderListScreen" component={require('./src/screens/OrderListScreen').default} />
+                <Stack.Screen name="ShipperListScreen" component={require('./src/screens/ShipperListScreen').default} />
+                
                 {/* Seller Dashboard */}
-                {user?.role === 'Chủ cửa hàng' && (
+                {(user?.role === 'Chủ cửa hàng' || user?.role_id === 3) && (
                   <Stack.Screen 
                     name="SellerDashboard" 
                     component={require('./src/screens/seller/DashboardScreen').default}
@@ -327,6 +348,7 @@ function AppNavigator() {
             )}
           </Stack.Navigator>
         </NavigationContainer>
+      </AdminProvider>
       </ShipperProvider>
     </VoucherProvider>
   );

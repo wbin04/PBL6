@@ -1,9 +1,11 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { View, Text, StyleSheet, FlatList, TouchableOpacity, Image, ActivityIndicator, Alert, TextInput, RefreshControl } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Star, Plus, UserCheck, UserX, ArrowLeft } from 'lucide-react-native'; // thêm ArrowLeft
+import { Star, Plus, UserCheck, UserX, Menu, BarChart3, ShoppingBag, Package, Users } from 'lucide-react-native';
 import { useNavigation } from '@react-navigation/native';
 import { apiClient, authApi } from '@/services/api';
+import { useAdmin } from '@/contexts/AdminContext';
+import Sidebar from '@/components/sidebar';
 import { API_CONFIG } from "@/constants";
 import { getImageSource } from '@/utils/imageUtils';
 import { Ionicons } from '@expo/vector-icons';
@@ -34,7 +36,21 @@ interface StoreApplication {
   is_store_registered: boolean;
 }
 
-const StoreListScreen = () => {
+const menuItems = [
+  { title: 'Trang chủ', icon: BarChart3, section: 'dashboard' },
+  // { title: 'Mua hàng', icon: ShoppingBag, section: 'buy' },
+  { title: 'Quản lý tài khoản', icon: Users, section: 'customers' },
+  { title: 'Quản lý cửa hàng', icon: ShoppingBag, section: 'stores' },
+  { title: 'Quản lý đơn hàng', icon: Package, section: 'orders' },
+  { title: 'Quản lý shipper', icon: Users, section: 'shippers' },
+  { title: 'Khuyến mãi hệ thống', icon: Star, section: 'promotions' },
+];
+
+type StoreListScreenProps = {
+  onMenuPress?: () => void;
+};
+
+const StoreListScreen = ({ onMenuPress }: StoreListScreenProps = {}) => {
   const navigation = useNavigation<any>();
   const [activeTab, setActiveTab] = useState<'list' | 'applications'>('list');
   const [stores, setStores] = useState<Store[]>([]);
@@ -43,7 +59,28 @@ const StoreListScreen = () => {
   const [refreshing, setRefreshing] = useState(false);
   const [searchText, setSearchText] = useState('');
 
+  // Try to use admin context if available
+  let adminContext: ReturnType<typeof useAdmin> | undefined;
+  try {
+    adminContext = useAdmin();
+  } catch (e) {
+    // Not in admin context
+    adminContext = undefined;
+  }
+
+  const handleMenuPress = () => {
+    if (onMenuPress) {
+      onMenuPress();
+    } else if (adminContext) {
+      adminContext.openSidebar();
+    } else if (navigation.canGoBack()) {
+      navigation.goBack();
+    }
+  };
+
   // Fetch store statistics (rating, review count, food count) from API
+  // NOTE: Currently disabled to prevent spam requests on initial load
+  // Can be re-enabled for lazy loading when user clicks on a specific store
   const fetchStoreStatistics = async (storeId: number) => {
     try {
       console.log(`Fetching statistics for store ${storeId}...`);
@@ -51,64 +88,32 @@ const StoreListScreen = () => {
       const url = '/menu/items/';
       const params = { 
         store: storeId,
-        page_size: 1000
+        page_size: 50  // Reduced from 1000 to avoid huge payloads
       };
-      
-      console.log(`Making API call: ${url} with params:`, params);
-      console.log(`Full URL would be: ${API_CONFIG.BASE_URL}${url}?store=${storeId}&page_size=1000`);
       
       const response: any = await apiClient.get('/menu/items/', {
         params: params
       });
       
-      console.log(`Store ${storeId} API response received:`, {
-        status: 'success',
-        dataType: typeof response,
-        hasData: !!response?.data,
-        hasResults: !!response?.data?.results,
-        isArray: Array.isArray(response?.data),
-        responseStructure: Object.keys(response || {}),
-        dataStructure: response?.data ? Object.keys(response.data) : 'no data'
-      });
-      
-      console.log(`Store ${storeId} FULL response:`, JSON.stringify(response, null, 2));
-      
       let foodsData = [];
       if (response?.data?.results && Array.isArray(response.data.results)) {
         foodsData = response.data.results;
-        console.log(`Store ${storeId}: Using response.data.results (${foodsData.length} items)`);
       } else if (Array.isArray(response?.data)) {
         foodsData = response.data;
-        console.log(`Store ${storeId}: Using response.data directly (${foodsData.length} items)`);
       } else if (Array.isArray(response)) {
         foodsData = response;
-        console.log(`Store ${storeId}: Using response directly (${foodsData.length} items)`);
       } else if (response?.results && Array.isArray(response.results)) {
         foodsData = response.results;
-        console.log(`Store ${storeId}: Using response.results directly (${foodsData.length} items)`);
-      } else {
-        console.log(`Store ${storeId}: No valid data structure found. Response:`, response);
-      }
-      
-      console.log(`Store ${storeId}: Found ${foodsData.length} foods`);
-      if (foodsData.length > 0) {
-        console.log(`Store ${storeId} foods sample:`, foodsData.slice(0, 2).map((f: any) => ({
-          id: f.id, 
-          title: f.title, 
-          average_rating: f.average_rating, 
-          rating_count: f.rating_count
-        })));
       }
       
       // Calculate store statistics from foods data
       const stats = {
-        foodCount: foodsData.length,
+        foodCount: response?.data?.count || foodsData.length,  // Use API count if available
         averageRating: 0,
         totalReviews: 0
       };
       
       if (foodsData.length > 0) {
-        // Calculate weighted average rating and total reviews
         let totalRatingPoints = 0;
         let totalReviews = 0;
         
@@ -116,38 +121,19 @@ const StoreListScreen = () => {
           const foodRating = parseFloat(food.average_rating) || 0;
           const foodReviewCount = parseInt(food.rating_count) || 0;
           
-          if (foodRating > 0 || foodReviewCount > 0) {
-            console.log(`Food ${food.title}: rating=${foodRating}, count=${foodReviewCount}`);
-          }
-          
-          // Add to weighted calculation
           totalRatingPoints += foodRating * foodReviewCount;
           totalReviews += foodReviewCount;
         });
         
-        // Calculate weighted average rating
         stats.averageRating = totalReviews > 0 ? 
           parseFloat((totalRatingPoints / totalReviews).toFixed(1)) : 0;
         stats.totalReviews = totalReviews;
-        
-        console.log(`Store ${storeId} calculation: totalRatingPoints=${totalRatingPoints}, totalReviews=${totalReviews}`);
       }
       
-      console.log(`Store ${storeId} final stats:`, stats);
       return stats;
       
     } catch (error: any) {
       console.error(`Error fetching statistics for store ${storeId}:`, error);
-      console.error('Error details:', {
-        message: error.message,
-        response: error.response?.data,
-        status: error.response?.status,
-        config: {
-          url: error.config?.url,
-          params: error.config?.params,
-          baseURL: error.config?.baseURL
-        }
-      });
       
       // Return default stats on error
       return {
@@ -176,24 +162,25 @@ const StoreListScreen = () => {
       
       if (Array.isArray(data)) {
         // Map API data and fetch statistics for each store
-        const storesWithStats = await Promise.all(
-          data.map(async (store: any) => {
-            const stats = await fetchStoreStatistics(store.id);
-            
-            return {
-              ...store,
-              name: store.store_name, // Map store_name to name for UI compatibility
-              rating: stats.averageRating, // Real calculated rating
-              address: store.description || 'Chưa cập nhật địa chỉ', // Use description as address
-              foods: [], // Empty foods array, will be loaded separately if needed
-              foodCount: stats.foodCount, // Real food count
-              totalReviews: stats.totalReviews, // Real review count
-            };
-          })
-        );
+        const storesDataPromises = data.map(async (store: any) => {
+          // Fetch statistics for this store
+          const stats = await fetchStoreStatistics(store.id);
+          
+          return {
+            ...store,
+            name: store.store_name, // Map store_name to name for UI compatibility
+            rating: stats.averageRating, // Use fetched rating
+            address: store.description || 'Chưa cập nhật địa chỉ', // Use description as address
+            foods: [], // Empty foods array, will be loaded separately if needed
+            foodCount: stats.foodCount, // Use fetched food count
+            totalReviews: stats.totalReviews, // Use fetched total reviews
+          };
+        });
         
-        console.log('Stores with statistics:', storesWithStats);
-        setStores(storesWithStats);
+        const storesData = await Promise.all(storesDataPromises);
+        
+        console.log('Stores loaded with statistics:', storesData);
+        setStores(storesData);
       } else {
         console.error('Unexpected API response structure:', data);
         setStores([]);
@@ -479,11 +466,37 @@ const StoreListScreen = () => {
   };
 
   return (
-    <SafeAreaView style={styles.safeArea} edges={['top']}>
+    <>
+      <Sidebar
+        isOpen={adminContext?.isSidebarOpen || false}
+        onClose={() => adminContext?.closeSidebar()}
+        menuItems={menuItems}
+        hitSlop={{ top: 50, bottom: 10, left: 10, right: 10 }}
+        onMenuItemPress={(section) => {
+          adminContext?.closeSidebar();
+          
+          if (section === 'buy') {
+            navigation.reset({ index: 0, routes: [{ name: 'MainTabs' }] });
+          } else if (section === 'dashboard') {
+            navigation.navigate('AdminDashboard');
+          } else if (section === 'customers') {
+            navigation.navigate('CustomerListScreen');
+          } else if (section === 'stores') {
+            // Stay on current screen
+          } else if (section === 'orders') {
+            navigation.navigate('OrderListScreen');
+          } else if (section === 'shippers') {
+            navigation.navigate('ShipperListScreen');
+          } else if (section === 'promotions') {
+            navigation.navigate('VoucherManagementScreen');
+          }
+        }}
+      />
+      <SafeAreaView style={styles.safeArea} edges={['top']}>
       <View style={styles.headerWrap}>
         <View style={styles.headerTopRow}>
-          <TouchableOpacity onPress={() => navigation.goBack()} style={styles.roundIconBtn}>
-            <ArrowLeft size={18} color="#eb5523" />
+          <TouchableOpacity onPress={handleMenuPress} style={styles.roundIconBtn}>
+            <Menu size={24} color="#eb552d" />
           </TouchableOpacity>
 
           <Text style={styles.headerTitle}>Quản lý cửa hàng</Text>
@@ -600,6 +613,7 @@ const StoreListScreen = () => {
         />
       )}
     </SafeAreaView>
+    </>
   );
 };
 

@@ -131,9 +131,47 @@ export default function LoginScreen() {
     
     try {
       console.log('Attempting login with:', { email, password });
-      await dispatch(login({ email: email.trim(), password })).unwrap();
-      console.log('Login successful, navigation will happen automatically');
-      // Navigation sẽ tự động xảy ra thông qua AppNavigator khi isAuthenticated = true
+      const result = await dispatch(login({ email: email.trim(), password })).unwrap();
+      console.log('Login successful, user:', result.user);
+      console.log('User role:', result.user.role, 'role_id:', result.user.role_id);
+      
+      // Navigate based on user role
+      const user = result.user;
+      
+      // For shippers (role_id = 4), set activeRole to shipper and navigate to MainTabs
+      if (user.role === 'Người vận chuyển' || user.role_id === 4) {
+        console.log('Shipper detected, setting activeRole to shipper');
+        await AsyncStorage.setItem('activeRole', 'shipper');
+        navigation.reset({
+          index: 0,
+          routes: [{ name: 'MainTabs' }],
+        });
+      }
+      // For sellers (role_id = 3), navigate to SellerDashboard
+      else if (user.role === 'Chủ cửa hàng' || user.role_id === 3) {
+        console.log('Seller detected, navigating to SellerDashboard');
+        navigation.reset({
+          index: 0,
+          routes: [{ name: 'SellerDashboard' }],
+        });
+      }
+      // For admin (role_id = 2), navigate to AdminDashboard
+      else if (user.role === 'Quản lý' || user.role_id === 2) {
+        console.log('Admin detected, navigating to AdminDashboard');
+        navigation.reset({
+          index: 0,
+          routes: [{ name: 'AdminDashboard' }],
+        });
+      }
+      // For customers (role_id = 1), navigate to MainTabs
+      else {
+        console.log('Customer detected, navigating to MainTabs');
+        await AsyncStorage.setItem('activeRole', 'customer');
+        navigation.reset({
+          index: 0,
+          routes: [{ name: 'MainTabs' }],
+        });
+      }
     } catch (err: any) {
       console.error('Login error caught in handleLogin:', err);
       const message = typeof err === 'string' ? err : (err.message ?? 'Đã xảy ra lỗi không xác định');

@@ -40,14 +40,15 @@ import { ApiError } from '@/types';
 import { AppDispatch } from '@/store';
 import { logout } from '@/store/slices/authSlice';
 import { Fonts } from '@/constants/Fonts';
-import Sidebar from '@/components/sidebar'; 
+import Sidebar from '@/components/sidebar';
+import { useAdmin } from '@/contexts/AdminContext'; 
 
 const screenWidth = Dimensions.get('window').width;
 const CONTENT_PADDING = 16;
 
 const menuItems = [
   { title: 'Trang chủ', icon: BarChart3, section: 'dashboard' },
-  { title: 'Mua hàng', icon: ShoppingBag, section: 'buy' },
+  // { title: 'Mua hàng', icon: ShoppingBag, section: 'buy' },
   { title: 'Quản lý tài khoản', icon: Users, section: 'customers' },
   { title: 'Quản lý cửa hàng', icon: ShoppingBag, section: 'stores' },
   { title: 'Quản lý đơn hàng', icon: Package, section: 'orders' },
@@ -140,12 +141,11 @@ const buildChartData = (trend: RevenueTrend, currentLabel: string, previousLabel
 function AdminDashboardScreen() {
   const navigation = useNavigation<any>();
   const dispatch = useDispatch<AppDispatch>();
+  const { isSidebarOpen, openSidebar, closeSidebar } = useAdmin();
 
   const [sidebarVisible, setSidebarVisible] = useState(false);
   const [activeSection, setActiveSection] = useState<Section>('dashboard');
   const [showChart, setShowChart] = useState(false);
-
-  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 
   const currentYear = new Date().getFullYear();
   const [stats, setStats] = useState<DashboardStats | null>(null);
@@ -235,15 +235,34 @@ function AdminDashboardScreen() {
       <View style={styles.wrapper}>
         <Sidebar
           isOpen={isSidebarOpen}
-          onClose={() => setIsSidebarOpen(false)}
-          currentRole={'admin' as any}
+          onClose={closeSidebar}
+          menuItems={menuItems}
+          onMenuItemPress={(section) => {
+            closeSidebar();
+            
+            if (section === 'buy') {
+              navigation.reset({ index: 0, routes: [{ name: 'MainTabs' }] });
+            } else if (section === 'dashboard') {
+              // Stay on dashboard - do nothing or navigate to self
+            } else if (section === 'customers') {
+              navigation.navigate('CustomerListScreen');
+            } else if (section === 'stores') {
+              navigation.navigate('StoreListScreen');
+            } else if (section === 'orders') {
+              navigation.navigate('OrderListScreen');
+            } else if (section === 'shippers') {
+              navigation.navigate('ShipperListScreen');
+            } else if (section === 'promotions') {
+              navigation.navigate('VoucherManagementScreen');
+            }
+          }}
         />
 
         {/* MAIN CONTENT */}
         <View style={styles.mainContent}>
           <View style={styles.headerWrap}>
             <View style={styles.headerTopRow}>
-              <TouchableOpacity onPress={() => setIsSidebarOpen(true)} style={styles.roundIconBtn}>
+              <TouchableOpacity onPress={openSidebar} style={styles.roundIconBtn}>
                 <Menu size={24} color="#eb552d" />
               </TouchableOpacity>
 

@@ -105,7 +105,9 @@ def food_list(request):
         except ValueError:
             page_size = 12
 
-        paginator = Paginator(foods, page_size)
+        # Convert to list to preserve annotations before pagination
+        foods_list = list(foods)
+        paginator = Paginator(foods_list, page_size)
         page_obj = paginator.get_page(page)
 
         serializer = FoodListSerializer(page_obj, many=True, context={'request': request})
@@ -159,7 +161,9 @@ def category_foods(request, category_id):
         # Pagination
         page = int(request.GET.get('page', 1)) if request.GET.get('page') else 1
         page_size = int(request.GET.get('page_size', 12)) if request.GET.get('page_size') else 12
-        paginator = Paginator(foods, page_size)
+        # Convert to list to preserve annotations before pagination
+        foods_list = list(foods)
+        paginator = Paginator(foods_list, page_size)
         page_obj = paginator.get_page(page)
 
         serializer = FoodListSerializer(page_obj, many=True, context={'request': request})
@@ -220,8 +224,10 @@ def store_foods_list(request):
         page_size = int(request.GET.get('page_size', 12))
     except ValueError:
         page_size = 12
-        
-    paginator = Paginator(foods, page_size)
+    
+    # Convert to list to preserve annotations before pagination
+    foods_list = list(foods)
+    paginator = Paginator(foods_list, page_size)
     page_obj = paginator.get_page(page)
     
     serializer = FoodListSerializer(page_obj, many=True, context={'request': request})
@@ -371,8 +377,10 @@ def admin_foods_list(request):
             page_size = int(request.GET.get('page_size', 10))
         except ValueError:
             page_size = 10
-            
-        paginator = Paginator(foods, page_size)
+        
+        # Convert to list to preserve annotations before pagination
+        foods_list = list(foods)
+        paginator = Paginator(foods_list, page_size)
         page_obj = paginator.get_page(page)
         
         serializer = FoodSerializer(page_obj, many=True)

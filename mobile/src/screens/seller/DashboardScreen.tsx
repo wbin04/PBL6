@@ -115,7 +115,7 @@ const formatOrderTime = (timestamp?: string) => {
 
 const menuItems = [
   { title: 'Trang chủ', icon: Menu, section: 'dashboard' },
-  { title: 'Mua hàng', icon: ShoppingBag, section: 'buy' },
+  // { title: 'Mua hàng', icon: ShoppingBag, section: 'buy' },
   { title: 'Quản lí món ăn', icon: ShoppingBag, section: 'foods' },
   { title: 'Quản lí đơn hàng', icon: ShoppingBag, section: 'orders' },
   { title: 'Quản lí khuyến mãi', icon: ShoppingBag, section: 'promotions' },
@@ -272,13 +272,32 @@ const SellerDashboardScreen: React.FC<SellerDashboardScreenProps> = ({ navigatio
   ];
 
   const storeEmoji = resolveStoreIcon(storeInfo?.image);
-  const NewOrderListScreen = require('./NewOrderListScreen').default;
 
   return (
     <SafeAreaView style={styles.safeArea} edges={['top', 'bottom']}>
       <Sidebar
         isOpen={sidebarVisible}
         onClose={() => setSidebarVisible(false)}
+        menuItems={menuItems}
+        onMenuItemPress={(section) => {
+          setSidebarVisible(false);
+          
+          // Handle navigation based on section
+          if (section === 'foods') {
+            navigation.navigate('SellerManageMenuScreen');
+          } else if (section === 'promotions') {
+            navigation.navigate('SellerVoucherManagementScreen');
+          } else if (section === 'orders') {
+            navigation.navigate('NewOrderListScreen');
+          } else if (section === 'analytics') {
+            setActiveSection('analytics');
+          } else if (section === 'buy') {
+            // Navigate to customer shopping mode
+            navigation.reset({ index: 0, routes: [{ name: 'MainTabs' }] });
+          } else {
+            setActiveSection(section);
+          }
+        }}
       />
 
       <View style={styles.wrapper}>
@@ -326,9 +345,7 @@ const SellerDashboardScreen: React.FC<SellerDashboardScreenProps> = ({ navigatio
           )}
 
           {/* Section Content */}
-          {activeSection === 'orders' ? (
-            <NewOrderListScreen />
-          ) : activeSection === 'analytics' ? (
+          {activeSection === 'analytics' ? (
             <ScrollView
               contentContainerStyle={styles.scrollContent}
               refreshControl={
@@ -426,14 +443,14 @@ const SellerDashboardScreen: React.FC<SellerDashboardScreenProps> = ({ navigatio
                     <View style={styles.storeDetails}>
                       <MapPin size={13} color="#6b7280" />
                       <Text style={styles.storeAddress}>
-                        {storeInfo?.address || 'Chưa cập nhật địa chỉ'}
+                        {storeInfo?.address ? String(storeInfo.address) : 'Chưa cập nhật địa chỉ'}
                       </Text>
                     </View>
                     <View style={styles.storeDetails}>
                       <Star size={13} color="#f59e0b" fill="#f59e0b" />
                       <Text style={styles.storeRating}>
                         {storeInfo
-                          ? `${Number(storeInfo.average_rating || 0).toFixed(1)} (${storeInfo.total_ratings} đánh giá)`
+                          ? `${Number(storeInfo.average_rating || 0).toFixed(1)} (${storeInfo.total_ratings || 0} đánh giá)`
                           : 'Chưa có đánh giá'}
                       </Text>
                     </View>
@@ -520,7 +537,9 @@ const SellerDashboardScreen: React.FC<SellerDashboardScreenProps> = ({ navigatio
                             <Text style={styles.orderCustomer}>
                               {order.customer || 'Khách vãng lai'}
                             </Text>
-                            <Text style={styles.orderItems}>{order.items || '—'}</Text>
+                            <Text style={styles.orderItems}>
+                              {typeof order.items === 'string' ? order.items : '—'}
+                            </Text>
                             <View style={styles.orderFooter}>
                               <Text style={styles.orderTotal}>
                                 {formatCurrency(order.total)}

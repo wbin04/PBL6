@@ -1,13 +1,24 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { View, Text, StyleSheet, FlatList, TouchableOpacity, TextInput, Alert, ActivityIndicator, RefreshControl } from 'react-native';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
-import { ArrowLeft } from 'lucide-react-native';
+import { Menu, BarChart3, ShoppingBag, Package, Users, Star } from 'lucide-react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { promotionsService, Promotion } from '../services/promotionsService';
 import { useSelector } from 'react-redux';
 import { RootState } from '../store';
 import { Fonts } from '@/constants/Fonts';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useAdmin } from '@/contexts/AdminContext';
+import Sidebar from '@/components/sidebar';
+
+const menuItems = [
+  { title: 'Trang chủ', icon: BarChart3, section: 'dashboard' },
+  { title: 'Quản lý tài khoản', icon: Users, section: 'customers' },
+  { title: 'Quản lý cửa hàng', icon: ShoppingBag, section: 'stores' },
+  { title: 'Quản lý đơn hàng', icon: Package, section: 'orders' },
+  { title: 'Quản lý shipper', icon: Users, section: 'shippers' },
+  { title: 'Khuyến mãi hệ thống', icon: Star, section: 'promotions' },
+];
 
 const VoucherManagementScreen: React.FC = () => {
   const navigation = useNavigation<any>();
@@ -19,6 +30,23 @@ const VoucherManagementScreen: React.FC = () => {
   const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'expired'>('all');
 
   const isAdmin = user?.role === 'Quản lý' || user?.role_id === 2;
+
+  // Try to use admin context if available
+  let adminContext: ReturnType<typeof useAdmin> | undefined;
+  try {
+    adminContext = useAdmin();
+  } catch (e) {
+    // Not in admin context
+    adminContext = undefined;
+  }
+
+  const handleMenuPress = () => {
+    if (adminContext) {
+      adminContext.openSidebar();
+    } else if (navigation.canGoBack()) {
+      navigation.goBack();
+    }
+  };
 
   const loadPromotions = async (showLoading = true) => {
     try {
@@ -140,19 +168,40 @@ const VoucherManagementScreen: React.FC = () => {
   const totalFound = filteredPromotions.length;
 
   return (
-    <SafeAreaView style={styles.safeArea} edges={['top']}>
+    <>
+      <Sidebar
+        isOpen={adminContext?.isSidebarOpen || false}
+        onClose={() => adminContext?.closeSidebar()}
+        menuItems={menuItems}
+        hitSlop={{ top: 50, bottom: 10, left: 10, right: 10 }}
+        onMenuItemPress={(section) => {
+          adminContext?.closeSidebar();
+          
+          if (section === 'buy') {
+            navigation.reset({ index: 0, routes: [{ name: 'MainTabs' }] });
+          } else if (section === 'dashboard') {
+            navigation.navigate('AdminDashboard');
+          } else if (section === 'customers') {
+            navigation.navigate('CustomerListScreen');
+          } else if (section === 'stores') {
+            navigation.navigate('StoreListScreen');
+          } else if (section === 'orders') {
+            navigation.navigate('OrderListScreen');
+          } else if (section === 'shippers') {
+            navigation.navigate('ShipperListScreen');
+          } else if (section === 'promotions') {
+            // Stay on current screen
+          }
+        }}
+      />
+      <SafeAreaView style={styles.safeArea} edges={['top']}>
       <View style={styles.headerWrap}>
         <View style={styles.headerTopRow}>
           <TouchableOpacity
-            onPress={() =>
-              navigation.reset({
-                index: 0,
-                routes: [{ name: 'AdminDashboard' }],
-              })
-            }
+            onPress={handleMenuPress}
             style={styles.roundIconBtn}
           >
-            <ArrowLeft size={18} color="#eb5523" />
+            <Menu size={24} color="#eb552d" />
           </TouchableOpacity>
 
           <Text style={styles.headerTitle}>Khuyến mãi</Text>
@@ -366,6 +415,7 @@ const VoucherManagementScreen: React.FC = () => {
         />
       )}
     </SafeAreaView>
+    </>
   );
 };
 

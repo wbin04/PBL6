@@ -793,17 +793,22 @@ const styles = StyleSheet.create({
   },
 
   // Modal (dựa theo add.tsx)
-  modalRoot: { flex: 1, justifyContent: "flex-end" },
+  modalRoot: { flex: 1, justifyContent: "center", alignItems: "center", paddingHorizontal: 20 },
   backdrop: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: "rgba(0,0,0,0.25)",
+    backgroundColor: "rgba(0,0,0,0.5)",
   },
   modalSheet: {
     backgroundColor: "#fff",
-    borderTopLeftRadius: 16,
-    borderTopRightRadius: 16,
+    borderRadius: 16,
     padding: 16,
-    maxHeight: "70%",
+    width: "100%",
+    maxWidth: 400,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 8,
   },
   modalHeader: {
     flexDirection: "row",
