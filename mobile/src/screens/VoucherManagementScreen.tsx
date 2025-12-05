@@ -1,21 +1,13 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { View, Text, StyleSheet, FlatList, TouchableOpacity, TextInput, Alert, ActivityIndicator, RefreshControl, Modal, SafeAreaView, StatusBar, ScrollView } from 'react-native';
+import { View, Text, StyleSheet, FlatList, TouchableOpacity, TextInput, Alert, ActivityIndicator, RefreshControl } from 'react-native';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
-import { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import { Tag, ArrowLeft, Menu, X, Bell, Search, BarChart3, Package, Users, ShoppingBag, Star } from 'lucide-react-native';
+import { ArrowLeft } from 'lucide-react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { promotionsService, Promotion } from '../services/promotionsService';
 import { useSelector } from 'react-redux';
 import { RootState } from '../store';
-
-const menuItems = [
-  { title: 'Trang chủ', icon: BarChart3, section: 'dashboard' },
-  { title: 'Mua hàng', icon: ShoppingBag, section: 'buy' },
-  { title: 'Quản lý tài khoản', icon: Users, section: 'customers' },
-  { title: 'Quản lý cửa hàng', icon: ShoppingBag, section: 'stores' },
-  { title: 'Quản lý đơn hàng', icon: Package, section: 'orders' },
-  { title: 'Quản lý shipper', icon: Users, section: 'shippers' },
-  { title: 'Khuyến mãi hệ thống', icon: Star, section: 'promotions' },
-];
+import { Fonts } from '@/constants/Fonts';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 const VoucherManagementScreen: React.FC = () => {
   const navigation = useNavigation<any>();
@@ -24,31 +16,17 @@ const VoucherManagementScreen: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
-  const [sidebarVisible, setSidebarVisible] = useState(false);
-  const [activeSection, setActiveSection] = useState<string>('promotions');
+  const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'expired'>('all');
 
-  // Check if user is admin (role_id = 2 / role = "Quản lý")
   const isAdmin = user?.role === 'Quản lý' || user?.role_id === 2;
 
-  // Load promotions
   const loadPromotions = async (showLoading = true) => {
     try {
       if (showLoading) setLoading(true);
       
-      // Debug logging
-      console.log('=== VoucherManagement Debug ===');
-      console.log('User:', user);
-      console.log('User role:', user?.role);
-      console.log('User role_id:', user?.role_id);
-      console.log('isAdmin:', isAdmin);
-      
-      // Use admin API if user is admin
       const data = isAdmin 
         ? await promotionsService.getAdminPromotions()
         : await promotionsService.getStorePromotions();
-      
-      console.log('API returned promotions:', data.length);
-      console.log('Promotions:', data.map(p => ({ id: p.id, name: p.name, store_id: p.store_id })));
       
       setPromotions(data);
     } catch (error: any) {
@@ -60,7 +38,6 @@ const VoucherManagementScreen: React.FC = () => {
     }
   };
 
-  // Load on mount and when screen focused
   useEffect(() => {
     loadPromotions();
   }, []);
@@ -71,7 +48,6 @@ const VoucherManagementScreen: React.FC = () => {
     }, [])
   );
 
-  // Refresh handler
   const onRefresh = () => {
     setRefreshing(true);
     loadPromotions(false);
@@ -98,7 +74,6 @@ const VoucherManagementScreen: React.FC = () => {
             try {
               setLoading(true);
               
-              // Use admin API if user is admin
               const result = isAdmin
                 ? await promotionsService.deleteAdminPromotion(promotion.id)
                 : await promotionsService.deletePromotion(promotion.id);
@@ -119,7 +94,6 @@ const VoucherManagementScreen: React.FC = () => {
     );
   };
 
-  // Format discount display
   const formatDiscount = (promotion: Promotion) => {
     if (promotion.discount_type === 'PERCENT') {
       const maxDiscount = promotion.max_discount_amount 
@@ -131,197 +105,558 @@ const VoucherManagementScreen: React.FC = () => {
     }
   };
 
-  // Format date display
   const formatDate = (dateString: string) => {
     const date = new Date(dateString);
     return `${date.getDate().toString().padStart(2, '0')}/${(date.getMonth() + 1).toString().padStart(2, '0')}/${date.getFullYear()}`;
   };
 
-  // Get status emoji and text
   const getStatusDisplay = (promotion: Promotion) => {
     const now = new Date();
     const startDate = new Date(promotion.start_date);
     const endDate = new Date(promotion.end_date);
 
     if (!promotion.is_active) {
-      return { emoji: '🔴', text: 'Không hoạt động' };
+      return { emoji: '🔴', text: 'Không hoạt động', type: 'expired' };
     } else if (now < startDate) {
-      return { emoji: '⚪', text: 'Chưa bắt đầu' };
+      return { emoji: '⚪', text: 'Chưa bắt đầu', type: 'active' };
     } else if (now > endDate) {
-      return { emoji: '🔴', text: 'Đã hết hạn' };
+      return { emoji: '🔴', text: 'Đã hết hạn', type: 'expired' };
     } else {
-      return { emoji: '🟢', text: 'Đang hoạt động' };
+      return { emoji: '🟢', text: 'Đang hoạt động', type: 'active' };
     }
   };
 
-  // Filter promotions by search query
-  const filteredPromotions = promotions.filter(p => 
-    p.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    p.id.toString().includes(searchQuery)
-  );
+  const filteredPromotions = promotions
+    .filter(p => 
+      p.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      p.id.toString().includes(searchQuery)
+    )
+    .filter(p => {
+      if (statusFilter === 'all') return true;
+      const status = getStatusDisplay(p);
+      return status.type === statusFilter;
+    });
 
-  // Calculate stats
-  const total = promotions.length;
-  const active = promotions.filter(p => {
-    const now = new Date();
-    const startDate = new Date(p.start_date);
-    const endDate = new Date(p.end_date);
-    return p.is_active && now >= startDate && now <= endDate;
-  }).length;
-  // For admin, all promotions are system-wide (store_id=0), so total = systemWide
-  const systemWide = isAdmin ? total : 0;
+  const totalFound = filteredPromotions.length;
 
   return (
-    <View style={styles.container}>
-      {/* Header */}
-      <View style={styles.headerBox}>
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+    <SafeAreaView style={styles.safeArea} edges={['top']}>
+      <View style={styles.headerWrap}>
+        <View style={styles.headerTopRow}>
           <TouchableOpacity
-            onPress={() => {
-              // Reset stack to AdminDashboard regardless of history
+            onPress={() =>
               navigation.reset({
                 index: 0,
                 routes: [{ name: 'AdminDashboard' }],
-              });
-            }}
-            style={{ padding: 4, marginRight: 2 }}
+              })
+            }
+            style={styles.roundIconBtn}
           >
-            <ArrowLeft color="#ea580c" size={28} />
+            <ArrowLeft size={18} color="#eb5523" />
           </TouchableOpacity>
-          <Tag color="#ea580c" size={28} />
-          <Text style={styles.headerTitle}>Quản lý khuyến mãi</Text>
+
+          <Text style={styles.headerTitle}>Khuyến mãi</Text>
+
+          <View style={{ width: 40 }} />
+        </View>
+
+        <View style={styles.searchRow}>
+          <View style={styles.searchBox}>
+            <TextInput
+              style={styles.searchInput}
+              placeholder="Tìm theo tên hoặc mã..."
+              placeholderTextColor="#9ca3af"
+              value={searchQuery}
+              onChangeText={setSearchQuery}
+              returnKeyType="search"
+            />
+            {searchQuery.length > 0 && (
+              <TouchableOpacity
+                onPress={() => setSearchQuery('')}
+                style={styles.clearBtn}
+              >
+                <Ionicons name="close-circle" size={16} color="#9ca3af" />
+              </TouchableOpacity>
+            )}
+            <TouchableOpacity
+              style={styles.searchBtn}
+              activeOpacity={0.8}
+            >
+              <Ionicons name="search" size={16} color="#fff" />
+            </TouchableOpacity>
+          </View>
         </View>
       </View>
 
-      {/* Stats */}
-      <View style={styles.statsRow}>
-        {[
-          { label: 'Tổng khuyến mãi', value: total },
-          { label: 'Đang hoạt động', value: active, color: '#ea580c' },
-          ...(isAdmin ? [{ label: 'Toàn hệ thống', value: systemWide, color: '#ea580c' }] : []),
-          { label: 'Lượt sử dụng', value: 0, color: '#ea580c' }
-        ].map((s, i) => (
-          <View style={styles.statCard} key={i}>
-            <Text style={styles.statLabel}>{s.label}</Text>
-            <Text style={[styles.statValue, { color: s.color || '#222' }]}>{s.value}</Text>
-          </View>
-        ))}
-      </View>
-
-      {/* Search */}
-      <View style={styles.searchBox}>
-        <TextInput 
-          style={styles.searchInput} 
-          placeholder="Tìm kiếm theo tên hoặc mã..." 
-          placeholderTextColor="#bdbdbd"
-          value={searchQuery}
-          onChangeText={setSearchQuery}
-        />
-      </View>
-
-      {/* List */}
-      <View style={styles.listBox}>
-        <View style={styles.listHeader}>
-          <Text style={styles.listTitle}>
-            {isAdmin ? 'Danh sách khuyến mãi' : 'Danh sách khuyến mãi'}
+      <View style={styles.filterRow}>
+        <TouchableOpacity 
+          style={[styles.filterPill, statusFilter === 'all' && styles.filterPillActive]}
+          onPress={() => setStatusFilter('all')}
+        >
+          <Text style={[styles.filterPillText, statusFilter === 'all' && styles.filterPillTextActive]}>
+            Tất cả
           </Text>
-          <TouchableOpacity style={styles.addButtonTable} onPress={handleAdd}>
-            <Text style={styles.addButtonTextTable}>+ Thêm</Text>
-          </TouchableOpacity>
-        </View>
+        </TouchableOpacity>
 
-        {loading && !refreshing ? (
-          <View style={{ padding: 20, alignItems: 'center' }}>
-            <ActivityIndicator size="large" color="#ea580c" />
-            <Text style={{ marginTop: 10, color: '#6b7280' }}>Đang tải...</Text>
-          </View>
-        ) : (
-          <FlatList
-            data={filteredPromotions}
-            keyExtractor={item => item.id.toString()}
-            contentContainerStyle={{ paddingBottom: 12 }}
-            refreshControl={
-              <RefreshControl
-                refreshing={refreshing}
-                onRefresh={onRefresh}
-                colors={['#ea580c']}
-                tintColor="#ea580c"
-              />
-            }
-            ListEmptyComponent={
-              <View style={{ padding: 20, alignItems: 'center' }}>
-                <Text style={{ color: '#6b7280' }}>
-                  {searchQuery ? 'Không tìm thấy khuyến mãi phù hợp' : 'Chưa có khuyến mãi nào'}
-                </Text>
-              </View>
-            }
-            renderItem={({ item }) => {
-              const status = getStatusDisplay(item);
-              
-              return (
-                <View style={styles.voucherItemCard}>
-                  <Text style={styles.voucherItemName}>{item.name}</Text>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 4, gap: 10 }}>
-                    <Text style={styles.voucherItemCode}>#{item.id}</Text>
-                    <Text style={styles.voucherItemStatus}>
-                      {status.emoji} {status.text}
-                    </Text>
-                    {isAdmin && (
-                      <Text style={{ fontSize: 11, color: '#10b981', fontWeight: 'bold' }}>🌍 Toàn HT</Text>
-                    )}
+        <TouchableOpacity 
+          style={[styles.filterPill, statusFilter === 'active' && styles.filterPillActive]}
+          onPress={() => setStatusFilter('active')}
+        >
+          <Text style={[styles.filterPillText, statusFilter === 'active' && styles.filterPillTextActive]}>
+            Đang hoạt động
+          </Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity 
+          style={[styles.filterPill, statusFilter === 'expired' && styles.filterPillActive]}
+          onPress={() => setStatusFilter('expired')}
+        >
+          <Text style={[styles.filterPillText, statusFilter === 'expired' && styles.filterPillTextActive]}>
+            Đã hết hạn
+          </Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={styles.addButton}
+          onPress={handleAdd}
+        >
+          <Text style={styles.addButtonText}>+ Thêm</Text>
+        </TouchableOpacity>
+      </View>
+
+      <View style={styles.foundWrap}>
+        <Text style={styles.foundText}>
+          Tìm thấy <Text style={styles.foundNum}>{totalFound}</Text> khuyến mãi
+        </Text>
+      </View>
+
+      {loading && !refreshing ? (
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color="#EB552D" />
+          <Text style={styles.loadingText}>Đang tải...</Text>
+        </View>
+      ) : (
+        <FlatList
+          data={filteredPromotions}
+          keyExtractor={(item) => item.id.toString()}
+          contentContainerStyle={styles.listContent}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={onRefresh}
+              colors={['#EB552D']}
+              tintColor="#EB552D"
+            />
+          }
+          ListEmptyComponent={
+            <View style={styles.emptyContainer}>
+              <Ionicons name="pricetag-outline" size={64} color="#d1d5db" />
+              <Text style={styles.emptyText}>
+                {searchQuery
+                  ? 'Không tìm thấy khuyến mãi phù hợp'
+                  : 'Chưa có khuyến mãi nào'}
+              </Text>
+            </View>
+          }
+          renderItem={({ item }) => {
+            const status = getStatusDisplay(item);
+
+            return (
+              <View style={styles.card}>
+                <View style={styles.cardHeader}>
+                  <View style={styles.cardHeaderLeft}>
+                    <Text style={styles.name}>{item.name}</Text>
+                    <Text style={styles.username}>#{item.id}</Text>
                   </View>
-                  <Text style={styles.voucherItemDesc}>
-                    Giảm: {formatDiscount(item)}
-                  </Text>
-                  <Text style={styles.voucherExtraText}>
-                    Đơn tối thiểu: {parseInt(item.minimum_pay.toString()).toLocaleString('vi-VN')}đ
-                  </Text>
-                  <Text style={styles.voucherExtraText}>
-                    Thời gian: {formatDate(item.start_date)} → {formatDate(item.end_date)}
-                  </Text>
-                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 8 }}>
-                    <TouchableOpacity style={styles.voucherItemEdit} onPress={() => handleEdit(item)}>
-                      <Text style={styles.voucherItemEditText}>Sửa</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity style={styles.voucherItemDelete} onPress={() => handleDelete(item)}>
-                      <Text style={styles.voucherItemDeleteText}>Xóa</Text>
-                    </TouchableOpacity>
+                  <View
+                    style={[
+                      styles.statusBadge,
+                      status.emoji === '🟢'
+                        ? styles.statusBadgeActive
+                        : styles.statusBadgeLocked,
+                    ]}
+                  >
+                    <Text
+                      style={[
+                        styles.statusText,
+                        status.emoji === '🟢'
+                          ? styles.statusTextActive
+                          : styles.statusTextLocked,
+                      ]}
+                    >
+                      {status.text}
+                    </Text>
                   </View>
                 </View>
-              );
-            }}
-          />
-        )}
-      </View>
-    </View>
+
+                <View style={styles.cardBody}>
+                  <View style={styles.infoLine}>
+                    <View style={styles.iconCircle}>
+                      <Ionicons
+                        name="pricetag-outline"
+                        size={18}
+                        color="#e95322"
+                      />
+                    </View>
+                    <Text style={styles.infoText}>
+                      Giảm: {formatDiscount(item)}
+                    </Text>
+                  </View>
+
+                  <View style={styles.infoLine}>
+                    <View style={styles.iconCircle}>
+                      <Ionicons
+                        name="cash-outline"
+                        size={18}
+                        color="#e95322"
+                      />
+                    </View>
+                    <Text style={styles.infoText}>
+                      Đơn tối thiểu:{' '}
+                      {parseInt(item.minimum_pay.toString()).toLocaleString('vi-VN')}đ
+                    </Text>
+                  </View>
+
+                  <View style={styles.infoLine}>
+                    <View style={[styles.iconCircle, styles.iconCircleMuted]}>
+                      <Ionicons
+                        name="calendar-outline"
+                        size={18}
+                        color="#6b7280"
+                      />
+                    </View>
+                    <Text style={styles.infoSubText}>
+                      {formatDate(item.start_date)} → {formatDate(item.end_date)}
+                    </Text>
+                  </View>
+
+                  {isAdmin && (
+                    <View style={styles.infoLine}>
+                      <View style={[styles.iconCircle, styles.iconCircleMuted]}>
+                        <Ionicons
+                          name="globe-outline"
+                          size={18}
+                          color="#6b7280"
+                        />
+                      </View>
+                      <Text style={styles.infoSubText}>Toàn hệ thống</Text>
+                    </View>
+                  )}
+                </View>
+
+                <View style={styles.buttonRow}>
+                  <TouchableOpacity
+                    onPress={() => handleEdit(item)}
+                    style={[styles.updateButton, loading && styles.disabledButton]}
+                    disabled={loading}
+                  >
+                    <Text style={styles.buttonText}>Cập nhật</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    onPress={() => handleDelete(item)}
+                    style={[styles.lockButton, loading && styles.disabledButton]}
+                    disabled={loading}
+                  >
+                    <Text style={styles.buttonText}>Xóa</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            );
+          }}
+        />
+      )}
+    </SafeAreaView>
   );
 };
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#fff7ed', paddingHorizontal: 10, paddingTop: 30 },
-  headerBox: { marginBottom: 10, paddingBottom: 10, borderBottomWidth: 1, marginTop:20,  borderColor: '#f59e0b' },
-  headerTitle: { fontSize: 22, fontWeight: 'bold', color: '#ea580c', marginLeft: 4 },
-  statsRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 10, gap: 8 },
-  statCard: { flex: 1, backgroundColor: '#fff', borderRadius: 10, padding: 10, alignItems: 'center', elevation: 2, borderWidth: 1, borderColor: '#f59e0b' },
-  statLabel: { fontSize: 13, color: '#ea580c', marginBottom: 2 },
-  statValue: { fontSize: 18, fontWeight: 'bold' },
-  searchBox: { marginBottom: 10, flexDirection: 'row', alignItems: 'center', backgroundColor: '#fff', borderRadius: 10, borderWidth: 1, borderColor: '#f59e0b', paddingHorizontal: 10, height: 40 },
-  searchInput: { flex: 1, fontSize: 15, color: '#222' },
-  listBox: { flex: 1, backgroundColor: '#fff7ed', borderRadius: 10, padding: 8, borderWidth: 1, borderColor: '#f59e0b' },
-  listHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 },
-  listTitle: { fontSize: 18, fontWeight: 'bold', color: '#ea580c' },
-  addButtonTable: { backgroundColor: '#f59e0b', paddingHorizontal: 16, paddingVertical: 8, borderRadius: 10 },
-  addButtonTextTable: { color: '#fff', fontWeight: 'bold', fontSize: 15 },
-  voucherItemCard: { backgroundColor: '#fff', borderRadius: 12, padding: 14, marginBottom: 14, borderWidth: 2, borderColor: '#f59e0b' },
-  voucherItemName: { fontSize: 17, fontWeight: 'bold', color: '#ea580c', marginBottom: 2 },
-  voucherItemCode: { fontSize: 14, color: '#f59e0b', fontWeight: 'bold' },
-  voucherItemStatus: { fontSize: 13, color: '#ea580c', fontWeight: 'bold' },
-  voucherItemDesc: { fontSize: 14, color: '#444', marginBottom: 2 },
-  voucherExtraText: { fontSize: 13, color: '#ea580c' },
-  voucherItemEdit: { backgroundColor: '#f59e0b', paddingHorizontal: 16, paddingVertical: 8, borderRadius: 10, left:100 },
-  voucherItemEditText: { color: '#fff', fontWeight: 'bold' },
-  voucherItemDelete: { backgroundColor: '#ea580c', paddingHorizontal: 16, paddingVertical: 8, borderRadius: 10, right:100 },
-  voucherItemDeleteText: { color: '#fff', fontWeight: 'bold' },
+  safeArea: {
+    flex: 1,
+    backgroundColor: '#ffffff',
+  },
+
+  headerWrap: {
+    backgroundColor: '#f5cb58',
+    paddingTop: 0,
+    paddingBottom: 12,
+  },
+  headerTopRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: 20,
+    marginBottom: 20,
+    paddingHorizontal: 16,
+  },
+  roundIconBtn: {
+    backgroundColor: '#FFFFFF',
+    padding: 10,
+    borderRadius: 999,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.06,
+    shadowRadius: 2,
+    elevation: 1,
+  },
+  headerTitle: {
+    fontSize: 20,
+    color: '#ffffff',
+    fontFamily: Fonts.LeagueSpartanExtraBold,
+  },
+  searchRow: {
+    paddingBottom: 8,
+    paddingHorizontal: 16,
+  },
+  searchBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#fff',
+    borderRadius: 999,
+    paddingLeft: 16,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+  },
+  searchInput: {
+    flex: 1,
+    height: 42,
+    fontSize: 14,
+    color: '#111827',
+    fontFamily: Fonts.LeagueSpartanRegular,
+  },
+  clearBtn: {
+    paddingHorizontal: 4,
+  },
+  searchBtn: {
+    height: 42,
+    width: 42,
+    borderRadius: 999,
+    backgroundColor: '#EB552D',
+    alignItems: 'center',
+    justifyContent: 'center',
+    margin: 4,
+  },
+
+  filterRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 10,
+    paddingHorizontal: 16,
+    paddingTop: 12,
+    backgroundColor: '#fff',
+  },
+  filterPill: {
+    paddingHorizontal: 18,
+    paddingVertical: 8,
+    borderRadius: 999,
+    backgroundColor: '#F2F3F5',
+  },
+  filterPillActive: {
+    backgroundColor: '#EB552D',
+    shadowColor: '#000',
+    shadowOpacity: 0.06,
+    shadowRadius: 2,
+    shadowOffset: { width: 0, height: 1 },
+    elevation: 1,
+  },
+  filterPillText: {
+    color: '#6B7280',
+    fontFamily: Fonts.LeagueSpartanMedium,
+    fontSize: 14,
+  },
+  filterPillTextActive: {
+    color: '#FFFFFF',
+    fontFamily: Fonts.LeagueSpartanSemiBold,
+    fontSize: 14,
+  },
+  addButton: {
+    paddingHorizontal: 18,
+    paddingVertical: 8,
+    borderRadius: 999,
+    backgroundColor: '#10b981',
+    shadowColor: '#000',
+    shadowOpacity: 0.06,
+    shadowRadius: 2,
+    shadowOffset: { width: 0, height: 1 },
+    elevation: 1,
+  },
+  addButtonText: {
+    color: '#FFFFFF',
+    fontFamily: Fonts.LeagueSpartanSemiBold,
+    fontSize: 14,
+  },
+
+  foundWrap: {
+    marginTop: 12,
+    backgroundColor: '#F6F7F8',
+    paddingVertical: 14,
+    paddingHorizontal: 14,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 3,
+    elevation: 2,
+  },
+  foundText: {
+    color: '#6B7280',
+    marginLeft: 6,
+    fontSize: 15,
+    fontFamily: Fonts.LeagueSpartanRegular,
+  },
+  foundNum: {
+    color: '#111827',
+    fontFamily: Fonts.LeagueSpartanBold,
+  },
+
+  listContent: {
+    paddingHorizontal: 16,
+    paddingTop: 8,
+    paddingBottom: 16,
+  },
+
+  card: {
+    backgroundColor: '#ffffff',
+    borderRadius: 24,
+    padding: 16,
+    marginBottom: 14,
+    borderWidth: 1,
+    borderColor: '#e5e7eb',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 6,
+    elevation: 3,
+  },
+  cardHeader: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    marginBottom: 10,
+  },
+  cardHeaderLeft: {
+    flex: 1,
+    paddingRight: 8,
+  },
+  name: {
+    fontSize: 16,
+    marginBottom: 2,
+    color: '#391713',
+    fontFamily: Fonts.LeagueSpartanBold,
+  },
+  username: {
+    fontSize: 13,
+    color: '#9CA3AF',
+    fontFamily: Fonts.LeagueSpartanMedium,
+  },
+  statusBadge: {
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 999,
+    alignSelf: 'flex-start',
+    borderWidth: 1,
+  },
+  statusBadgeActive: {
+    backgroundColor: 'rgba(16,185,129,0.06)',
+    borderColor: '#10b981',
+  },
+  statusBadgeLocked: {
+    backgroundColor: 'rgba(239,68,68,0.06)',
+    borderColor: '#ef4444',
+  },
+  statusText: {
+    fontSize: 11,
+    fontFamily: Fonts.LeagueSpartanSemiBold,
+  },
+  statusTextActive: {
+    color: '#047857',
+  },
+  statusTextLocked: {
+    color: '#b91c1c',
+  },
+  cardBody: {
+    borderTopWidth: 1,
+    borderTopColor: '#f3f4f6',
+    paddingTop: 10,
+  },
+  infoLine: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  iconCircle: {
+    width: 32,
+    height: 32,
+    borderRadius: 999,
+    backgroundColor: 'rgba(233,83,34,0.08)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  iconCircleMuted: {
+    backgroundColor: '#e5e7eb',
+  },
+  infoText: {
+    flex: 1,
+    marginLeft: 10,
+    fontSize: 14,
+    color: '#111827',
+    fontFamily: Fonts.LeagueSpartanRegular,
+  },
+  infoSubText: {
+    flex: 1,
+    marginLeft: 10,
+    fontSize: 12,
+    color: '#6b7280',
+    fontFamily: Fonts.LeagueSpartanRegular,
+  },
+  buttonRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    gap: 8,
+    marginTop: 12,
+  },
+  updateButton: {
+    backgroundColor: '#10b981',
+    paddingVertical: 10,
+    borderRadius: 999,
+    flex: 1,
+    alignItems: 'center',
+  },
+  lockButton: {
+    backgroundColor: '#e95322',
+    paddingVertical: 10,
+    borderRadius: 999,
+    flex: 1,
+    alignItems: 'center',
+  },
+  buttonText: {
+    color: '#ffffff',
+    fontSize: 14,
+    fontFamily: Fonts.LeagueSpartanSemiBold,
+  },
+  disabledButton: {
+    backgroundColor: '#d1d5db',
+    opacity: 0.7,
+  },
+
+  loadingContainer: {
+    alignItems: 'center',
+    padding: 20,
+  },
+  loadingText: {
+    marginTop: 8,
+    fontSize: 14,
+    color: '#6B7280',
+    fontFamily: Fonts.LeagueSpartanRegular,
+  },
+  emptyContainer: {
+    alignItems: 'center',
+    padding: 40,
+  },
+  emptyText: {
+    marginTop: 16,
+    fontSize: 16,
+    color: '#6b7280',
+    fontFamily: Fonts.LeagueSpartanRegular,
+    textAlign: 'center',
+  },
 });
 
 export default VoucherManagementScreen;

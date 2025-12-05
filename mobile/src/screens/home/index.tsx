@@ -37,7 +37,7 @@ import { API_CONFIG } from "@/constants";
 import { formatPriceWithCurrency } from "@/utils/priceUtils";
 import Sidebar from "@/components/sidebar";
 import db from "@/assets/database.json";
-import { CopilotIcon } from "@/assets/images/CopilotIcon";
+const copilotIcon = require('../../assets/images/CopilotIcon.png');
 
 const { width } = Dimensions.get("window");
 const SESSION_KEY = "auth.session";
@@ -552,20 +552,27 @@ export default function HomeScreen() {
               scrollEventThrottle={16}
               renderItem={({ item }) => (
                 <TouchableOpacity 
-                  style={{ width: 160, backgroundColor: '#f5f5f5', borderRadius: 12, padding: 12 }}
                   onPress={() => navigation.navigate("StoreDetail", { storeId: item.id })}
+                  activeOpacity={0.92}
+                  style={styles.storeCard}
                 >
                   <Image 
                     source={{ uri: getImageUrl(item.image) || 'https://via.placeholder.com/160x96' }} 
-                    style={{ width: "100%", height: 96, borderRadius: 8, marginBottom: 8 }} 
+                    style={styles.storeImage}
                   />
-                  <Text style={{ fontSize: 14, fontWeight: 'bold', marginBottom: 4 }}>{item.store_name}</Text>
-                  <Text style={{ fontSize: 12, color: '#666' }} numberOfLines={2}>{item.description}</Text>
+                  <View style={styles.storeInfo}>
+                    <Text style={styles.storeName} numberOfLines={1}>
+                      {item.store_name}
+                    </Text>
+                    <Text style={styles.storeDesc} numberOfLines={2}>
+                      {item.description || 'Cửa hàng thực phẩm chất lượng'}
+                    </Text>
+                  </View>
                 </TouchableOpacity>
               )}
             />
-            
-            {/* Left Arrow */}
+
+            {/* Left Arrow giữ nguyên */}
             {storesCanScrollLeft && (
               <TouchableOpacity
                 onPress={scrollStoresLeft}
@@ -590,8 +597,8 @@ export default function HomeScreen() {
                 <ChevronRight size={20} color="#e95322" style={{ transform: [{ rotate: '180deg' }] }} />
               </TouchableOpacity>
             )}
-            
-            {/* Right Arrow */}
+
+            {/* Right Arrow giữ nguyên */}
             {storesCanScrollRight && (
               <TouchableOpacity
                 onPress={scrollStoresRight}
@@ -741,27 +748,13 @@ export default function HomeScreen() {
         </View>
 
         {/* Recommend */}
-        <View
-          style={{
-            backgroundColor: "#fff",
-            paddingHorizontal: 24,
-            marginBottom: 16,
-          }}
-        >
+        <View style={styles.recommendWrap}>
           <View style={styles.sectionHeader}>
             <Text style={styles.sectionTitle}>
-              
               {currentCategory ? currentCategory.cate_name : "Đề xuất"}
-            
             </Text>
             {selectedCategoryId && selectedCategoryId !== 0 && (
-              <Text
-                style={{
-                  color: "#e95322",
-                  fontSize: 13,
-                  fontFamily: Fonts.LeagueSpartanSemiBold,
-                }}
-              >
+              <Text style={styles.recommendCount}>
                 {filteredFoods.length} món ăn
               </Text>
             )}
@@ -769,19 +762,31 @@ export default function HomeScreen() {
 
           <View style={styles.grid}>
             {filteredFoods.map((item) => (
-              <View key={item.id} style={{ width: '48%', marginBottom: 16 }}>
-                <TouchableOpacity onPress={() => navigation.navigate("FoodDetail", { foodId: item.id })}>
-                  <Image 
-                    source={{ uri: getImageUrl(item.image) || 'https://via.placeholder.com/150x120' }} 
-                    style={{ width: "100%", height: 120, borderRadius: 12, marginBottom: 8 }} 
+              <View key={item.id} style={styles.recommendCard}>
+                <TouchableOpacity
+                  onPress={() =>
+                    navigation.navigate("FoodDetail", { foodId: item.id })
+                  }
+                  activeOpacity={0.9}
+                  style={{ flex: 1 }}
+                >
+                  <Image
+                    source={{ uri: getImageUrl(item.image) || 'https://via.placeholder.com/150x120' }}
+                    style={styles.recommendImage}
                   />
-                  <Text style={{ fontSize: 14, fontWeight: 'bold', marginBottom: 4 }} numberOfLines={1}>
+                  <Text
+                    style={styles.recommendTitle}
+                    numberOfLines={1}
+                  >
                     {item.title}
                   </Text>
-                  <Text style={{ fontSize: 12, color: '#666', marginBottom: 4 }} numberOfLines={2}>
-                    {item.description}
+                  <Text
+                    style={styles.recommendDesc}
+                    numberOfLines={2}
+                  >
+                    {item.description || "Món ăn ngon, phù hợp cho mọi bữa ăn"}
                   </Text>
-                  <Text style={{ fontSize: 14, fontWeight: 'bold', color: '#e95322' }}>
+                  <Text style={styles.recommendPrice}>
                     {formatPriceWithCurrency(item.price)}
                   </Text>
                 </TouchableOpacity>
@@ -837,13 +842,13 @@ export default function HomeScreen() {
       />
       {/* Floating Copilot button - positioned above bottom nav */}
       <TouchableOpacity
-        accessibilityLabel="Copilot"
-        onPress={() => navigation.navigate('Chatbot' as never)}
-        activeOpacity={0.85}
-        style={styles.copilotButton}
-      >
-        <CopilotIcon size={28} color="#ffffff" />
-      </TouchableOpacity>
+         accessibilityLabel="Copilot"
+         onPress={() => navigation.navigate('Chatbot' as never)}
+         activeOpacity={0.85}
+         style={styles.copilotButton}
+       >
+        <Image source={copilotIcon} style={{ width: 28, height: 28, tintColor: '#ffffff' }} />
+       </TouchableOpacity>
     </View>
   );
 }
@@ -973,6 +978,62 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
   },
 
+  // === Đề xuất / Recommend ===
+  recommendWrap: {
+    backgroundColor: "#fff",
+    paddingHorizontal: 24,
+    paddingBottom: 20,
+    marginBottom: 16,
+  },
+  recommendCount: {
+    color: "#e95322",
+    fontSize: 13,
+    fontFamily: Fonts.LeagueSpartanSemiBold,
+  },
+  recommendCard: {
+    width: "48%",
+    marginBottom: 16,
+    backgroundColor: "#ffffff",
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: "#f3f4f6",
+    overflow: "hidden",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 3,
+    elevation: 2,
+  },
+  recommendImage: {
+    width: "100%",
+    height: 120,
+    borderTopLeftRadius: 16,
+    borderTopRightRadius: 16,
+    backgroundColor: "#f3f4f6",
+  },
+  recommendTitle: {
+    fontSize: 14,
+    color: "#391713",
+    marginTop: 8,
+    marginHorizontal: 8,
+    fontFamily: Fonts.LeagueSpartanSemiBold,
+  },
+  recommendDesc: {
+    fontSize: 12,
+    color: "#6b7280",
+    marginTop: 2,
+    marginHorizontal: 8,
+    marginBottom: 4,
+    fontFamily: Fonts.LeagueSpartanRegular,
+  },
+  recommendPrice: {
+    fontSize: 14,
+    color: "#e95322",
+    marginHorizontal: 8,
+    marginBottom: 8,
+    fontFamily: Fonts.LeagueSpartanBold,
+  },
+
   heartBtn: {
     position: "absolute",
     right: 8,
@@ -1012,5 +1073,39 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.2,
     shadowRadius: 6,
     zIndex: 1000,
+  },
+  storeCard: {
+    width: 180,
+    backgroundColor: '#ffffff',
+    borderRadius: 16,
+    padding: 8,
+    borderWidth: 1,
+    borderColor: '#f3f4f6',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.06,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  storeImage: {
+    width: '100%',
+    height: 96,
+    borderRadius: 12,
+    marginBottom: 8,
+    backgroundColor: '#f3f4f6',
+  },
+  storeInfo: {
+    paddingHorizontal: 2,
+  },
+  storeName: {
+    fontSize: 14,
+    color: '#391713',
+    fontFamily: Fonts.LeagueSpartanSemiBold,
+    marginBottom: 4,
+  },
+  storeDesc: {
+    fontSize: 12,
+    color: '#6b7280',
+    fontFamily: Fonts.LeagueSpartanRegular,
   },
 });

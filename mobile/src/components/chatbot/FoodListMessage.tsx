@@ -95,7 +95,7 @@ export const FoodListMessage: React.FC<FoodListMessageProps> = ({ foods }) => {
   };
 
   const handleStorePress = (storeId: number, storeName: string) => {
-    navigation.navigate('StoreDetailScreenV2', {
+    navigation.navigate('StoreDetailScreen', {
       storeId,
       storeName,
     });

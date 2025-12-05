@@ -14,6 +14,9 @@ import DateTimePicker from '@react-native-community/datetimepicker';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import { ArrowLeft } from 'lucide-react-native';
 import { promotionsService, Promotion } from '../services/promotionsService';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { Ionicons } from '@expo/vector-icons';
+import { Fonts } from '@/constants/Fonts';
 
 const VoucherEditScreen: React.FC = () => {
   const navigation = useNavigation();
@@ -124,18 +127,29 @@ const VoucherEditScreen: React.FC = () => {
   };
 
   return (
-    <View style={styles.container}>
-      <View style={styles.headerBox}>
-        <TouchableOpacity onPress={handleCancel} style={{ padding: 4 }}>
-          <ArrowLeft color="#ea580c" size={28} />
-        </TouchableOpacity>
-        <Text style={styles.title}>
-          {promotion ? 'Sửa khuyến mãi' : 'Thêm khuyến mãi'}
-          {isAdmin && ' (Toàn hệ thống)'}
-        </Text>
+    <SafeAreaView style={styles.safeArea} edges={['top', 'bottom']}>
+      <View style={styles.headerWrap}>
+        <View style={styles.headerTopRow}>
+          <TouchableOpacity
+            onPress={handleCancel}
+            style={styles.roundIconBtn}
+            activeOpacity={0.8}
+          >
+            <ArrowLeft size={18} color="#eb5523" />
+          </TouchableOpacity>
+
+          <Text style={styles.headerTitle}>
+            {promotion ? 'Sửa khuyến mãi' : 'Thêm khuyến mãi'}
+          </Text>
+
+          <View style={{ width: 40 }} />
+        </View>
       </View>
 
-      <ScrollView showsVerticalScrollIndicator={false} style={{ flex: 1 }}>
+      <ScrollView
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={styles.content}
+      >
         {/* Name */}
         <View style={styles.inputGroup}>
           <Text style={styles.label}>Tên khuyến mãi</Text>
@@ -156,11 +170,17 @@ const VoucherEditScreen: React.FC = () => {
           </Text>
           <TouchableOpacity
             style={styles.dropdown}
-            onPress={() => setShowDiscountTypeDropdown(!showDiscountTypeDropdown)}
+            onPress={() =>
+              setShowDiscountTypeDropdown(!showDiscountTypeDropdown)
+            }
+            activeOpacity={0.9}
           >
-            <Text style={{ color: '#1f2937' }}>
-              {discountType === 'PERCENT' ? 'PERCENT - Giảm theo phần trăm' : 'AMOUNT - Giảm số tiền cố định'}
+            <Text style={styles.dropdownText}>
+              {discountType === 'PERCENT'
+                ? 'PERCENT - Giảm theo phần trăm'
+                : 'AMOUNT - Giảm số tiền cố định'}
             </Text>
+            <Ionicons name="chevron-down" size={16} color="#6b7280" />
           </TouchableOpacity>
           {showDiscountTypeDropdown && (
             <View style={styles.dropdownOverlay}>
@@ -176,8 +196,10 @@ const VoucherEditScreen: React.FC = () => {
                     }
                   }}
                 >
-                  <Text>
-                    {type === 'PERCENT' ? 'PERCENT - Giảm theo phần trăm' : 'AMOUNT - Giảm số tiền cố định'}
+                  <Text style={styles.dropdownItemText}>
+                    {type === 'PERCENT'
+                      ? 'PERCENT - Giảm theo phần trăm'
+                      : 'AMOUNT - Giảm số tiền cố định'}
                   </Text>
                 </TouchableOpacity>
               ))}
@@ -245,10 +267,9 @@ const VoucherEditScreen: React.FC = () => {
           <TouchableOpacity
             style={styles.input}
             onPress={() => openDatePicker('start')}
+            activeOpacity={0.9}
           >
-            <Text style={{ fontSize: 15, color: '#222' }}>
-              {formatDate(startDate)}
-            </Text>
+            <Text style={styles.inputText}>{formatDate(startDate)}</Text>
           </TouchableOpacity>
         </View>
 
@@ -258,10 +279,9 @@ const VoucherEditScreen: React.FC = () => {
           <TouchableOpacity
             style={styles.input}
             onPress={() => openDatePicker('end')}
+            activeOpacity={0.9}
           >
-            <Text style={{ fontSize: 15, color: '#222' }}>
-              {formatDate(endDate)}
-            </Text>
+            <Text style={styles.inputText}>{formatDate(endDate)}</Text>
           </TouchableOpacity>
         </View>
 
@@ -271,28 +291,32 @@ const VoucherEditScreen: React.FC = () => {
           <TouchableOpacity
             style={styles.dropdown}
             onPress={() => setShowStatusDropdown(!showStatusDropdown)}
+            activeOpacity={0.9}
           >
-            <Text style={{ color: '#1f2937' }}>
+            <Text style={styles.dropdownText}>
               {isActive ? 'Đang hoạt động' : 'Không hoạt động'}
             </Text>
+            <Ionicons name="chevron-down" size={16} color="#6b7280" />
           </TouchableOpacity>
           {showStatusDropdown && (
             <View style={styles.dropdownOverlay}>
               {[
                 { value: true, label: 'Đang hoạt động' },
-                { value: false, label: 'Không hoạt động' }
-              ].filter(s => s.value !== isActive).map((status) => (
-                <TouchableOpacity
-                  key={status.label}
-                  style={styles.dropdownItem}
-                  onPress={() => {
-                    setIsActive(status.value);
-                    setShowStatusDropdown(false);
-                  }}
-                >
-                  <Text>{status.label}</Text>
-                </TouchableOpacity>
-              ))}
+                { value: false, label: 'Không hoạt động' },
+              ]
+                .filter((s) => s.value !== isActive)
+                .map((status) => (
+                  <TouchableOpacity
+                    key={status.label}
+                    style={styles.dropdownItem}
+                    onPress={() => {
+                      setIsActive(status.value);
+                      setShowStatusDropdown(false);
+                    }}
+                  >
+                    <Text style={styles.dropdownItemText}>{status.label}</Text>
+                  </TouchableOpacity>
+                ))}
             </View>
           )}
         </View>
@@ -352,138 +376,205 @@ const VoucherEditScreen: React.FC = () => {
         {/* Actions */}
         <View style={styles.actions}>
           {loading ? (
-            <ActivityIndicator size="large" color="#ea580c" />
+            <ActivityIndicator size="large" color="#eb552d" />
           ) : (
             <>
-              <TouchableOpacity style={styles.saveBtn} onPress={handleSave}>
-                <Text style={{ color: '#fff', fontWeight: 'bold', fontSize: 16 }}>Lưu</Text>
+              <TouchableOpacity
+                style={styles.saveBtn}
+                onPress={handleSave}
+                activeOpacity={0.9}
+              >
+                <Text style={styles.saveText}>Lưu</Text>
               </TouchableOpacity>
-              <TouchableOpacity style={styles.cancelBtn} onPress={handleCancel}>
-                <Text style={{ color: '#fff', fontSize: 16, fontWeight: 'bold' }}>Hủy</Text>
+              <TouchableOpacity
+                style={styles.cancelBtn}
+                onPress={handleCancel}
+                activeOpacity={0.9}
+              >
+                <Text style={styles.cancelText}>Hủy</Text>
               </TouchableOpacity>
             </>
           )}
         </View>
       </ScrollView>
-    </View>
+    </SafeAreaView>
   );
 };
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#fff7ed', padding: 20 },
-  headerBox: { 
-    flexDirection: 'row', 
-    alignItems: 'center', 
-    marginBottom: 20, 
-    paddingBottom: 10, 
-    borderBottomWidth: 1, 
-    borderColor: '#f59e0b',
-    marginTop: 20,
-  },
-  title: { 
-    fontSize: 20, 
-    fontWeight: 'bold', 
-    color: '#ea580c', 
-    marginLeft: 10,
+  safeArea: {
     flex: 1,
+    backgroundColor: '#f9fafb',
   },
-  inputGroup: { 
+
+  // Header giống phong cách VoucherManagementScreen
+  headerWrap: {
+    backgroundColor: '#f5cb58',
+    paddingBottom: 12,
+  },
+  headerTopRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: 8,
     marginBottom: 16,
+    paddingHorizontal: 16,
   },
-  label: { 
-    fontSize: 14, 
-    color: '#ea580c', 
-    fontWeight: 'bold', 
-    marginBottom: 6,
+  roundIconBtn: {
+    backgroundColor: '#ffffff',
+    padding: 10,
+    borderRadius: 999,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.06,
+    shadowRadius: 2,
+    elevation: 1,
+  },
+  headerTitle: {
+    fontSize: 20,
+    color: '#ffffff',
+    fontFamily: Fonts.LeagueSpartanExtraBold,
+    paddingLeft: 8,
+  },
+
+  content: {
+    paddingHorizontal: 16,
+    paddingTop: 12,
+    paddingBottom: 24,
+  },
+
+  inputGroup: {
+    marginBottom: 14,
+  },
+  label: {
+    fontSize: 14,
+    color: '#111827',
+    marginBottom: 4,
+    fontFamily: Fonts.LeagueSpartanSemiBold,
   },
   hint: {
     fontSize: 12,
     color: '#6b7280',
     marginBottom: 4,
     fontStyle: 'italic',
+    fontFamily: Fonts.LeagueSpartanRegular,
   },
-  input: { 
-    borderWidth: 1, 
-    borderColor: '#ea580c', 
-    borderRadius: 10, 
-    padding: 12, 
-    backgroundColor: '#fff',
+  input: {
+    borderWidth: 1,
+    borderColor: '#e5e7eb',
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    backgroundColor: '#ffffff',
     fontSize: 15,
-    color: '#222',
+    color: '#111827',
+    fontFamily: Fonts.LeagueSpartanRegular,
   },
-  dropdown: { 
-    borderWidth: 1, 
-    borderColor: '#ea580c', 
-    borderRadius: 10, 
-    padding: 12, 
-    backgroundColor: '#fff',
+  inputText: {
+    fontSize: 15,
+    color: '#111827',
+    fontFamily: Fonts.LeagueSpartanRegular,
   },
-  dropdownOverlay: { 
-    position: 'absolute', 
-    top: '100%', 
-    left: 0, 
-    right: 0, 
-    backgroundColor: '#fff', 
-    borderRadius: 10, 
-    borderWidth: 1, 
-    borderColor: '#ea580c', 
-    zIndex: 999, 
+
+  dropdown: {
+    borderWidth: 1,
+    borderColor: '#e5e7eb',
+    borderRadius: 999,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    backgroundColor: '#ffffff',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  dropdownText: {
+    color: '#111827',
+    fontSize: 14,
+    fontFamily: Fonts.LeagueSpartanRegular,
+  },
+  dropdownOverlay: {
+    position: 'absolute',
+    top: '100%',
+    left: 0,
+    right: 0,
+    backgroundColor: '#ffffff',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#e5e7eb',
+    zIndex: 999,
     elevation: 5,
     marginTop: 4,
   },
-  dropdownItem: { 
-    padding: 12, 
-    borderBottomWidth: 1, 
-    borderColor: '#f3f3f3',
+  dropdownItem: {
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderBottomWidth: 1,
+    borderColor: '#f3f4f6',
   },
-  actions: { 
-    flexDirection: 'row', 
-    justifyContent: 'center', 
-    marginTop: 20,
-    marginBottom: 20,
+  dropdownItemText: {
+    fontSize: 14,
+    color: '#111827',
+    fontFamily: Fonts.LeagueSpartanRegular,
+  },
+
+  actions: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginTop: 18,
     gap: 10,
   },
-  saveBtn: { 
-    backgroundColor: '#f59e0b', 
-    padding: 14, 
-    borderRadius: 12,
-    minWidth: 100,
+  saveBtn: {
+    flex: 1,
+    backgroundColor: '#10b981',
+    paddingVertical: 12,
+    borderRadius: 999,
     alignItems: 'center',
   },
-  cancelBtn: { 
-    backgroundColor: '#ea580c', 
-    padding: 14, 
-    borderRadius: 12,
-    minWidth: 100,
+  cancelBtn: {
+    flex: 1,
+    backgroundColor: '#ef4444',
+    paddingVertical: 12,
+    borderRadius: 999,
     alignItems: 'center',
   },
-  datePickerOverlay: { 
-    position: 'absolute', 
-    top: 0, 
-    left: 0, 
-    right: 0, 
-    bottom: 0, 
-    zIndex: 1000, 
-    justifyContent: 'center', 
+  saveText: {
+    color: '#ffffff',
+    fontSize: 15,
+    fontFamily: Fonts.LeagueSpartanSemiBold,
+  },
+  cancelText: {
+    color: '#ffffff',
+    fontSize: 15,
+    fontFamily: Fonts.LeagueSpartanSemiBold,
+  },
+
+  datePickerOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    zIndex: 1000,
+    justifyContent: 'center',
     alignItems: 'center',
   },
-  datePickerBackdrop: { 
-    position: 'absolute', 
-    top: 0, 
-    left: 0, 
-    right: 0, 
-    bottom: 0, 
+  datePickerBackdrop: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
     backgroundColor: 'rgba(0,0,0,0.5)',
   },
-  datePickerContainer: { 
-    backgroundColor: '#fff', 
-    borderRadius: 16, 
-    padding: 12, 
-    elevation: 6, 
-    shadowColor: '#000', 
-    shadowOffset: { width: 0, height: 2 }, 
-    shadowOpacity: 0.15, 
-    shadowRadius: 8, 
+  datePickerContainer: {
+    backgroundColor: '#ffffff',
+    borderRadius: 16,
+    padding: 12,
+    elevation: 6,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 8,
     minWidth: 320,
   },
 });

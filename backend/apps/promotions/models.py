@@ -100,3 +100,4 @@ class Promo(models.Model):
 
 # Import OrderPromo from separate file
 from .order_promo import OrderPromo
+

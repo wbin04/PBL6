@@ -6,7 +6,7 @@ import pytz
 class OrderPromo(models.Model):
     """Simple model for order-promotion relationship"""
     order = models.ForeignKey('orders.Order', on_delete=models.CASCADE)
-    promo = models.ForeignKey('Promo', on_delete=models.CASCADE)
+    promo = models.ForeignKey('promotions.Promo', on_delete=models.CASCADE)
     applied_amount = models.DecimalField(max_digits=12, decimal_places=2, default=0)
     note = models.CharField(max_length=255, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)

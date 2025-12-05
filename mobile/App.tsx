@@ -293,6 +293,7 @@ function AppNavigator() {
                 <Stack.Screen name="SellerProfileEditScreen" component={require('./src/screens/seller/SellerProfileEditScreen').default} />
                 <Stack.Screen name="SellerVoucherEditScreen" component={require('./src/screens/seller/VoucherEditScreen').default} />
                 <Stack.Screen name="SellerVoucherManagementScreen" component={require('./src/screens/seller/VoucherManagementScreen').default} />
+                <Stack.Screen name="NewOrderListScreen" component={require('./src/screens/seller/NewOrderListScreen').default} />
                 
                 {/* Common screens available to all authenticated users */}
                 <Stack.Screen name="UpdateCustomerScreen" component={require('./src/screens/UpdateCustomerScreen').default} />

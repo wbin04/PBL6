@@ -1,11 +1,25 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { View, Text, StyleSheet, FlatList, TouchableOpacity, TextInput, RefreshControl, Alert, ActivityIndicator, ScrollView } from 'react-native';
+import {
+  View,
+  Text,
+  StyleSheet,
+  FlatList,
+  TouchableOpacity,
+  TextInput,
+  RefreshControl,
+  Alert,
+  ActivityIndicator,
+  ScrollView,
+} from 'react-native';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
-import { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import { Tag, Menu, X, ShoppingBag } from 'lucide-react-native';
+import { Tag, Menu, User } from 'lucide-react-native';
 import { promotionsService, Promotion } from '../../services/promotionsService';
 import { useSelector } from 'react-redux';
 import { RootState } from '../../store/index';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { Ionicons } from '@expo/vector-icons';
+import { Fonts } from '@/constants/Fonts';
+import Sidebar from '@/components/sidebar';
 
 const VoucherManagementScreen: React.FC = () => {
   const navigation = useNavigation<any>();
@@ -17,6 +31,7 @@ const VoucherManagementScreen: React.FC = () => {
   const [refreshing, setRefreshing] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [sidebarVisible, setSidebarVisible] = useState(false);
+  const [activeTab, setActiveTab] = useState('all');
 
   // Load promotions
   const loadPromotions = async (showRefreshing = false) => {
@@ -85,18 +100,6 @@ const VoucherManagementScreen: React.FC = () => {
     );
   };
 
-  // Filter promotions based on search query
-  const filteredPromotions = promotions.filter(p => 
-    p.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    (p.id && p.id.toString().includes(searchQuery))
-  );
-
-  // Calculate stats
-  const total = promotions.length;
-  const active = promotions.filter(p => p.is_active).length;
-  const used = 0; // Backend doesn't track usage yet
-  const conversion = '0.0'; // Backend doesn't track usage yet
-
   // Format date for display
   const formatDate = (dateString: string) => {
     try {
@@ -129,40 +132,92 @@ const VoucherManagementScreen: React.FC = () => {
     const endDate = new Date(promotion.end_date);
 
     if (!promotion.is_active) {
-      return { icon: '🔴', text: 'Đã tắt' };
+      return { icon: '🔴', text: 'Đã tắt', color: '#ef4444' };
     } else if (now < startDate) {
-      return { icon: '⚪', text: 'Chưa kích hoạt' };
+      return { icon: '⚪', text: 'Chưa kích hoạt', color: '#9ca3af' };
     } else if (now > endDate) {
-      return { icon: '🔴', text: 'Đã hết hạn' };
+      return { icon: '🔴', text: 'Đã hết hạn', color: '#ef4444' };
     } else {
-      return { icon: '🟢', text: 'Đang hoạt động' };
+      return { icon: '🟢', text: 'Đang hoạt động', color: '#10b981' };
     }
   };
 
+  // Filter promotions
+  const filteredPromotions = promotions.filter(p => {
+    const matchSearch =
+      searchQuery.trim() === '' ||
+      p.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (p.id && p.id.toString().includes(searchQuery));
+
+    if (activeTab === 'all') return matchSearch;
+
+    const status = getStatusDisplay(p);
+    if (activeTab === 'active') {
+      return matchSearch && status.text === 'Đang hoạt động';
+    } else if (activeTab === 'inactive') {
+      return matchSearch && (status.text === 'Đã tắt' || status.text === 'Đã hết hạn');
+    }
+    return matchSearch;
+  });
+
+  // Calculate stats
+  const total = promotions.length;
+  const active = promotions.filter(p => {
+    const status = getStatusDisplay(p);
+    return status.text === 'Đang hoạt động';
+  }).length;
+
   return (
-    <View style={styles.container}>
-      {/* Header */}
-      <View style={styles.headerRow}>
-        <TouchableOpacity 
-          style={styles.menuButton}
-          onPress={() => setSidebarVisible(true)}
-        >
-          <Menu color="#ea580c" size={24} />
-        </TouchableOpacity>
-        <View style={styles.headerCenter}>
+    <SafeAreaView style={styles.container} edges={['top']}>
+      {/* Sidebar CHUNG – dùng được cho seller (user.role = "Chủ cửa hàng") */}
+      <Sidebar
+        isOpen={sidebarVisible}
+        onClose={() => setSidebarVisible(false)}
+      />
+
+      {/* Header giống NewOrderListScreen */}
+      <View style={styles.headerWrap}>
+        <View style={styles.headerTopRow}>
+          <TouchableOpacity
+            onPress={() => setSidebarVisible(true)}
+            style={styles.roundIconBtn}
+          >
+            <Menu size={24} color="#eb5523" />
+          </TouchableOpacity>
+
           <Text style={styles.headerTitle}>Quản lý khuyến mãi</Text>
-          <Text style={styles.headerSubtitle}>Cửa hàng của tôi</Text>
+
+          <TouchableOpacity 
+            style={styles.roundIconBtn}
+            onPress={() => navigation.navigate('SellerProfileScreen')}
+          >
+            <User size={24} color="#eb5523" />
+          </TouchableOpacity>
         </View>
-        <View style={styles.headerRight}>
-          <TouchableOpacity style={styles.iconBtn}>
-            <Text style={styles.icon}>🔔</Text>
-            <View style={styles.badge}>
-              <Text style={styles.badgeText}>3</Text>
-            </View>
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.avatar}>
-            <Text style={styles.avatarText}>{(user as any)?.name?.charAt(0).toUpperCase() || 'A'}</Text>
-          </TouchableOpacity>
+
+        {/* Search Box */}
+        <View style={styles.searchRow}>
+          <View style={styles.searchBox}>
+            <TextInput
+              style={styles.searchInput}
+              placeholder="Tìm theo tên, mã khuyến mãi..."
+              placeholderTextColor="#9ca3af"
+              value={searchQuery}
+              onChangeText={setSearchQuery}
+              returnKeyType="search"
+            />
+            {searchQuery.length > 0 && (
+              <TouchableOpacity
+                onPress={() => setSearchQuery('')}
+                style={styles.clearBtn}
+              >
+                <Ionicons name="close-circle" size={16} color="#9ca3af" />
+              </TouchableOpacity>
+            )}
+            <TouchableOpacity style={styles.searchBtn} activeOpacity={0.8}>
+              <Ionicons name="search" size={16} color="#fff" />
+            </TouchableOpacity>
+          </View>
         </View>
       </View>
 
@@ -174,567 +229,502 @@ const VoucherManagementScreen: React.FC = () => {
         </TouchableOpacity>
       </View>
 
-      {/* Stats */}
-      <ScrollView 
-        horizontal 
-        showsHorizontalScrollIndicator={false}
-        style={styles.statsScrollView}
-        contentContainerStyle={styles.statsRow}
-      >
-        {[
-          { label: 'Tổng khuyến mãi', value: total },
-          { label: 'Đang hoạt động', value: active, color: '#10b981' },
-          { label: 'Lượt sử dụng', value: used, color: '#3b82f6' },
-          { label: 'Tỷ lệ chuyển đổi', value: conversion + '%', color: '#8b5cf6' }
-        ].map((s, i) => (
-          <View style={styles.statCard} key={i}>
-            <Text style={styles.statLabel}>{s.label}</Text>
-            <Text style={[styles.statValue, { color: s.color || '#1e293b' }]}>{s.value}</Text>
-          </View>
-        ))}
-      </ScrollView>
+      {/* Tabs horizontal scroll */}
+      <View style={styles.tabs}>
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.tabsContent}
+        >
+          <TouchableOpacity
+            style={[styles.tab, activeTab === 'all' && styles.tabActive]}
+            onPress={() => setActiveTab('all')}
+            activeOpacity={0.7}
+          >
+            <Text
+              style={[
+                styles.tabText,
+                activeTab === 'all' && styles.tabTextActive,
+              ]}
+            >
+              Tất cả
+            </Text>
+            <View
+              style={[
+                styles.countBadge,
+                activeTab === 'all' && styles.countBadgeActive,
+              ]}
+            >
+              <Text
+                style={[
+                  styles.countText,
+                  activeTab === 'all' && styles.countTextActive,
+                ]}
+              >
+                {total}
+              </Text>
+            </View>
+          </TouchableOpacity>
 
-      {/* Search */}
-      <View style={styles.searchBox}>
-        <Text style={styles.searchIcon}>🔍</Text>
-        <TextInput 
-          style={styles.searchInput} 
-          placeholder="Tìm kiếm theo tên hoặc mã..." 
-          placeholderTextColor="#9ca3af"
-          value={searchQuery}
-          onChangeText={setSearchQuery}
-        />
+          <TouchableOpacity
+            style={[styles.tab, activeTab === 'active' && styles.tabActive]}
+            onPress={() => setActiveTab('active')}
+            activeOpacity={0.7}
+          >
+            <Text
+              style={[
+                styles.tabText,
+                activeTab === 'active' && styles.tabTextActive,
+              ]}
+            >
+              Đang hoạt động
+            </Text>
+            <View
+              style={[
+                styles.countBadge,
+                activeTab === 'active' && styles.countBadgeActive,
+              ]}
+            >
+              <Text
+                style={[
+                  styles.countText,
+                  activeTab === 'active' && styles.countTextActive,
+                ]}
+              >
+                {active}
+              </Text>
+            </View>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.tab, activeTab === 'inactive' && styles.tabActive]}
+            onPress={() => setActiveTab('inactive')}
+            activeOpacity={0.7}
+          >
+            <Text
+              style={[
+                styles.tabText,
+                activeTab === 'inactive' && styles.tabTextActive,
+              ]}
+            >
+              Không hoạt động
+            </Text>
+            <View
+              style={[
+                styles.countBadge,
+                activeTab === 'inactive' && styles.countBadgeActive,
+              ]}
+            >
+              <Text
+                style={[
+                  styles.countText,
+                  activeTab === 'inactive' && styles.countTextActive,
+                ]}
+              >
+                {total - active}
+              </Text>
+            </View>
+          </TouchableOpacity>
+        </ScrollView>
+      </View>
+
+      {/* Found Bar */}
+      <View style={styles.foundWrap}>
+        <Text style={styles.foundText}>
+          Tìm thấy <Text style={styles.foundNum}>{filteredPromotions.length}</Text> khuyến mãi
+        </Text>
+        <TouchableOpacity style={styles.addBtn} onPress={handleAdd}>
+          <Ionicons name="add" size={18} color="#fff" />
+          <Text style={styles.addBtnText}>Thêm</Text>
+        </TouchableOpacity>
       </View>
 
       {/* List */}
-      <View style={styles.listContainer}>
-        <Text style={styles.listTitle}>
-          Tất cả khuyến mãi ({filteredPromotions.length})
-        </Text>
-        
-        {loading && !refreshing ? (
-          <View style={styles.loaderContainer}>
-            <ActivityIndicator size="large" color="#ea580c" />
-            <Text style={styles.loadingText}>Đang tải...</Text>
-          </View>
-        ) : filteredPromotions.length === 0 ? (
-          <View style={styles.emptyContainer}>
-            <Text style={styles.emptyText}>
-              {searchQuery ? 'Không tìm thấy kết quả' : 'Chưa có khuyến mãi nào'}
-            </Text>
-            <Text style={styles.emptySubText}>
-              {searchQuery ? 'Thử từ khóa khác' : 'Nhấn "Thêm" để tạo khuyến mãi mới'}
-            </Text>
-          </View>
-        ) : (
-          <FlatList
-            data={filteredPromotions}
-            keyExtractor={item => item.id.toString()}
-            contentContainerStyle={{ paddingBottom: 12 }}
-            refreshControl={
-              <RefreshControl 
-                refreshing={refreshing} 
-                onRefresh={onRefresh}
-                colors={['#ea580c']}
-              />
-            }
-            renderItem={({ item }) => {
-              const status = getStatusDisplay(item);
-              return (
-                <View style={styles.voucherCard}>
-                  <View style={styles.voucherHeader}>
+      {loading && !refreshing ? (
+        <View style={styles.loaderContainer}>
+          <ActivityIndicator size="large" color="#ea580c" />
+          <Text style={styles.loadingText}>Đang tải...</Text>
+        </View>
+      ) : filteredPromotions.length === 0 ? (
+        <View style={styles.emptyContainer}>
+          <Tag size={64} color="#d1d5db" style={{ marginBottom: 16 }} />
+          <Text style={styles.emptyText}>
+            {searchQuery ? 'Không tìm thấy kết quả' : 'Chưa có khuyến mãi nào'}
+          </Text>
+          <Text style={styles.emptySubText}>
+            {searchQuery ? 'Thử từ khóa khác' : 'Nhấn "Thêm" để tạo khuyến mãi mới'}
+          </Text>
+        </View>
+      ) : (
+        <FlatList
+          data={filteredPromotions}
+          keyExtractor={item => item.id.toString()}
+          contentContainerStyle={styles.scrollContent}
+          refreshControl={
+            <RefreshControl 
+              refreshing={refreshing} 
+              onRefresh={onRefresh}
+              colors={['#ea580c']}
+            />
+          }
+          renderItem={({ item }) => {
+            const status = getStatusDisplay(item);
+            return (
+              <View style={styles.card}>
+                {/* Header */}
+                <View style={styles.cardHeader}>
+                  <View style={{ flex: 1 }}>
                     <Text style={styles.voucherName}>{item.name}</Text>
-                    <View style={styles.statusBadge}>
-                      <Text style={styles.statusIcon}>{status.icon}</Text>
-                      <Text style={styles.statusText}>{status.text}</Text>
-                    </View>
-                  </View>
-                  
-                  <View style={styles.voucherInfoRow}>
                     <Text style={styles.voucherCode}>#{item.id}</Text>
-                    <Text style={styles.voucherType}>
+                  </View>
+                  <View style={[styles.statusPill, { backgroundColor: status.color + '20' }]}>
+                    <Text style={[styles.statusText, { color: status.color }]}>
+                      {status.icon} {status.text}
+                    </Text>
+                  </View>
+                </View>
+
+                {/* Info */}
+                <View style={styles.infoRow}>
+                  <View style={styles.typeBadge}>
+                    <Text style={styles.typeText}>
                       {item.discount_type === 'PERCENT' ? '📊 PERCENT' : '💵 AMOUNT'}
                     </Text>
                   </View>
-
-                  <Text style={styles.voucherDesc}>
-                    Giảm {formatDiscount(item)} cho đơn từ {parseFloat(item.minimum_pay.toString()).toLocaleString()}đ
-                  </Text>
-                  
-                  <Text style={styles.voucherDate}>
-                    � {formatDate(item.start_date)} → {formatDate(item.end_date)}
-                  </Text>
-
-                  <View style={styles.voucherActions}>
-                    <TouchableOpacity style={styles.editButton} onPress={() => handleEdit(item)}>
-                      <Text style={styles.editButtonText}>✏️ Sửa</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity style={styles.deleteButton} onPress={() => handleDelete(item.id)}>
-                      <Text style={styles.deleteButtonText}>🗑️ Xóa</Text>
-                    </TouchableOpacity>
-                  </View>
                 </View>
-              );
-            }}
-          />
-        )}
-      </View>
 
-      {/* Sidebar */}
-      {sidebarVisible && (
-        <>
-          <TouchableOpacity style={styles.overlay} activeOpacity={1} onPress={() => setSidebarVisible(false)} />
-          <View style={styles.sidebar}>
-            <View style={styles.logoContainer}>
-              <View style={styles.logoHeader}>
-                <TouchableOpacity onPress={() => setSidebarVisible(false)} style={styles.closeButton}>
-                  <X width={24} height={24} stroke="#fff" />
-                </TouchableOpacity>
-              </View>
-              <View style={styles.logoBox}>
-                <View style={styles.logoCircle}>
-                  <Text style={styles.logoEmoji}>🍔</Text>
+                <Text style={styles.voucherDesc}>
+                  Giảm {formatDiscount(item)} cho đơn từ{' '}
+                  {parseFloat(item.minimum_pay.toString()).toLocaleString()}đ
+                </Text>
+
+                <Text style={styles.voucherDate}>
+                  📅 {formatDate(item.start_date)} → {formatDate(item.end_date)}
+                </Text>
+
+                {/* Actions */}
+                <View style={styles.actionRow}>
+                  <TouchableOpacity
+                    style={[styles.actionBtn, styles.editBtn]}
+                    onPress={() => handleEdit(item)}
+                  >
+                    <Ionicons name="create-outline" size={16} color="#fff" />
+                    <Text style={styles.editText}>Sửa</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[styles.actionBtn, styles.deleteBtn]}
+                    onPress={() => handleDelete(item.id)}
+                  >
+                    <Ionicons name="trash-outline" size={16} color="#fff" />
+                    <Text style={styles.deleteText}>Xóa</Text>
+                  </TouchableOpacity>
                 </View>
-                <Text style={styles.logoText}>BÁN HÀNG</Text>
               </View>
-            </View>
-            <View style={styles.menuContainer}>
-              <TouchableOpacity
-                style={[styles.menuItem, { backgroundColor: '#ea580c' }]}
-                onPress={() => {
-                  setSidebarVisible(false);
-                  navigation.navigate('DashboardScreen');
-                }}
-              >
-                <Menu width={16} height={16} stroke="#fff7ed" />
-                <Text style={styles.menuText}>Trang chủ</Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={[styles.menuItem, { backgroundColor: '#ea580c' }]}
-                onPress={() => {
-                  setSidebarVisible(false);
-                  navigation.reset({
-                    index: 0,
-                    routes: [{ name: 'MainTabs', params: { screen: 'Home' } }],
-                  });
-                }}
-              >
-                <ShoppingBag width={16} height={16} stroke="#fff7ed" />
-                <Text style={styles.menuText}>Mua hàng</Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={[styles.menuItem, { backgroundColor: '#ea580c' }]}
-                onPress={() => {
-                  setSidebarVisible(false);
-                  navigation.navigate('ManageMenuScreen');
-                }}
-              >
-                <ShoppingBag width={16} height={16} stroke="#fff7ed" />
-                <Text style={styles.menuText}>Quản lí món ăn</Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={[styles.menuItem, { backgroundColor: '#ea580c' }]}
-                onPress={() => {
-                  setSidebarVisible(false);
-                  navigation.navigate('NewOrderListScreen');
-                }}
-              >
-                <ShoppingBag width={16} height={16} stroke="#fff7ed" />
-                <Text style={styles.menuText}>Quản lí đơn hàng</Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={[styles.menuItem, styles.menuItemActive]}
-                onPress={() => setSidebarVisible(false)}
-              >
-                <Tag width={16} height={16} stroke="#fff" />
-                <Text style={[styles.menuText, styles.menuTextActive]}>Quản lí khuyến mãi</Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={[styles.menuItem, { backgroundColor: '#ea580c' }]}
-                onPress={() => {
-                  setSidebarVisible(false);
-                }}
-              >
-                <Menu width={16} height={16} stroke="#fff7ed" />
-                <Text style={styles.menuText}>Thống kê</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </>
-      )}
-    </View>
+            );
+          }}
+        />
+      )}   
+    </SafeAreaView>
   );
 };
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#fff7ed' },
-  loaderContainer: { 
-    flex: 1, 
-    justifyContent: 'center', 
-    alignItems: 'center', 
-    backgroundColor: '#fff7ed' 
+  container: {
+    flex: 1,
+    backgroundColor: '#ffffff',
+  },
+
+  // Header giống NewOrderListScreen
+  headerWrap: {
+    backgroundColor: '#f5cb58',
+    paddingTop: 0,
+    paddingBottom: 12,
+  },
+  headerTopRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: 20,
+    marginBottom: 20,
+    paddingHorizontal: 16,
+  },
+  roundIconBtn: {
+    backgroundColor: '#FFFFFF',
+    padding: 10,
+    borderRadius: 999,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.06,
+    shadowRadius: 2,
+    elevation: 1,
+  },
+  headerTitle: {
+    fontSize: 20,
+    color: '#ffffff',
+    fontFamily: Fonts.LeagueSpartanExtraBold,
+  },
+
+  searchRow: {
+    paddingBottom: 8,
+    paddingHorizontal: 16,
+  },
+  searchBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#fff',
+    borderRadius: 999,
+    paddingLeft: 16,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+  },
+  searchInput: {
+    flex: 1,
+    height: 42,
+    fontSize: 14,
+    color: '#111827',
+    fontFamily: Fonts.LeagueSpartanRegular,
+  },
+  clearBtn: {
+    paddingHorizontal: 4,
+  },
+  searchBtn: {
+    height: 42,
+    width: 42,
+    borderRadius: 999,
+    backgroundColor: '#EB552D',
+    alignItems: 'center',
+    justifyContent: 'center',
+    margin: 4,
+  },
+
+  tabs: {
+    backgroundColor: '#fff',
+    paddingTop: 12,
+    paddingBottom: 12,
+  },
+  tabsContent: {
+    paddingHorizontal: 16,
+    paddingRight: 24,
+    flexDirection: 'row',
+    alignItems: 'center',
+    columnGap: 10,
+  },
+  tab: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 999,
+    backgroundColor: '#F2F3F5',
+  },
+  tabActive: {
+    backgroundColor: '#EB552D',
+    shadowColor: '#000',
+    shadowOpacity: 0.06,
+    shadowRadius: 2,
+    shadowOffset: { width: 0, height: 1 },
+    elevation: 1,
+  },
+  tabText: {
+    color: '#6B7280',
+    fontFamily: Fonts.LeagueSpartanMedium,
+    fontSize: 14,
+  },
+  tabTextActive: {
+    color: '#FFFFFF',
+    fontFamily: Fonts.LeagueSpartanSemiBold,
+    fontSize: 14,
+  },
+  countBadge: {
+    marginLeft: 8,
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 999,
+    backgroundColor: '#e5e7eb',
+  },
+  countBadgeActive: {
+    backgroundColor: 'rgba(255,255,255,0.3)',
+  },
+  countText: {
+    fontSize: 11,
+    color: '#6b7280',
+    fontFamily: Fonts.LeagueSpartanBold,
+  },
+  countTextActive: {
+    color: '#fff',
+  },
+
+  foundWrap: {
+    marginTop: 4,
+    backgroundColor: '#F6F7F8',
+    paddingVertical: 8,
+    paddingHorizontal: 14,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 3,
+    elevation: 2,
+  },
+  foundText: {
+    color: '#6B7280',
+    fontSize: 15,
+    fontFamily: Fonts.LeagueSpartanRegular,
+  },
+  foundNum: {
+    color: '#111827',
+    fontFamily: Fonts.LeagueSpartanBold,
+  },
+  addBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#ea580c',
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 999,
+  },
+  addBtnText: {
+    color: '#fff',
+    fontFamily: Fonts.LeagueSpartanBold,
+    fontSize: 14,
+  },
+
+  scrollContent: {
+    padding: 16,
+    paddingBottom: 100,
+  },
+  loaderContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   loadingText: {
     marginTop: 10,
     fontSize: 16,
     color: '#ea580c',
-    fontWeight: '500'
-  },
-  headerRow: { 
-    flexDirection: 'row', 
-    alignItems: 'center', 
-    paddingHorizontal: 18, 
-    paddingTop: 50, 
-    paddingBottom: 8, 
-    backgroundColor: '#fff7ed',
-    borderBottomWidth: 0 
-  },
-  menuButton: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: '#fff',
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: '#f3f4f6',
-    shadowColor: '#000',
-    shadowOpacity: 0.1,
-    shadowRadius: 2,
-    elevation: 2
-  },
-  headerCenter: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center'
-  },
-  headerTitle: { fontSize: 20, color: '#1e293b', fontWeight: 'bold' },
-  headerSubtitle: { fontSize: 13, color: '#64748b', marginTop: 2 },
-  headerRight: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  iconBtn: { 
-    width: 32, 
-    height: 32, 
-    borderRadius: 16, 
-    backgroundColor: '#fff', 
-    alignItems: 'center', 
-    justifyContent: 'center', 
-    borderWidth: 1, 
-    borderColor: '#f3f4f6', 
-    marginLeft: 6 
-  },
-  icon: { fontSize: 18 },
-  badge: { 
-    position: 'absolute', 
-    top: -4, 
-    right: -4, 
-    backgroundColor: '#ea580c', 
-    borderRadius: 10, 
-    minWidth: 18, 
-    height: 18, 
-    alignItems: 'center', 
-    justifyContent: 'center', 
-    borderWidth: 2, 
-    borderColor: '#fff' 
-  },
-  badgeText: { fontSize: 11, color: '#fff', fontWeight: 'bold' },
-  avatar: { 
-    width: 32, 
-    height: 32, 
-    borderRadius: 16, 
-    backgroundColor: '#F4A460', 
-    alignItems: 'center', 
-    justifyContent: 'center', 
-    marginLeft: 8 
-  },
-  avatarText: { color: '#fff', fontSize: 14, fontWeight: 'bold' },
-  sectionTitleRow: { 
-    flexDirection: 'row', 
-    alignItems: 'center', 
-    justifyContent: 'space-between', 
-    marginHorizontal: 18, 
-    marginTop: 0, 
-    marginBottom: 16
-  },
-  menuSectionTitle: { 
-    fontSize: 20, 
-    fontWeight: 'bold', 
-    color: '#ea580c' 
-  },
-  addBtn: { 
-    backgroundColor: '#ea580c', 
-    borderRadius: 20, 
-    paddingHorizontal: 16, 
-    paddingVertical: 6 
-  },
-  addBtnText: { color: '#fff', fontWeight: 'bold', fontSize: 15 },
-  statsScrollView: {
-    marginHorizontal: 18,
-    marginBottom: 12,
-    maxHeight: 80,
-  },
-  statsRow: { 
-    flexDirection: 'row', 
-    gap: 8,
-    paddingRight: 18
-  },
-  statCard: { 
-    width: 140,
-    backgroundColor: '#fff', 
-    borderRadius: 12, 
-    padding: 12, 
-    alignItems: 'center', 
-    elevation: 2, 
-    borderWidth: 1, 
-    borderColor: '#f3f4f6',
-    shadowColor: '#000',
-    shadowOpacity: 0.05,
-    shadowRadius: 4
-  },
-  statLabel: { fontSize: 12, color: '#64748b', marginBottom: 4, textAlign: 'center' },
-  statValue: { fontSize: 20, fontWeight: 'bold' },
-  searchBox: { 
-    marginHorizontal: 18, 
-    marginBottom: 12, 
-    flexDirection: 'row', 
-    alignItems: 'center', 
-    backgroundColor: '#fff', 
-    borderRadius: 12, 
-    borderWidth: 1, 
-    borderColor: '#f3f4f6', 
-    paddingHorizontal: 12, 
-    height: 44,
-    shadowColor: '#000',
-    shadowOpacity: 0.05,
-    shadowRadius: 2,
-    elevation: 1
-  },
-  searchIcon: { fontSize: 18, marginRight: 8 },
-  searchInput: { flex: 1, fontSize: 15, color: '#1e293b' },
-  listContainer: {
-    flex: 1,
-  },
-  listTitle: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    marginHorizontal: 18,
-    marginBottom: 12,
-    color: '#1f2937',
+    fontFamily: Fonts.LeagueSpartanMedium,
   },
   emptyContainer: {
     flex: 1,
-    justifyContent: 'center',
+    paddingVertical: 80,
     alignItems: 'center',
-    paddingVertical: 60,
   },
   emptyText: {
     fontSize: 18,
-    fontWeight: 'bold',
-    color: '#64748b',
-    marginBottom: 8,
+    color: '#9ca3af',
+    marginBottom: 6,
+    fontFamily: Fonts.LeagueSpartanSemiBold,
   },
   emptySubText: {
     fontSize: 14,
-    color: '#9ca3af',
+    color: '#d1d5db',
     textAlign: 'center',
+    fontFamily: Fonts.LeagueSpartanRegular,
   },
-  voucherCard: { 
-    backgroundColor: '#fff', 
-    borderRadius: 16, 
-    padding: 16, 
-    marginHorizontal: 18, 
-    marginBottom: 10, 
-    shadowColor: '#000', 
-    shadowOpacity: 0.03, 
-    shadowRadius: 4, 
-    elevation: 1,
+
+  // Card
+  card: {
+    backgroundColor: '#fff',
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 12,
     borderWidth: 1,
-    borderColor: '#f3f4f6'
+    borderColor: '#f3f4f6',
+    shadowColor: '#000',
+    shadowOpacity: 0.04,
+    shadowRadius: 6,
+    elevation: 2,
   },
-  voucherHeader: {
+  cardHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'flex-start',
-    marginBottom: 8
+    marginBottom: 10,
   },
-  voucherName: { 
-    flex: 1,
-    fontSize: 17, 
-    fontWeight: 'bold', 
+  voucherName: {
+    fontSize: 17,
+    fontWeight: 'bold',
     color: '#1e293b',
-    marginRight: 8
+    fontFamily: Fonts.LeagueSpartanBold,
+    marginBottom: 4,
   },
-  statusBadge: {
+  voucherCode: {
+    fontSize: 13,
+    color: '#ea580c',
+    fontFamily: Fonts.LeagueSpartanSemiBold,
+  },
+  statusPill: {
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 999,
+  },
+  statusText: {
+    fontSize: 12,
+    fontFamily: Fonts.LeagueSpartanBold,
+  },
+  infoRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#f1f5f9',
-    paddingHorizontal: 8,
+    marginBottom: 8,
+  },
+  typeBadge: {
+    backgroundColor: '#f3f4f6',
+    paddingHorizontal: 10,
     paddingVertical: 4,
     borderRadius: 8,
-    gap: 4
   },
-  statusIcon: { fontSize: 12 },
-  statusText: { fontSize: 12, color: '#64748b', fontWeight: '600' },
-  voucherInfoRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    marginBottom: 8
-  },
-  voucherCode: { 
-    fontSize: 13, 
-    color: '#ea580c', 
-    fontWeight: 'bold',
-    backgroundColor: '#fff7ed',
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderRadius: 6
-  },
-  voucherType: { 
-    fontSize: 12, 
+  typeText: {
+    fontSize: 12,
     color: '#6366f1',
-    fontWeight: '600'
+    fontFamily: Fonts.LeagueSpartanSemiBold,
   },
-  voucherDesc: { 
-    fontSize: 14, 
-    color: '#475569', 
-    marginBottom: 6,
-    lineHeight: 20
+  voucherDesc: {
+    fontSize: 14,
+    color: '#475569',
+    marginBottom: 8,
+    lineHeight: 20,
+    fontFamily: Fonts.LeagueSpartanRegular,
   },
-  voucherDate: { 
-    fontSize: 12, 
+  voucherDate: {
+    fontSize: 12,
     color: '#64748b',
-    marginBottom: 12
+    marginBottom: 12,
+    fontFamily: Fonts.LeagueSpartanRegular,
   },
-  voucherActions: {
+  actionRow: {
     flexDirection: 'row',
     gap: 8,
-    marginTop: 8
+    marginTop: 8,
   },
-  editButton: {
+  actionBtn: {
     flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 4,
+    borderRadius: 10,
+    paddingVertical: 10,
+  },
+  editBtn: {
     backgroundColor: '#f59e0b',
-    paddingVertical: 10,
-    borderRadius: 10,
-    alignItems: 'center'
   },
-  editButtonText: {
+  editText: {
     color: '#fff',
     fontWeight: 'bold',
-    fontSize: 14
+    fontSize: 14,
+    fontFamily: Fonts.LeagueSpartanBold,
   },
-  deleteButton: {
-    flex: 1,
+  deleteBtn: {
     backgroundColor: '#ef4444',
-    paddingVertical: 10,
-    borderRadius: 10,
-    alignItems: 'center'
   },
-  deleteButtonText: {
+  deleteText: {
     color: '#fff',
     fontWeight: 'bold',
-    fontSize: 14
-  },
-  overlay: { 
-    position: 'absolute', 
-    top: 0, 
-    left: 0, 
-    right: 0, 
-    bottom: 0, 
-    backgroundColor: 'rgba(0,0,0,0.5)', 
-    zIndex: 1 
-  },
-  sidebar: { 
-    position: 'absolute', 
-    left: 0, 
-    top: 0, 
-    bottom: 0, 
-    width: 260, 
-    backgroundColor: '#f5f2f0ff', 
-    borderRightWidth: 0, 
-    zIndex: 2, 
-    shadowColor: '#000', 
-    shadowOffset: { width: 2, height: 0 }, 
-    shadowOpacity: 0.18, 
-    shadowRadius: 10, 
-    elevation: 10 
-  },
-  logoContainer: { 
-    paddingTop: 24, 
-    paddingBottom: 16, 
-    borderBottomWidth: 0, 
-    alignItems: 'center', 
-    backgroundColor: '#ea580c', 
-    height: 160
-  },
-  logoHeader: { 
-    flexDirection: 'row', 
-    justifyContent: 'flex-end', 
-    width: '100%', 
-    paddingRight: 16 
-  },
-  closeButton: { 
-    padding: 6, 
-    backgroundColor: '#ea580c', 
-    borderRadius: 16, 
-    marginTop: 20
-  },
-  logoBox: { 
-    alignItems: 'center', 
-    marginTop: -30 
-  },
-  logoCircle: { 
-    width: 56, 
-    height: 56, 
-    borderRadius: 28, 
-    backgroundColor: '#fff', 
-    alignItems: 'center', 
-    justifyContent: 'center', 
-    marginBottom: 8, 
-    shadowColor: '#ea580c', 
-    shadowOpacity: 0.15, 
-    shadowRadius: 8, 
-    elevation: 4 
-  },
-  logoEmoji: { 
-    fontSize: 32 
-  },
-  logoText: { 
-    fontSize: 18, 
-    color: '#fff', 
-    fontWeight: 'bold', 
-    letterSpacing: 1 
-  },
-  menuContainer: { 
-    flex: 1, 
-    paddingVertical: 16 
-  },
-  menuItem: { 
-    flexDirection: 'row', 
-    alignItems: 'center', 
-    paddingHorizontal: 20, 
-    paddingVertical: 14, 
-    marginHorizontal: 12, 
-    borderRadius: 10, 
-    marginBottom: 8 
-  },
-  menuItemActive: { 
-    backgroundColor: '#fff', 
-    borderWidth: 0 
-  },
-  menuText: { 
-    marginLeft: 14, 
-    fontSize: 15, 
-    color: '#fff', 
-    fontWeight: '500' 
-  },
-  menuTextActive: { 
-    color: '#ea580c', 
-    fontWeight: 'bold' 
+    fontSize: 14,
+    fontFamily: Fonts.LeagueSpartanBold,
   },
 });
 

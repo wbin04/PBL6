@@ -8,10 +8,10 @@ import {
   FlatList,
   KeyboardAvoidingView,
   Platform,
-  SafeAreaView,
   ActivityIndicator,
   Alert,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import { ArrowLeft, Send, ShoppingCart } from 'lucide-react-native';
 import { Fonts } from '@/constants/Fonts';
@@ -268,6 +268,7 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#f9fafb',
+    paddingBottom: 50
   },
   header: {
     flexDirection: 'row',

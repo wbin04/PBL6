@@ -1,8 +1,7 @@
 import React, { useCallback, useMemo, useState } from 'react';
-import { ActivityIndicator, RefreshControl, View, ScrollView, Text, StyleSheet, TouchableOpacity } from 'react-native';
-import { LineChart, BarChart } from 'react-native-chart-kit';
-import { Dimensions } from 'react-native';
-import { MapPin, Star, Menu, X, ShoppingBag, LogOut } from 'react-native-feather';
+import { ActivityIndicator, RefreshControl, View, ScrollView, Text, StyleSheet, TouchableOpacity, Modal, Dimensions } from 'react-native';
+import { LineChart } from 'react-native-chart-kit';
+import { MapPin, Star, Menu, ShoppingBag, LogOut, Bell, RefreshCw, TrendingUp, DollarSign, Package, Users, UserX, User } from 'lucide-react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { dashboardApi } from '@/services/api';
@@ -11,6 +10,9 @@ import { ApiError } from '@/types';
 import { useDispatch } from 'react-redux';
 import { AppDispatch } from '@/store';
 import { logout } from '@/store/slices/authSlice';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { Fonts } from '@/constants/Fonts';
+import Sidebar from '@/components/sidebar';
 
 type StoreCardInfo = {
   id: number;
@@ -62,6 +64,8 @@ type StoreDashboardResponse = {
 };
 
 const FALLBACK_STORE_EMOJI = '🍔';
+const screenWidth = Dimensions.get('window').width;
+const CONTENT_PADDING = 16;
 
 const ORDER_STATUS_META: Record<string, { label: string; color: string }> = {
   'Chờ xác nhận': { label: 'Chờ xác nhận', color: '#f59e0b' },
@@ -75,9 +79,7 @@ const ORDER_STATUS_META: Record<string, { label: string; color: string }> = {
 };
 
 const normalizeNumber = (value: number | string | null | undefined): number => {
-  if (value === null || value === undefined) {
-    return 0;
-  }
+  if (value === null || value === undefined) return 0;
   const parsed = typeof value === 'string' ? parseFloat(value) : value;
   return Number.isFinite(parsed) ? parsed : 0;
 };
@@ -91,9 +93,7 @@ const formatCurrency = (value: number | string | null | undefined): string => {
 };
 
 const resolveStoreIcon = (image?: string | null) => {
-  if (!image) {
-    return FALLBACK_STORE_EMOJI;
-  }
+  if (!image) return FALLBACK_STORE_EMOJI;
   const trimmed = image.trim();
   if (!trimmed || trimmed.startsWith('http') || trimmed.includes('/') || trimmed.length > 4) {
     return FALLBACK_STORE_EMOJI;
@@ -102,24 +102,16 @@ const resolveStoreIcon = (image?: string | null) => {
 };
 
 const getOrderStatusMeta = (status?: string) => {
-  if (!status) {
-    return { label: 'Khác', color: '#6b7280' };
-  }
+  if (!status) return { label: 'Khác', color: '#6b7280' };
   return ORDER_STATUS_META[status] || { label: status, color: '#6b7280' };
 };
 
 const formatOrderTime = (timestamp?: string) => {
-  if (!timestamp) {
-    return '';
-  }
+  if (!timestamp) return '';
   const parsed = new Date(timestamp);
-  if (Number.isNaN(parsed.getTime())) {
-    return '';
-  }
+  if (Number.isNaN(parsed.getTime())) return '';
   return parsed.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' });
 };
-
-const screenWidth = Dimensions.get('window').width;
 
 const menuItems = [
   { title: 'Trang chủ', icon: Menu, section: 'dashboard' },
@@ -132,12 +124,14 @@ const menuItems = [
 
 type SellerDashboardScreenProps = {
   navigation: NativeStackNavigationProp<any>;
+  route?: { params?: { section?: string } };
 };
 
-const SellerDashboardScreen: React.FC<SellerDashboardScreenProps> = ({ navigation }) => {
+const SellerDashboardScreen: React.FC<SellerDashboardScreenProps> = ({ navigation, route }) => {
   const dispatch = useDispatch<AppDispatch>();
+  
   const [sidebarVisible, setSidebarVisible] = useState(false);
-  const [activeSection, setActiveSection] = useState('dashboard');
+  const [activeSection, setActiveSection] = useState(route?.params?.section ?? 'dashboard');
   const [storeId, setStoreId] = useState<number | null>(null);
   const [storeInfo, setStoreInfo] = useState<StoreCardInfo | null>(null);
   const [stats, setStats] = useState<StoreDashboardStats | null>(null);
@@ -149,6 +143,7 @@ const SellerDashboardScreen: React.FC<SellerDashboardScreenProps> = ({ navigatio
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [lastUpdated, setLastUpdated] = useState<string | null>(null);
   const [isOpen, setIsOpen] = useState(true);
+  const [showChart, setShowChart] = useState(false);
 
   const handleLogout = async () => {
     try {
@@ -160,9 +155,7 @@ const SellerDashboardScreen: React.FC<SellerDashboardScreenProps> = ({ navigatio
 
   const fetchDashboardData = useCallback(async (targetStoreId?: number, isRefresh = false) => {
     const idToUse = targetStoreId ?? storeId;
-    if (!idToUse) {
-      return;
-    }
+    if (!idToUse) return;
 
     if (isRefresh) {
       setRefreshing(true);
@@ -194,15 +187,17 @@ const SellerDashboardScreen: React.FC<SellerDashboardScreenProps> = ({ navigatio
 
   useFocusEffect(
     useCallback(() => {
+      if (route?.params?.section) {
+        setActiveSection(route.params.section);
+      }
+
       let isActive = true;
 
       const loadStore = async () => {
         try {
           setLoading(true);
           const myStore = await storesService.getMyStore();
-          if (!isActive) {
-            return;
-          }
+          if (!isActive) return;
           setStoreId(myStore.id);
           setStoreInfo({
             id: myStore.id,
@@ -215,9 +210,7 @@ const SellerDashboardScreen: React.FC<SellerDashboardScreenProps> = ({ navigatio
           });
           await fetchDashboardData(myStore.id);
         } catch (error) {
-          if (!isActive) {
-            return;
-          }
+          if (!isActive) return;
           const apiError = error as ApiError;
           setErrorMessage(apiError?.message || 'Không thể tải thông tin cửa hàng');
           setLoading(false);
@@ -229,7 +222,7 @@ const SellerDashboardScreen: React.FC<SellerDashboardScreenProps> = ({ navigatio
       return () => {
         isActive = false;
       };
-    }, [fetchDashboardData])
+    }, [route?.params?.section, fetchDashboardData])
   );
 
   const handleRefresh = useCallback(() => {
@@ -247,399 +240,801 @@ const SellerDashboardScreen: React.FC<SellerDashboardScreenProps> = ({ navigatio
     ],
   }), [revenueTrend]);
 
-  const barChartData = useMemo(() => {
-    if (!topFoods.length) {
-      return {
-        labels: ['—'],
-        datasets: [{ data: [0] }],
-      };
-    }
-    return {
-      labels: topFoods.map((item) => item.food_name),
-      datasets: [
-        {
-          data: topFoods.map((item) => item.quantity || 0),
-        },
-      ],
-    };
-  }, [topFoods]);
-
   const isInitialLoading = loading && !refreshing;
 
   const statCards = [
     {
-      icon: '💲',
+      icon: DollarSign,
       title: 'Doanh thu hôm nay',
       value: stats ? formatCurrency(stats.revenue_today) : '—',
       helper: lastUpdated
         ? `Cập nhật ${new Date(lastUpdated).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}`
         : 'Trong ngày',
-      helperColor: '#10b981',
     },
     {
-      icon: '🛒',
+      icon: Package,
       title: 'Đơn hàng mới',
       value: stats ? formatNumber(stats.orders_today) : '—',
       helper: stats ? `${formatNumber(stats.processing_orders)} đang xử lý` : '—',
-      helperColor: '#f97316',
     },
     {
-      icon: '👥',
+      icon: Users,
       title: 'Khách (30 ngày)',
       value: stats ? formatNumber(stats.customers_30_days) : '—',
       helper: 'Khách duy nhất',
-      helperColor: '#0ea5e9',
     },
     {
-      icon: '⭐',
+      icon: Star,
       title: 'Đánh giá TB',
       value: stats ? Number(stats.average_rating || 0).toFixed(1) : '—',
       helper: `${storeInfo?.total_ratings ?? 0} lượt`,
-      helperColor: '#facc15',
     },
   ];
 
-  const storeAddress = storeInfo?.address || 'Chưa cập nhật địa chỉ';
-  const storeRatingText = storeInfo
-    ? `${Number(storeInfo.average_rating || 0).toFixed(1)} (${storeInfo.total_ratings} đánh giá)`
-    : 'Chưa có đánh giá';
   const storeEmoji = resolveStoreIcon(storeInfo?.image);
-
-  // Import NewOrderListScreen
   const NewOrderListScreen = require('./NewOrderListScreen').default;
+
   return (
-    <View style={{ flex: 1, backgroundColor: '#fff7ed' }}>
-      {/* Sidebar */}
-      {sidebarVisible && (
-        <>
-          <TouchableOpacity style={styles.overlay} activeOpacity={1} onPress={() => setSidebarVisible(false)} />
-          <View style={styles.sidebar}>
-            <View style={styles.logoContainer}>
-              <View style={styles.logoHeader}>
-                <TouchableOpacity onPress={() => setSidebarVisible(false)} style={styles.closeButton}>
-                  <X width={24} height={24} stroke="#fff" />
+    <SafeAreaView style={styles.safeArea} edges={['top', 'bottom']}>
+      <Sidebar
+        isOpen={sidebarVisible}
+        onClose={() => setSidebarVisible(false)}
+      />
+
+      <View style={styles.wrapper}>
+        <View style={styles.mainContent}>
+          {/* Header */}
+          <View style={styles.headerWrap}>
+            <View style={styles.headerTopRow}>
+              <TouchableOpacity
+                onPress={() => setSidebarVisible(true)}
+                style={styles.roundIconBtn}
+              >
+                <Menu size={24} color="#eb552d" />
+              </TouchableOpacity>
+
+              <Text style={styles.headerTitle}>Tổng quan cửa hàng</Text>
+
+              <View style={{ flexDirection: 'row', gap: 10 }}>
+                <TouchableOpacity 
+                  style={styles.roundIconBtn}
+                  onPress={() => navigation.navigate('SellerProfileScreen')}
+                >
+                  <User size={24} color="#eb552d" />
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.roundIconBtn}
+                  onPress={handleRefresh}
+                >
+                  <RefreshCw size={24} color="#eb552d" />
                 </TouchableOpacity>
               </View>
-              <View style={styles.logoBox}>
-                <View style={styles.logoCircle}>
-                  <Text style={styles.logoEmoji}>🍔</Text>
+            </View>
+          </View>
+
+          {/* Error banner */}
+          {errorMessage && (
+            <View style={styles.errorBanner}>
+              <Text style={styles.errorText}>{errorMessage}</Text>
+              <TouchableOpacity
+                style={styles.retryButton}
+                onPress={() => fetchDashboardData()}
+              >
+                <Text style={styles.retryButtonText}>Thử lại</Text>
+              </TouchableOpacity>
+            </View>
+          )}
+
+          {/* Section Content */}
+          {activeSection === 'orders' ? (
+            <NewOrderListScreen />
+          ) : activeSection === 'analytics' ? (
+            <ScrollView
+              contentContainerStyle={styles.scrollContent}
+              refreshControl={
+                <RefreshControl 
+                  refreshing={refreshing} 
+                  onRefresh={handleRefresh}
+                  colors={['#EB552D']}
+                  tintColor="#EB552D"
+                />
+              }
+            >
+              {isInitialLoading ? (
+                <View style={styles.loadingContainer}>
+                  <ActivityIndicator size="large" color="#EB552D" />
+                  <Text style={styles.loadingText}>Đang tải dữ liệu...</Text>
                 </View>
-                <Text style={styles.logoText}>BÁN HÀNG</Text>
+              ) : (
+                <>
+                  {/* Chart Section */}
+                  <View style={styles.sectionCardContainer}>
+                    <View style={styles.sectionHeaderRow}>
+                      <Text style={styles.sectionTitle}>Biểu đồ doanh thu</Text>
+                      <TouchableOpacity onPress={() => setShowChart(true)}>
+                        <Text style={styles.sectionLink}>Xem chi tiết</Text>
+                      </TouchableOpacity>
+                    </View>
+
+                    <View style={styles.chartCard}>
+                      <LineChart
+                        data={revenueChartData}
+                        width={screenWidth * 0.9}
+                        height={220}
+                        chartConfig={{
+                          backgroundColor: '#ffffff',
+                          backgroundGradientFrom: '#ffffff',
+                          backgroundGradientTo: '#ffffff',
+                          decimalPlaces: 0,
+                          color: (opacity = 1) => `rgba(233, 83, 34, ${opacity})`,
+                          labelColor: (opacity = 1) => `rgba(57, 23, 19, ${opacity})`,
+                          style: { borderRadius: 16 },
+                          propsForDots: { r: '4', strokeWidth: '2', stroke: '#EB552D' },
+                        }}
+                        bezier
+                        style={{ borderRadius: 16 }}
+                      />
+                    </View>
+                  </View>
+
+                  {/* Top Foods */}
+                  <View style={styles.sectionCardContainer}>
+                    <Text style={styles.sectionTitle}>Món bán chạy</Text>
+                    {topFoods.length === 0 ? (
+                      <View style={styles.emptyState}>
+                        <Text style={styles.emptyStateText}>Chưa có dữ liệu món bán</Text>
+                      </View>
+                    ) : (
+                      topFoods.map((food, idx) => (
+                        <View key={food.food_id} style={styles.foodCard}>
+                          <View style={styles.foodRank}>
+                            <Text style={styles.foodRankText}>#{idx + 1}</Text>
+                          </View>
+                          <View style={{ flex: 1 }}>
+                            <Text style={styles.foodName}>{food.food_name}</Text>
+                            <Text style={styles.foodQuantity}>
+                              Đã bán: <Text style={styles.foodQuantityValue}>{food.quantity}</Text> món
+                            </Text>
+                          </View>
+                        </View>
+                      ))
+                    )}
+                  </View>
+                </>
+              )}
+            </ScrollView>
+          ) : (
+            <ScrollView
+              contentContainerStyle={styles.scrollContent}
+              refreshControl={
+                <RefreshControl 
+                  refreshing={refreshing} 
+                  onRefresh={handleRefresh}
+                  colors={['#EB552D']}
+                  tintColor="#EB552D"
+                />
+              }
+            >
+              {/* Store Card */}
+              <View style={styles.storeCard}>
+                <View style={styles.storeHeader}>
+                  <Text style={styles.storeEmoji}>{storeEmoji}</Text>
+                  <View style={styles.storeInfo}>
+                    <Text style={styles.storeName}>
+                      {storeInfo?.name || 'Đang tải cửa hàng...'}
+                    </Text>
+                    <View style={styles.storeDetails}>
+                      <MapPin size={13} color="#6b7280" />
+                      <Text style={styles.storeAddress}>
+                        {storeInfo?.address || 'Chưa cập nhật địa chỉ'}
+                      </Text>
+                    </View>
+                    <View style={styles.storeDetails}>
+                      <Star size={13} color="#f59e0b" fill="#f59e0b" />
+                      <Text style={styles.storeRating}>
+                        {storeInfo
+                          ? `${Number(storeInfo.average_rating || 0).toFixed(1)} (${storeInfo.total_ratings} đánh giá)`
+                          : 'Chưa có đánh giá'}
+                      </Text>
+                    </View>
+                  </View>
+                  <View style={{ alignItems: 'center' }}>
+                    <TouchableOpacity
+                      style={[
+                        styles.storeStatus,
+                        { backgroundColor: isOpen ? '#e0fbe0' : '#fee2e2' }
+                      ]}
+                      onPress={() => setIsOpen(!isOpen)}
+                    >
+                      <View 
+                        style={[
+                          styles.statusCircle,
+                          { backgroundColor: isOpen ? '#10b981' : '#ef4444' }
+                        ]}
+                      />
+                    </TouchableOpacity>
+                    <Text 
+                      style={[
+                        styles.statusText,
+                        { color: isOpen ? '#10b981' : '#ef4444' }
+                      ]}
+                    >
+                      {isOpen ? 'Mở cửa' : 'Đóng cửa'}
+                    </Text>
+                  </View>
+                </View>
               </View>
-            </View>
-            <View style={styles.menuContainer}>
-              {menuItems.map((item, index) => {
-                const IconComponent = item.icon;
-                return (
+
+              {isInitialLoading ? (
+                <View style={styles.loadingContainer}>
+                  <ActivityIndicator size="large" color="#EB552D" />
+                  <Text style={styles.loadingText}>Đang tải dữ liệu...</Text>
+                </View>
+              ) : (
+                <>
+                  {/* Stat Cards giống AdminDashboard */}
+                  <View style={styles.statGrid}>
+                    {statCards.map((stat, index) => {
+                      const IconComponent = stat.icon;
+                      return (
+                        <View key={index} style={styles.statCard}>
+                          <View style={styles.statIconWrapper}>
+                            <IconComponent size={20} color="#EB552D" />
+                          </View>
+                          <Text style={styles.statValue}>{stat.value}</Text>
+                          <Text style={styles.statTitle}>{stat.title}</Text>
+                          <View style={styles.statHelperBadge}>
+                            <Text style={styles.statHelperText}>{stat.helper}</Text>
+                          </View>
+                        </View>
+                      );
+                    })}
+                  </View>
+
+                  {/* Recent Orders */}
+                  <View style={styles.sectionCardContainer}>
+                    <View style={styles.sectionHeaderRow}>
+                      <Text style={styles.sectionTitle}>Đơn hàng gần đây</Text>
+                      <TouchableOpacity 
+                        onPress={() => navigation.navigate('NewOrderListScreen')}
+                      >
+                        <Text style={styles.sectionLink}>Xem tất cả</Text>
+                      </TouchableOpacity>
+                    </View>
+
+                    {recentOrders.length === 0 ? (
+                      <View style={styles.emptyState}>
+                        <Text style={styles.emptyStateText}>Chưa có đơn hàng gần đây</Text>
+                      </View>
+                    ) : (
+                      recentOrders.map((order) => {
+                        const statusMeta = getOrderStatusMeta(order.status);
+                        return (
+                          <View key={order.order_id} style={styles.orderCard}>
+                            <View style={styles.orderHeader}>
+                              <Text style={styles.orderId}>{order.code}</Text>
+                              <Text style={styles.orderTime}>
+                                {formatOrderTime(order.created_at)}
+                              </Text>
+                            </View>
+                            <Text style={styles.orderCustomer}>
+                              {order.customer || 'Khách vãng lai'}
+                            </Text>
+                            <Text style={styles.orderItems}>{order.items || '—'}</Text>
+                            <View style={styles.orderFooter}>
+                              <Text style={styles.orderTotal}>
+                                {formatCurrency(order.total)}
+                              </Text>
+                              <View 
+                                style={[
+                                  styles.orderStatus,
+                                  { backgroundColor: statusMeta.color }
+                                ]}
+                              >
+                                <Text style={styles.orderStatusText}>
+                                  {statusMeta.label}
+                                </Text>
+                              </View>
+                            </View>
+                          </View>
+                        );
+                      })
+                    )}
+                  </View>
+
+                  {/* Report Card */}
                   <TouchableOpacity
-                    key={index}
-                    style={[styles.menuItem, { backgroundColor: '#ea580c' }, activeSection === item.section && styles.menuItemActive]}
-                    onPress={() => {
-                      setSidebarVisible(false);
-                      setActiveSection(item.section);
-                      if (item.section === 'foods') {
-                        navigation.navigate('SellerManageMenuScreen');
-                      } else if (item.section === 'promotions') {
-                        navigation.navigate('SellerVoucherManagementScreen');
-                      } else if (item.section === 'buy') {
-                        // Navigate to main home screen like a customer
-                        navigation.reset({
-                          index: 0,
-                          routes: [{ name: 'MainTabs', params: { screen: 'Home' } }],
-                        });
-                      }
-                    }}
+                    style={styles.reportCard}
+                    onPress={() => setActiveSection('analytics')}
+                    activeOpacity={0.8}
                   >
-                    <IconComponent width={16} height={16} stroke={activeSection === item.section ? '#fff' : '#fff7ed'} />
-                    <Text style={[styles.menuText, activeSection === item.section && styles.menuTextActive]}>{item.title}</Text>
+                    <View style={styles.reportLeft}>
+                      <View style={styles.reportIconWrapper}>
+                        <TrendingUp size={20} color="#EB552D" />
+                      </View>
+                      <Text style={styles.reportText}>Xem thống kê chi tiết</Text>
+                    </View>
+                    <Text style={{ fontSize: 18, color: '#9ca3af' }}>→</Text>
                   </TouchableOpacity>
-                );
-              })}
-            </View>
-            <View style={styles.logoutContainer}>
-              <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
-                <LogOut width={16} height={16} stroke="#dc2626" />
-                <Text style={styles.logoutLabel}>Đăng xuất</Text>
+                </>
+              )}
+            </ScrollView>
+          )}
+        </View>
+
+        {/* Modal Chart */}
+        <Modal visible={showChart} animationType="slide" transparent>
+          <View style={styles.modalOverlay}>
+            <View style={styles.modalContent}>
+              <Text style={styles.modalTitle}>Biểu đồ doanh thu</Text>
+              <LineChart
+                data={revenueChartData}
+                width={screenWidth * 0.85}
+                height={220}
+                chartConfig={{
+                  backgroundColor: '#ffffff',
+                  backgroundGradientFrom: '#ffffff',
+                  backgroundGradientTo: '#ffffff',
+                  decimalPlaces: 0,
+                  color: (opacity = 1) => `rgba(233, 83, 34, ${opacity})`,
+                  labelColor: (opacity = 1) => `rgba(57, 23, 19, ${opacity})`,
+                  style: { borderRadius: 16 },
+                  propsForDots: { r: '4', strokeWidth: '2', stroke: '#EB552D' },
+                }}
+                bezier
+                style={{ marginVertical: 8, borderRadius: 16 }}
+              />
+              <TouchableOpacity 
+                style={styles.closeBtn} 
+                onPress={() => setShowChart(false)}
+              >
+                <Text style={styles.closeBtnText}>Đóng</Text>
               </TouchableOpacity>
             </View>
           </View>
-        </>
-      )}
-
-      {/* Header */}
-      <View style={styles.headerNew}>
-        <TouchableOpacity onPress={() => setSidebarVisible(true)} style={styles.menuButtonNew}>
-          <Menu width={22} height={22} stroke="#ea580c" />
-        </TouchableOpacity>
-        <View style={{ flex: 1 }}>
-          <Text style={styles.headerTitleNew}>Tổng quan</Text>
-          <Text style={styles.headerSubtitleNew}>Quản lý cửa hàng của bạn</Text>
-        </View>
-        <View style={styles.headerActionsNew}>
-          <TouchableOpacity style={styles.headerIconButtonNew}><Text style={styles.headerIconTextNew}>🔍</Text></TouchableOpacity>
-          <TouchableOpacity style={styles.headerIconButtonNew}><Text style={styles.headerIconTextNew}>🔔</Text><View style={styles.headerBadgeNew}><Text style={styles.headerBadgeTextNew}>2</Text></View></TouchableOpacity>
-          <TouchableOpacity style={styles.headerAvatarNew} onPress={() => navigation.navigate('SellerProfileScreen')}><Text style={styles.headerAvatarTextNew}>S</Text></TouchableOpacity>
-        </View>
+        </Modal>
       </View>
-
-      {errorMessage && (
-        <View style={styles.errorBanner}>
-          <Text style={styles.errorBannerText}>{errorMessage}</Text>
-          <TouchableOpacity onPress={() => fetchDashboardData()}>
-            <Text style={styles.errorBannerAction}>Thử lại</Text>
-          </TouchableOpacity>
-        </View>
-      )}
-
-      {/* Section switch logic */}
-      {activeSection === 'orders' ? (
-        <NewOrderListScreen />
-      ) : activeSection === 'analytics' ? (
-        <ScrollView
-          contentContainerStyle={{ paddingBottom: 24 }}
-          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor="#ea580c" />}
-        >
-          {isInitialLoading ? (
-            <View style={styles.loadingContainer}>
-              <ActivityIndicator size="large" color="#ea580c" />
-              <Text style={styles.loadingText}>Đang tải dữ liệu...</Text>
-            </View>
-          ) : (
-            <>
-              <View style={{ marginBottom: 20, marginTop: 20 }}>
-                <Text style={{ fontSize: 16, fontWeight: 'bold', color: '#1f2937', marginBottom: 12, alignSelf: 'center' }}>Biểu đồ doanh thu</Text>
-                <View style={{ backgroundColor: '#fff', borderRadius: 8, padding: 10, borderWidth: 1, borderColor: '#e5e7eb', alignItems: 'center' }}>
-                  <LineChart
-                    data={revenueChartData}
-                    width={screenWidth * 0.9}
-                    height={220}
-                    chartConfig={{
-                      backgroundColor: '#fff',
-                      backgroundGradientFrom: '#fff',
-                      backgroundGradientTo: '#fff',
-                      decimalPlaces: 0,
-                      color: (opacity = 1) => `rgba(233, 83, 34, ${opacity})`,
-                      labelColor: (opacity = 1) => `rgba(57, 23, 19, ${opacity})`,
-                      style: { borderRadius: 16 },
-                      propsForDots: { r: '4', strokeWidth: '2', stroke: '#e95322' },
-                    }}
-                    bezier
-                    style={{ borderRadius: 16 }}
-                  />
-                </View>
-              </View>
-              <View style={{ marginBottom: 20, marginTop: 20 }}>
-                <Text style={{ fontSize: 16, fontWeight: 'bold', color: '#1f2937', marginBottom: 12, alignSelf: 'center' }}>Biểu đồ số lượng món bán</Text>
-                <View style={{ backgroundColor: '#fff', borderRadius: 8, padding: 10, borderWidth: 1, borderColor: '#e5e7eb', alignItems: 'center' }}>
-                  {topFoods.length === 0 ? (
-                    <View style={styles.emptyState}>
-                      <Text style={styles.emptyStateText}>Chưa có dữ liệu món bán</Text>
-                    </View>
-                  ) : (
-                    <BarChart
-                      data={barChartData}
-                      width={screenWidth * 0.9}
-                      height={220}
-                      yAxisLabel={''}
-                      yAxisSuffix={' món'}
-                      chartConfig={{
-                        backgroundColor: '#fff',
-                        backgroundGradientFrom: '#fff',
-                        backgroundGradientTo: '#fff',
-                        decimalPlaces: 0,
-                        color: (opacity = 1) => `rgba(233, 83, 34, ${opacity})`,
-                        labelColor: (opacity = 1) => `rgba(57, 23, 19, ${opacity})`,
-                        style: { borderRadius: 16 },
-                      }}
-                      style={{ borderRadius: 16 }}
-                    />
-                  )}
-                </View>
-              </View>
-            </>
-          )}
-        </ScrollView>
-      ) : (
-        <ScrollView
-          contentContainerStyle={{ paddingBottom: 24 }}
-          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor="#ea580c" />}
-        >
-          {/* Store Card */}
-          <View style={styles.storeCardNew}>
-            <View style={styles.storeHeaderNew}>
-              <Text style={styles.storeEmojiNew}>{storeEmoji}</Text>
-              <View style={styles.storeInfoNew}>
-                <Text style={styles.storeNameNew}>{storeInfo?.name || 'Đang tải cửa hàng...'}</Text>
-                <View style={styles.storeDetailsNew}>
-                  <MapPin width={13} height={13} color="#6b7280" />
-                  <Text style={styles.storeAddressNew}>{storeAddress}</Text>
-                </View>
-                <View style={styles.storeDetailsNew}>
-                  <Star width={13} height={13} color="#f59e0b" fill="#f59e0b" />
-                  <Text style={styles.storeRatingNew}>{storeRatingText}</Text>
-                </View>
-              </View>
-              <View style={{ alignItems: 'center' }}>
-                <TouchableOpacity
-                  style={[styles.storeStatusNew, { backgroundColor: isOpen ? '#e0fbe0' : '#fee2e2', borderRadius: 20, paddingHorizontal: 12, paddingVertical: 6 }]}
-                  onPress={() => setIsOpen(!isOpen)}
-                >
-                  <View style={[styles.statusCircleNew, { backgroundColor: isOpen ? '#10b981' : '#ef4444' }]} />
-                </TouchableOpacity>
-                <Text style={[styles.statusTextNew, { color: isOpen ? '#10b981' : '#ef4444', marginTop: 4 }]}> {isOpen ? 'Mở cửa' : 'Đóng cửa'} </Text>
-              </View>
-            </View>
-          </View>
-          {isInitialLoading ? (
-            <View style={styles.loadingContainer}>
-              <ActivityIndicator size="large" color="#ea580c" />
-              <Text style={styles.loadingText}>Đang tải dữ liệu...</Text>
-            </View>
-          ) : (
-            <>
-              <View style={styles.statsGridNew}>
-                {statCards.map((stat, index) => (
-                  <View key={`${stat.title}-${index}`} style={[styles.statCardNew, { width: '48%', marginBottom: 12 }]}>
-                    <View style={styles.statIconNew}>
-                      <Text style={styles.statIconTextNew}>{stat.icon}</Text>
-                    </View>
-                    <Text style={styles.statValueNew}>{stat.value}</Text>
-                    <Text style={styles.statTitleNew}>{stat.title}</Text>
-                    <Text style={[styles.statChangeNew, { color: stat.helperColor }]}>{stat.helper}</Text>
-                  </View>
-                ))}
-              </View>
-
-              <View style={styles.sectionNew}>
-                <Text style={styles.sectionTitleNew}>Đơn hàng gần đây</Text>
-                {recentOrders.length === 0 ? (
-                  <View style={styles.emptyState}>
-                    <Text style={styles.emptyStateText}>Chưa có đơn hàng gần đây</Text>
-                  </View>
-                ) : (
-                  recentOrders.map((order) => {
-                    const statusMeta = getOrderStatusMeta(order.status);
-                    return (
-                      <View key={order.order_id} style={styles.orderCardNew}>
-                        <View style={styles.orderHeaderNew}>
-                          <Text style={styles.orderIdNew}>{order.code}</Text>
-                          <Text style={styles.orderTimeNew}>{formatOrderTime(order.created_at)}</Text>
-                        </View>
-                        <Text style={styles.orderCustomerNew}>{order.customer || 'Khách vãng lai'}</Text>
-                        <Text style={styles.orderItemsNew}>{order.items || '—'}</Text>
-                        <View style={styles.orderFooterNew}>
-                          <Text style={styles.orderTotalNew}>{formatCurrency(order.total)}</Text>
-                          <View style={[styles.orderStatusNew, { backgroundColor: statusMeta.color }]}>
-                            <Text style={styles.orderStatusTextNew}>{statusMeta.label}</Text>
-                          </View>
-                        </View>
-                      </View>
-                    );
-                  })
-                )}
-              </View>
-            </>
-          )}
-        </ScrollView>
-      )}
-    </View>
+    </SafeAreaView>
   );
 };
 
 const styles = StyleSheet.create({
-  // New styles for updated UI
-  headerNew: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 18, paddingTop: 18, paddingBottom: 8, backgroundColor: '#fff7ed', borderBottomWidth: 0, marginTop: 25 },
-  menuButtonNew: { width: 36, height: 36, borderRadius: 18, backgroundColor: '#fff', alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: '#f3f4f6', marginRight: 12 },
-  headerTitleNew: { fontSize: 20, color: '#1e293b', fontWeight: 'bold' },
-  headerSubtitleNew: { fontSize: 13, color: '#64748b', marginTop: 2 },
-  headerActionsNew: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  headerIconButtonNew: { width: 32, height: 32, borderRadius: 16, backgroundColor: '#fff', alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: '#f3f4f6', marginLeft: 6 },
-  headerIconTextNew: { fontSize: 16 },
-  headerBadgeNew: { position: 'absolute', top: -4, right: -4, backgroundColor: '#ea580c', borderRadius: 10, minWidth: 18, height: 18, alignItems: 'center', justifyContent: 'center', borderWidth: 2, borderColor: '#fff' },
-  headerBadgeTextNew: { fontSize: 11, color: '#fff', fontWeight: 'bold' },
-  headerAvatarNew: { width: 32, height: 32, borderRadius: 16, backgroundColor: '#ea580c', alignItems: 'center', justifyContent: 'center', marginLeft: 8 },
-  headerAvatarTextNew: { fontSize: 14, color: '#fff', fontWeight: 'bold' },
-  errorBanner: { marginHorizontal: 18, marginTop: 12, padding: 12, backgroundColor: '#fee2e2', borderRadius: 12, borderWidth: 1, borderColor: '#fecaca', flexDirection: 'row', alignItems: 'center' },
-  errorBannerText: { color: '#991b1b', flex: 1, marginRight: 12, fontSize: 13 },
-  errorBannerAction: { color: '#b91c1c', fontWeight: 'bold' },
-  loadingContainer: { paddingVertical: 32, alignItems: 'center', justifyContent: 'center' },
-  loadingText: { marginTop: 8, color: '#6b7280' },
-  emptyState: { padding: 16, borderRadius: 12, borderWidth: 1, borderColor: '#f3f4f6', alignItems: 'center' },
-  emptyStateText: { color: '#6b7280', fontSize: 13 },
+  safeArea: { flex: 1, backgroundColor: '#fff' },
+  wrapper: {
+    flex: 1,
+    flexDirection: 'row',
+    alignSelf: 'center',
+    width: '100%',
+    maxWidth: 480,
+  },
+  mainContent: { flex: 1, backgroundColor: '#ffffff' },
 
-  storeCardNew: { backgroundColor: '#fff', borderRadius: 16, marginHorizontal: 18, marginTop: 18, padding: 18, shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 6, elevation: 2 },
-  storeHeaderNew: { flexDirection: 'row', alignItems: 'center' },
-  storeEmojiNew: { fontSize: 38, marginRight: 16 },
-  storeInfoNew: { flex: 1 },
-  storeNameNew: { fontSize: 18, fontWeight: 'bold', color: '#1e293b' },
-  storeDetailsNew: { flexDirection: 'row', alignItems: 'center', marginTop: 2 },
-  storeAddressNew: { fontSize: 13, color: '#6b7280', marginLeft: 4 },
-  storeRatingNew: { fontSize: 13, color: '#f59e0b', marginLeft: 4 },
-  storeStatusNew: { alignItems: 'center', marginLeft: 8 },
-  statusCircleNew: { width: 18, height: 18, borderRadius: 9, backgroundColor: '#ea580c', marginBottom: 2 },
-  statusTextNew: { fontSize: 13, color: '#10b981', fontWeight: 'bold' },
+  // Header giống AdminDashboard
+  headerWrap: {
+    backgroundColor: '#f5cb58',
+    paddingTop: 0,
+    paddingBottom: 12,
+  },
+  headerTopRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: 20,
+    marginBottom: 12,
+    paddingHorizontal: CONTENT_PADDING,
+  },
+  roundIconBtn: {
+    backgroundColor: '#ffffff',
+    padding: 10,
+    borderRadius: 999,
+    shadowColor: '#000',
+    shadowOffset: { width: 1, height: 1 },
+    shadowOpacity: 0.06,
+    shadowRadius: 5,
+    elevation: 1,
+  },
+  headerTitle: {
+    fontSize: 18,
+    color: '#ffffff',
+    fontFamily: Fonts.LeagueSpartanExtraBold,
+  },
 
-  statsGridNew: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', marginHorizontal: 18, marginTop: 18 },
-  statCardNew: { backgroundColor: '#fff', borderRadius: 12, padding: 12, alignItems: 'center', marginHorizontal: 4, borderWidth: 1, borderColor: '#f3f4f6' },
-  statIconNew: { width: 32, height: 32, borderRadius: 16, backgroundColor: '#fff7ed', alignItems: 'center', justifyContent: 'center', marginBottom: 6 },
-  statIconTextNew: { fontSize: 18, color: '#ea580c' },
-  statValueNew: { fontSize: 16, fontWeight: 'bold', color: '#ea580c' },
-  statTitleNew: { fontSize: 12, color: '#6b7280', marginTop: 2 },
-  statChangeNew: { fontSize: 12, color: '#10b981', marginTop: 2 },
+  // Error banner
+  errorBanner: {
+    backgroundColor: '#fef2f2',
+    borderWidth: 1,
+    borderColor: '#fecaca',
+    padding: 12,
+    borderRadius: 8,
+    margin: 16,
+    marginBottom: 0,
+  },
+  errorText: {
+    color: '#b91c1c',
+    fontSize: 12,
+    marginBottom: 8,
+    fontFamily: Fonts.LeagueSpartanRegular,
+  },
+  retryButton: {
+    alignSelf: 'flex-start',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    backgroundColor: '#b91c1c',
+    borderRadius: 6,
+  },
+  retryButtonText: {
+    color: '#ffffff',
+    fontSize: 12,
+    fontWeight: 'bold',
+    fontFamily: Fonts.LeagueSpartanBold,
+  },
 
-  sectionNew: { backgroundColor: '#fff', borderRadius: 16, marginHorizontal: 18, marginTop: 18, padding: 18 },
-  sectionTitleNew: { fontSize: 16, fontWeight: 'bold', color: '#ea580c', marginBottom: 8 },
-  orderCardNew: { backgroundColor: '#fff', borderRadius: 12, padding: 14, marginBottom: 12, shadowColor: '#000', shadowOpacity: 0.03, shadowRadius: 4, elevation: 1 },
-  orderHeaderNew: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 2 },
-  orderIdNew: { fontSize: 13, color: '#64748b', fontWeight: 'bold' },
-  orderTimeNew: { fontSize: 13, color: '#64748b' },
-  orderCustomerNew: { fontSize: 15, color: '#1e293b', fontWeight: 'bold', marginBottom: 2 },
-  orderItemsNew: { fontSize: 13, color: '#6b7280', marginBottom: 2 },
-  orderFooterNew: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 4 },
-  orderTotalNew: { fontSize: 15, color: '#ea580c', fontWeight: 'bold' },
-  orderStatusNew: { backgroundColor: '#f59e0b', borderRadius: 8, paddingHorizontal: 10, paddingVertical: 2 },
-  orderStatusTextNew: { fontSize: 13, color: '#fff', fontWeight: 'bold' },
-  container: { flex: 1, backgroundColor: '#fff7ed' },
-  header: { flexDirection: 'row', alignItems: 'center', padding: 16, backgroundColor: '#f59e0b', borderBottomWidth: 1, borderBottomColor: '#e5e7eb' , marginTop: 50},
-  menuButton: { width: 32, height: 32, borderRadius: 16, backgroundColor: '#fef3e2', alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: '#e5e7eb', marginRight: 12 },
-  headerTitle: { fontSize: 20, color: '#ea580c', fontWeight: 'bold' },
-  overlay: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.5)', zIndex: 1 },
-  sidebar: { position: 'absolute', left: 0, top: 0, bottom: 0, width: 260, backgroundColor: '#f5f2f0ff', borderRightWidth: 0, zIndex: 2, shadowColor: '#000', shadowOffset: { width: 2, height: 0 }, shadowOpacity: 0.18, shadowRadius: 10, elevation: 10 },
-  logoContainer: { paddingTop: 24, paddingBottom: 16, borderBottomWidth: 0, alignItems: 'center', backgroundColor: '#ea580c' , height: 160},
-  logoHeader: { flexDirection: 'row', justifyContent: 'flex-end', width: '100%', paddingRight: 16 },
-  closeButton: { padding: 6, backgroundColor: '#ea580c', borderRadius: 16, marginTop: 20},
-  logoBox: { alignItems: 'center', marginTop: -30 },
-  logoCircle: { width: 56, height: 56, borderRadius: 28, backgroundColor: '#fff', alignItems: 'center', justifyContent: 'center', marginBottom: 8, shadowColor: '#ea580c', shadowOpacity: 0.15, shadowRadius: 8, elevation: 4 },
-  logoEmoji: { fontSize: 32 },
-  logoText: { fontSize: 18, color: '#fff', fontWeight: 'bold', letterSpacing: 1 },
-  menuContainer: { flex: 1, paddingVertical: 16 },
-  menuItem: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 20, paddingVertical: 14, marginHorizontal: 12, borderRadius: 10, marginBottom: 8 },
-  menuItemActive: { backgroundColor: '#fff', borderWidth: 0 },
-  menuText: { marginLeft: 14, fontSize: 15, color: '#fff', fontWeight: '500' },
-  menuTextActive: { color: '#ea580c', fontWeight: 'bold' },
-  storeCard: { backgroundColor: '#fff', borderRadius: 12, margin: 16, padding: 16, shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 6, elevation: 2 },
+  // Scroll content
+  scrollContent: {
+    paddingHorizontal: 16,
+    paddingBottom: 32,
+    paddingTop: 16,
+  },
+  loadingContainer: {
+    alignItems: 'center',
+    marginBottom: 16,
+    paddingVertical: 32,
+  },
+  loadingText: {
+    marginTop: 16,
+    fontSize: 14,
+    color: '#6B7280',
+    fontFamily: Fonts.LeagueSpartanRegular,
+  },
+
+  // Store card
+  storeCard: {
+    backgroundColor: '#fff',
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: '#e5e7eb',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 3,
+    elevation: 1,
+  },
   storeHeader: { flexDirection: 'row', alignItems: 'center' },
-  storeEmoji: { fontSize: 36, marginRight: 16 },
+  storeEmoji: { fontSize: 38, marginRight: 16 },
   storeInfo: { flex: 1 },
-  storeName: { fontSize: 18, fontWeight: 'bold', color: '#1f2937' },
-  storeDetails: { flexDirection: 'row', alignItems: 'center', marginTop: 2 },
-  storeAddress: { fontSize: 12, color: '#6b7280', marginLeft: 4 },
-  storeRating: { fontSize: 12, color: '#f59e0b', marginLeft: 4 },
-  storeStatus: { marginLeft: 8 },
-  statsContainer: { flexDirection: 'row', justifyContent: 'space-between', marginHorizontal: 16, marginBottom: 16 },
-  statCard: { flex: 1, backgroundColor: '#fff', borderRadius: 8, padding: 12, alignItems: 'center', marginHorizontal: 4, borderWidth: 1, borderColor: '#e5e7eb' },
-  statValue: { fontSize: 16, fontWeight: 'bold', color: '#ea580c' },
-  statTitle: { fontSize: 12, color: '#6b7280', marginTop: 2 },
-  section: { backgroundColor: '#fff', borderRadius: 12, margin: 16, padding: 16, marginTop: 0 },
-  sectionTitle: { fontSize: 16, fontWeight: 'bold', color: '#ea580c', marginBottom: 8 },
-  orderItem: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: '#f3f4f6' },
-  orderCustomer: { fontSize: 14, color: '#1f2937' },
-  orderTotal: { fontSize: 14, color: '#10b981' },
-  orderStatus: { fontSize: 12, fontWeight: 'bold' },
-  addButton: { backgroundColor: '#ea580c', borderRadius: 8, paddingVertical: 12, paddingHorizontal: 16, alignItems: 'center', justifyContent: 'center', margin: 16 },
-  logoutContainer: { paddingHorizontal: 18, paddingBottom: 24 },
-  logoutButton: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', borderRadius: 12, borderWidth: 1, borderColor: '#fecaca', paddingVertical: 12, backgroundColor: '#fff' },
-  logoutLabel: { marginLeft: 8, color: '#dc2626', fontWeight: 'bold', fontSize: 14 },
+  storeName: { 
+    fontSize: 18, 
+    fontWeight: 'bold', 
+    color: '#1e293b',
+    fontFamily: Fonts.LeagueSpartanBold,
+  },
+  storeDetails: { 
+    flexDirection: 'row', 
+    alignItems: 'center', 
+    marginTop: 2,
+  },
+  storeAddress: { 
+    fontSize: 13, 
+    color: '#6b7280', 
+    marginLeft: 4,
+    fontFamily: Fonts.LeagueSpartanRegular,
+  },
+  storeRating: { 
+    fontSize: 13, 
+    color: '#f59e0b', 
+    marginLeft: 4,
+    fontFamily: Fonts.LeagueSpartanRegular,
+  },
+  storeStatus: {
+    alignItems: 'center',
+    marginLeft: 8,
+    borderRadius: 20,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+  },
+  statusCircle: { 
+    width: 18, 
+    height: 18, 
+    borderRadius: 9,
+    marginBottom: 2,
+  },
+  statusText: { 
+    fontSize: 13, 
+    fontWeight: 'bold',
+    marginTop: 4,
+    fontFamily: Fonts.LeagueSpartanBold,
+  },
+
+  // Stat cards giống AdminDashboard
+  statGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'space-between',
+    marginBottom: 16,
+  },
+  statCard: {
+    width: '48%',
+    backgroundColor: '#ffffff',
+    borderRadius: 16,
+    padding: 12,
+    borderWidth: 1,
+    borderColor: '#e5e7eb',
+    marginBottom: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 3,
+    elevation: 1,
+  },
+  statIconWrapper: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#fde7dd',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 6,
+  },
+  statValue: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#111827',
+    marginBottom: 2,
+    fontFamily: Fonts.LeagueSpartanBold,
+  },
+  statTitle: {
+    fontSize: 11,
+    color: '#6b7280',
+    marginBottom: 4,
+    fontFamily: Fonts.LeagueSpartanRegular,
+  },
+  statHelperBadge: {
+    alignSelf: 'flex-start',
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 999,
+    backgroundColor: 'rgba(233,83,34,0.08)',
+  },
+  statHelperText: {
+    fontSize: 10,
+    color: '#EB552D',
+    fontWeight: '600',
+    fontFamily: Fonts.LeagueSpartanSemiBold,
+  },
+
+  // Sections
+  sectionCardContainer: {
+    marginBottom: 20,
+  },
+  sectionHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 8,
+  },
+  sectionTitle: {
+    fontSize: 15,
+    fontWeight: 'bold',
+    color: '#111827',
+    fontFamily: Fonts.LeagueSpartanBold,
+  },
+  sectionLink: {
+    fontSize: 13,
+    color: '#EB552D',
+    fontWeight: '500',
+    fontFamily: Fonts.LeagueSpartanMedium,
+  },
+  chartCard: {
+    backgroundColor: '#ffffff',
+    borderRadius: 16,
+    padding: 12,
+    borderWidth: 1,
+    borderColor: '#e5e7eb',
+  },
+
+  emptyState: {
+    padding: 16,
+    borderWidth: 1,
+    borderColor: '#fed7aa',
+    borderRadius: 12,
+    backgroundColor: '#fff7ed',
+    alignItems: 'center',
+  },
+  emptyStateText: {
+    color: '#ea580c',
+    fontWeight: '600',
+    fontSize: 13,
+    fontFamily: Fonts.LeagueSpartanSemiBold,
+  },
+
+  // Food cards
+  foodCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#ffffff',
+    borderRadius: 12,
+    padding: 12,
+    marginBottom: 8,
+    borderWidth: 1,
+    borderColor: '#e5e7eb',
+  },
+  foodRank: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#fef3e2',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 12,
+  },
+  foodRankText: {
+    fontSize: 14,
+    fontWeight: 'bold',
+    color: '#ea580c',
+    fontFamily: Fonts.LeagueSpartanBold,
+  },
+  foodName: {
+    fontSize: 14,
+    fontWeight: 'bold',
+    color: '#1f2937',
+    marginBottom: 2,
+    fontFamily: Fonts.LeagueSpartanBold,
+  },
+  foodQuantity: {
+    fontSize: 12,
+    color: '#6b7280',
+    fontFamily: Fonts.LeagueSpartanRegular,
+  },
+  foodQuantityValue: {
+    color: '#EB552D',
+    fontWeight: 'bold',
+  },
+
+  // Order cards
+  orderCard: {
+    backgroundColor: '#ffffff',
+    borderRadius: 12,
+    padding: 14,
+    marginBottom: 10,
+    borderWidth: 1,
+    borderColor: '#e5e7eb',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.03,
+    shadowRadius: 4,
+    elevation: 1,
+  },
+  orderHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 2,
+  },
+  orderId: {
+    fontSize: 13,
+    color: '#64748b',
+    fontWeight: 'bold',
+    fontFamily: Fonts.LeagueSpartanBold,
+  },
+  orderTime: {
+    fontSize: 13,
+    color: '#64748b',
+    fontFamily: Fonts.LeagueSpartanRegular,
+  },
+  orderCustomer: {
+    fontSize: 15,
+    color: '#1e293b',
+    fontWeight: 'bold',
+    marginBottom: 2,
+    fontFamily: Fonts.LeagueSpartanBold,
+  },
+  orderItems: {
+    fontSize: 13,
+    color: '#6b7280',
+    marginBottom: 2,
+    fontFamily: Fonts.LeagueSpartanRegular,
+  },
+  orderFooter: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginTop: 4,
+  },
+  orderTotal: {
+    fontSize: 15,
+    color: '#ea580c',
+    fontWeight: 'bold',
+    fontFamily: Fonts.LeagueSpartanBold,
+  },
+  orderStatus: {
+    backgroundColor: '#f59e0b',
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 2,
+  },
+  orderStatusText: {
+    fontSize: 13,
+    color: '#fff',
+    fontWeight: 'bold',
+    fontFamily: Fonts.LeagueSpartanBold,
+  },
+
+  // Report card
+  reportCard: {
+    backgroundColor: '#ffffff',
+    borderRadius: 18,
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    borderWidth: 1,
+    borderColor: '#e5e7eb',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: 4,
+  },
+  reportLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  reportIconWrapper: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(233,83,34,0.08)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 10,
+  },
+  reportText: {
+    fontSize: 15,
+    fontWeight: 'bold',
+    color: '#111827',
+    fontFamily: Fonts.LeagueSpartanBold,
+  },
+
+  // Modal
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.4)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  modalContent: {
+    width: '90%',
+    backgroundColor: '#ffffff',
+    borderRadius: 16,
+    padding: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+    elevation: 5,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 4,
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#EB552D',
+    marginBottom: 12,
+    fontFamily: Fonts.LeagueSpartanBold,
+  },
+  closeBtn: {
+    marginTop: 16,
+    paddingVertical: 10,
+    paddingHorizontal: 20,
+    backgroundColor: '#fef3e2',
+    borderRadius: 999,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  closeBtnText: {
+    color: '#EB552D',
+    fontWeight: 'bold',
+    fontFamily: Fonts.LeagueSpartanBold,
+  },
 });
 
 export default SellerDashboardScreen;
