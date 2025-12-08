@@ -37,7 +37,7 @@ import { API_CONFIG } from "@/constants";
 import { formatPriceWithCurrency } from "@/utils/priceUtils";
 import Sidebar from "@/components/sidebar";
 import db from "@/assets/database.json";
-const copilotIcon = require('../../assets/images/copilot-logo.png');
+const CopilotIcon = require('../../assets/images/copilot-logo.png');
 
 const { width } = Dimensions.get("window");
 const SESSION_KEY = "auth.session";
@@ -847,7 +847,7 @@ export default function HomeScreen() {
          activeOpacity={0.85}
          style={styles.copilotButton}
        >
-        <Image source={copilotIcon} style={{ width: 28, height: 28, tintColor: '#ffffff' }} />
+        <Image source={CopilotIcon} style={{ width: 28, height: 28, tintColor: '#ffffff' }} />
        </TouchableOpacity>
     </View>
   );

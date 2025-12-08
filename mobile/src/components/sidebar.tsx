@@ -133,16 +133,10 @@ export default function Sidebar({ isOpen, onClose, currentRole, onSwitchRole, me
     await AsyncStorage.setItem("activeRole", next);
     onClose();
     
-    // Navigate based on role
+    // Navigate to MainTabs for all roles
+    // MainTabs will handle showing the correct bottom bar based on activeRole
     setTimeout(() => {
-      if (next === 'seller') {
-        navigation.reset({ index: 0, routes: [{ name: "SellerDashboard" }] });
-      } else if (next === 'admin') {
-        navigation.reset({ index: 0, routes: [{ name: "AdminDashboard" }] });
-      } else {
-        // For customer and shipper, go to MainTabs
-        navigation.reset({ index: 0, routes: [{ name: "MainTabs" }] });
-      }
+      navigation.reset({ index: 0, routes: [{ name: "MainTabs" }] });
     }, 100);
   };
 
@@ -275,34 +269,6 @@ export default function Sidebar({ isOpen, onClose, currentRole, onSwitchRole, me
                 <X size={22} color="#fff" />
               </TouchableOpacity>
             </View>
-
-            {/* Custom Menu Items */}
-            {menuItems && menuItems.length > 0 && (
-              <>
-                <View style={styles.menuSection}>
-                  <Text style={styles.menuSectionTitle}>Chức năng</Text>
-                  {menuItems.map((item, index) => {
-                    const IconComponent = item.icon;
-                    return (
-                      <TouchableOpacity
-                        key={index}
-                        style={styles.menuItem}
-                        activeOpacity={0.7}
-                        onPress={() => {
-                          onMenuItemPress?.(item.section);
-                        }}
-                      >
-                        <View style={styles.menuItemIconWrap}>
-                          <IconComponent size={20} color={APP_ORANGE} />
-                        </View>
-                        <Text style={styles.menuItemText}>{item.title}</Text>
-                      </TouchableOpacity>
-                    );
-                  })}
-                </View>
-                <View style={styles.divider} />
-              </>
-            )}
 
             {/* Admin */}
             {(user?.role === 'Quản lý' || user?.role_id === 2) && (

@@ -467,21 +467,46 @@ export default function OrderListScreen({ onMenuPress }: OrderListScreenProps = 
       </View>
 
       <View style={styles.tabs}>
-        {statusTabs.map((tab) => {
-          const isActive = orderFilter === tab.key;
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.tabsContent}
+        >
+          {statusTabs.map((tab) => {
+            const isActive = orderFilter === tab.key;
+            const count = tab.key === 'all' 
+              ? allOrders.length 
+              : allOrders.filter(order => order.order_status === tab.key).length;
 
-          return (
-            <TouchableOpacity
-              key={tab.key}
-              onPress={() => setOrderFilter(tab.key)}
-              style={[styles.tab, isActive && styles.tabActive]}
-            >
-              <Text style={[styles.tabText, isActive && styles.tabTextActive]}>
-                {tab.label}
-              </Text>
-            </TouchableOpacity>
-          );
-        })}
+            return (
+              <TouchableOpacity
+                key={tab.key}
+                onPress={() => setOrderFilter(tab.key)}
+                style={[styles.tab, isActive && styles.tabActive]}
+                activeOpacity={0.7}
+              >
+                <Text style={[styles.tabText, isActive && styles.tabTextActive]}>
+                  {tab.label}
+                </Text>
+                <View
+                  style={[
+                    styles.countBadge,
+                    isActive && styles.countBadgeActive,
+                  ]}
+                >
+                  <Text
+                    style={[
+                      styles.countText,
+                      isActive && styles.countTextActive,
+                    ]}
+                  >
+                    {count}
+                  </Text>
+                </View>
+              </TouchableOpacity>
+            );
+          })}
+        </ScrollView>
       </View>
 
       <View style={styles.foundWrap}>
@@ -787,16 +812,22 @@ const styles = StyleSheet.create({
   },
 
   tabs: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 14,
-    paddingHorizontal: 16,
-    paddingTop: 12,
     backgroundColor: '#fff',
+    paddingTop: 12,
+    paddingBottom: 12,
+  },
+  tabsContent: {
+    paddingHorizontal: 16,
+    paddingRight: 24,
+    flexDirection: 'row',
+    alignItems: 'center',
+    columnGap: 10,
   },
   tab: {
-    paddingHorizontal: 18,
-    paddingVertical: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
     borderRadius: 999,
     backgroundColor: '#F2F3F5',
   },
@@ -818,9 +849,27 @@ const styles = StyleSheet.create({
     fontFamily: Fonts.LeagueSpartanSemiBold,
     fontSize: 14,
   },
+  countBadge: {
+    marginLeft: 8,
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 999,
+    backgroundColor: '#e5e7eb',
+  },
+  countBadgeActive: {
+    backgroundColor: 'rgba(255,255,255,0.3)',
+  },
+  countText: {
+    fontSize: 11,
+    color: '#6b7280',
+    fontFamily: Fonts.LeagueSpartanBold,
+  },
+  countTextActive: {
+    color: '#fff',
+  },
 
   foundWrap: {
-    marginTop: 12,
+    marginTop: 4,
     backgroundColor: '#F6F7F8',
     paddingVertical: 14,
     paddingHorizontal: 14,

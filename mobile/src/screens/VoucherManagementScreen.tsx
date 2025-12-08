@@ -264,19 +264,16 @@ const VoucherManagementScreen: React.FC = () => {
             Đã hết hạn
           </Text>
         </TouchableOpacity>
-
-        <TouchableOpacity
-          style={styles.addButton}
-          onPress={handleAdd}
-        >
-          <Text style={styles.addButtonText}>+ Thêm</Text>
-        </TouchableOpacity>
       </View>
 
       <View style={styles.foundWrap}>
         <Text style={styles.foundText}>
           Tìm thấy <Text style={styles.foundNum}>{totalFound}</Text> khuyến mãi
         </Text>
+        <TouchableOpacity style={styles.addBtn} onPress={handleAdd}>
+          <Ionicons name="add" size={18} color="#fff" />
+          <Text style={styles.addBtnText}>Thêm</Text>
+        </TouchableOpacity>
       </View>
 
       {loading && !refreshing ? (
@@ -491,7 +488,8 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap',
     gap: 10,
     paddingHorizontal: 16,
-    paddingTop: 12,
+    paddingTop: 8,
+    paddingBottom: 8,
     backgroundColor: '#fff',
   },
   filterPill: {
@@ -518,28 +516,15 @@ const styles = StyleSheet.create({
     fontFamily: Fonts.LeagueSpartanSemiBold,
     fontSize: 14,
   },
-  addButton: {
-    paddingHorizontal: 18,
-    paddingVertical: 8,
-    borderRadius: 999,
-    backgroundColor: '#10b981',
-    shadowColor: '#000',
-    shadowOpacity: 0.06,
-    shadowRadius: 2,
-    shadowOffset: { width: 0, height: 1 },
-    elevation: 1,
-  },
-  addButtonText: {
-    color: '#FFFFFF',
-    fontFamily: Fonts.LeagueSpartanSemiBold,
-    fontSize: 14,
-  },
 
   foundWrap: {
-    marginTop: 12,
+    marginTop: 4,
     backgroundColor: '#F6F7F8',
-    paddingVertical: 14,
+    paddingVertical: 8,
     paddingHorizontal: 14,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.05,
@@ -548,13 +533,26 @@ const styles = StyleSheet.create({
   },
   foundText: {
     color: '#6B7280',
-    marginLeft: 6,
     fontSize: 15,
     fontFamily: Fonts.LeagueSpartanRegular,
   },
   foundNum: {
     color: '#111827',
     fontFamily: Fonts.LeagueSpartanBold,
+  },
+  addBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#ea580c',
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 999,
+  },
+  addBtnText: {
+    color: '#fff',
+    fontFamily: Fonts.LeagueSpartanBold,
+    fontSize: 14,
   },
 
   listContent: {
