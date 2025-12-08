@@ -135,43 +135,26 @@ export default function LoginScreen() {
       console.log('Login successful, user:', result.user);
       console.log('User role:', result.user.role, 'role_id:', result.user.role_id);
       
-      // Navigate based on user role
+      // Set activeRole based on user type for proper tab display
       const user = result.user;
       
-      // For shippers (role_id = 4), set activeRole to shipper and navigate to MainTabs
       if (user.role === 'Người vận chuyển' || user.role_id === 4) {
         console.log('Shipper detected, setting activeRole to shipper');
         await AsyncStorage.setItem('activeRole', 'shipper');
-        navigation.reset({
-          index: 0,
-          routes: [{ name: 'MainTabs' }],
-        });
-      }
-      // For sellers (role_id = 3), navigate to SellerDashboard
-      else if (user.role === 'Chủ cửa hàng' || user.role_id === 3) {
-        console.log('Seller detected, navigating to SellerDashboard');
-        navigation.reset({
-          index: 0,
-          routes: [{ name: 'SellerDashboard' }],
-        });
-      }
-      // For admin (role_id = 2), navigate to AdminDashboard
-      else if (user.role === 'Quản lý' || user.role_id === 2) {
-        console.log('Admin detected, navigating to AdminDashboard');
-        navigation.reset({
-          index: 0,
-          routes: [{ name: 'AdminDashboard' }],
-        });
-      }
-      // For customers (role_id = 1), navigate to MainTabs
-      else {
-        console.log('Customer detected, navigating to MainTabs');
+      } else if (user.role === 'Chủ cửa hàng' || user.role_id === 3) {
+        console.log('Seller detected, setting activeRole to seller');
+        await AsyncStorage.setItem('activeRole', 'seller');
+      } else if (user.role === 'Quản lý' || user.role_id === 2) {
+        console.log('Admin detected, setting activeRole to admin');
+        await AsyncStorage.setItem('activeRole', 'admin');
+      } else {
+        console.log('Customer detected, setting activeRole to customer');
         await AsyncStorage.setItem('activeRole', 'customer');
-        navigation.reset({
-          index: 0,
-          routes: [{ name: 'MainTabs' }],
-        });
       }
+      
+      // AppNavigator sẽ tự động điều hướng đến MainTabs sau khi auth state thay đổi
+      // Không cần manual navigation
+      console.log('Login complete, auth state updated. AppNavigator will handle navigation.');
     } catch (err: any) {
       console.error('Login error caught in handleLogin:', err);
       const message = typeof err === 'string' ? err : (err.message ?? 'Đã xảy ra lỗi không xác định');

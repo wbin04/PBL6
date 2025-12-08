@@ -298,14 +298,14 @@ const NewOrderListScreen = ({ navigation }: any) => {
               onChangeText={setSearchText}
               returnKeyType="search"
             />
-            {searchText.length > 0 && (
+            {searchText.length > 0 ? (
               <TouchableOpacity
                 onPress={() => setSearchText('')}
                 style={styles.clearBtn}
               >
                 <Ionicons name="close-circle" size={16} color="#9ca3af" />
               </TouchableOpacity>
-            )}
+            ) : null}
             <TouchableOpacity style={styles.searchBtn} activeOpacity={0.8}>
               <Ionicons name="search" size={16} color="#fff" />
             </TouchableOpacity>
@@ -508,29 +508,29 @@ const NewOrderListScreen = ({ navigation }: any) => {
                       <View style={styles.itemRow}>
                         <View style={{ flex: 1 }}>
                           <Text style={styles.itemName}>{item.name || 'N/A'}</Text>
-                          {item.size_display && (
+                          {item.size_display ? (
                             <Text style={{ color: '#6b7280', fontSize: 11, marginTop: 1 }}>
                               Size: {item.size_display}
                             </Text>
-                          )}
+                          ) : null}
                         </View>
                         <Text style={styles.itemQty}>x{typeof item.qty === 'number' ? item.qty : 0}</Text>
                         <View style={{ alignItems: 'flex-end' }}>
                           <Text style={styles.itemPrice}>{(typeof item.price === 'number' ? item.price : 0).toLocaleString()} đ</Text>
-                          {item.food_option_price && item.food_option_price > 0 && (
+                          {item.food_option_price && item.food_option_price > 0 ? (
                             <Text style={{ color: '#6b7280', fontSize: 10, marginTop: 1 }}>
                               +{(typeof item.food_option_price === 'number' ? item.food_option_price : 0).toLocaleString()} đ
                             </Text>
-                          )}
+                          ) : null}
                         </View>
                       </View>
-                      {item.food_note && item.food_note.trim() !== '' && (
+                      {item.food_note && item.food_note.trim() !== '' ? (
                         <View style={{ marginLeft: 8, marginBottom: 2 }}>
                           <Text style={{ color: '#6b7280', fontSize: 11, fontStyle: 'italic' }}>
                             • {item.food_note}
                           </Text>
                         </View>
-                      )}
+                      ) : null}
                     </View>
                   ))}
 
@@ -549,14 +549,14 @@ const NewOrderListScreen = ({ navigation }: any) => {
                           {(typeof order.shipping_fee === 'number' ? order.shipping_fee : 0).toLocaleString()} đ
                         </Text>
                       </View>
-                      {(typeof order.promo_discount === 'number' && order.promo_discount > 0) && (
+                      {typeof order.promo_discount === 'number' && order.promo_discount > 0 ? (
                         <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 2 }}>
                           <Text style={{ color: '#10b981', fontSize: 13 }}>Giảm giá:</Text>
                           <Text style={{ color: '#10b981', fontSize: 13, fontWeight: 'bold' }}>
                             -{order.promo_discount.toLocaleString()} đ
                           </Text>
                         </View>
-                      )}
+                      ) : null}
                       <View style={{ height: 1, backgroundColor: '#e5e7eb', marginVertical: 4 }} />
                       <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
                         <Text style={{ fontWeight: 'bold', fontSize: 15, color: '#1e293b' }}>Tổng cộng:</Text>
@@ -740,20 +740,20 @@ const NewOrderListScreen = ({ navigation }: any) => {
                         <View style={styles.foodItemRow}>
                           <View style={styles.foodItemLeft}>
                             <Text style={styles.foodItemName}>{item.name || 'N/A'}</Text>
-                            {item.size_display && (
+                            {item.size_display ? (
                               <Text style={styles.foodItemSize}>Size: {String(item.size_display)}</Text>
-                            )}
+                            ) : null}
                             <Text style={styles.foodItemPrice}>
                               {(typeof item.price === 'number' ? item.price : 0).toLocaleString()}đ
-                              {item.food_option_price && item.food_option_price > 0 && (
+                              {item.food_option_price && item.food_option_price > 0 ? (
                                 <Text style={styles.foodItemExtra}> +{(typeof item.food_option_price === 'number' ? item.food_option_price : 0).toLocaleString()}đ</Text>
-                              )}
+                              ) : null}
                             </Text>
-                            {item.food_note && item.food_note.trim() !== '' && (
+                            {item.food_note && item.food_note.trim() !== '' ? (
                               <View style={styles.foodNoteBox}>
                                 <Text style={styles.foodNoteText}>💬 {item.food_note}</Text>
                               </View>
-                            )}
+                            ) : null}
                           </View>
                           <View style={styles.foodItemRight}>
                             <Text style={styles.foodItemQty}>x{typeof item.qty === 'number' ? item.qty : 0}</Text>
@@ -783,7 +783,7 @@ const NewOrderListScreen = ({ navigation }: any) => {
                         +{(typeof selectedOrder.shipping_fee === 'number' ? selectedOrder.shipping_fee : 0).toLocaleString()}đ
                       </Text>
                     </View>
-                    {(typeof selectedOrder.promo_discount === 'number' && selectedOrder.promo_discount > 0) && (
+                    {typeof selectedOrder.promo_discount === 'number' && selectedOrder.promo_discount > 0 ? (
                       <View style={styles.summaryRow}>
                         <Text style={[styles.summaryLabel, { color: '#10b981' }]}>
                           🎁 Giảm giá
@@ -792,7 +792,7 @@ const NewOrderListScreen = ({ navigation }: any) => {
                           -{selectedOrder.promo_discount.toLocaleString()}đ
                         </Text>
                       </View>
-                    )}
+                    ) : null}
                     <View style={styles.summaryDivider} />
                     <View style={styles.summaryTotalRow}>
                       <Text style={styles.summaryTotalLabel}>Tổng thanh toán</Text>
@@ -804,7 +804,7 @@ const NewOrderListScreen = ({ navigation }: any) => {
                 </View>
 
                 {/* Ghi chú */}
-                {selectedOrder.notes && (
+                {selectedOrder.notes ? (
                   <View style={styles.modalSection}>
                     <Text style={styles.sectionTitle}>Ghi chú</Text>
                     <View style={styles.notesCard}>
@@ -813,7 +813,7 @@ const NewOrderListScreen = ({ navigation }: any) => {
                       </Text>
                     </View>
                   </View>
-                )}
+                ) : null}
               </ScrollView>
 
               {/* Nút hành động */}
@@ -859,10 +859,10 @@ const NewOrderListScreen = ({ navigation }: any) => {
                   activeOpacity={0.9}
                 >
                   <Text style={styles.modalConfirmText}>
-                    {selectedOrder.status === 'pending' ? '✅ Xác nhận' 
-                      : selectedOrder.status === 'preparing' ? '🍽️ Sẵn sàng' 
-                      : selectedOrder.status === 'ready' ? '🚚 Đang giao' 
-                      : selectedOrder.status === 'delivering' ? '✅ Hoàn thành' 
+                    {selectedOrder.status === 'pending' ? 'Xác nhận' 
+                      : selectedOrder.status === 'preparing' ? 'Sẵn sàng' 
+                      : selectedOrder.status === 'ready' ? 'Đang giao' 
+                      : selectedOrder.status === 'delivering' ? 'Hoàn thành' 
                       : 'Xác nhận'}
                   </Text>
                 </TouchableOpacity>
