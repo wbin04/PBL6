@@ -326,13 +326,6 @@ function AppNavigator() {
     return null;
   }
 
-  // Luôn dùng MainTabs làm entry point khi đã authenticated
-  // MainTabs tự quyết định hiển thị tab nào dựa trên role
-  let initialRouteName = "Login";
-  if (isAuthenticated) {
-    initialRouteName = "MainTabs";
-  }
-
   return (
     <VoucherProvider>
       <ShipperProvider>
@@ -340,8 +333,7 @@ function AppNavigator() {
           <NavigationContainer>
             <StatusBar style="auto" />
             <Stack.Navigator 
-              screenOptions={{ headerShown: false }} 
-              initialRouteName={initialRouteName}
+              screenOptions={{ headerShown: false }}
             >
             {!isAuthenticated ? (
               <>

@@ -147,18 +147,13 @@ export default function Sidebar({ isOpen, onClose, currentRole, onSwitchRole, me
       await AsyncStorage.removeItem("token");
       
       // Dispatch logout action to Redux
+      // App.tsx will automatically handle navigation to Login screen
       dispatch(logout());
       
-      // Close sidebar and navigate to login
+      // Close sidebar
       onClose();
       
-      // Reset navigation stack to login screen
-      setTimeout(() => {
-        navigation.reset({
-          index: 0,
-          routes: [{ name: "Login" }],
-        });
-      }, 100);
+      console.log('Logout successful, App.tsx will handle navigation');
     } catch (error) {
       console.error('Logout error:', error);
     }

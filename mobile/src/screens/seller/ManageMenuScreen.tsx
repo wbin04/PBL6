@@ -71,6 +71,18 @@ const ManageMenuScreen: React.FC<ManageMenuScreenProps> = ({ navigation }) => {
   const [searchText, setSearchText] = useState('');
   const { user, tokens } = useSelector((state: RootState) => state.auth);
 
+  // Debug log để kiểm tra categories
+  useEffect(() => {
+    console.log('=== CATEGORIES STATE CHANGED ===');
+    console.log('Categories length:', categories.length);
+    console.log('Categories type:', typeof categories);
+    console.log('Is array:', Array.isArray(categories));
+    if (categories.length > 0) {
+      console.log('First category:', categories[0]);
+      console.log('Categories structure:', JSON.stringify(categories.slice(0, 3)));
+    }
+  }, [categories]);
+
   const hashString = (str: string): number => {
     let hash = 0;
     if (str.length === 0) return hash;
@@ -81,38 +93,6 @@ const ManageMenuScreen: React.FC<ManageMenuScreenProps> = ({ navigation }) => {
     }
     return Math.abs(hash);
   };
-
-  const fetchCategories = useCallback(async () => {
-    try {
-      console.log('Fetching categories...');
-      const response: any = await axios.get(`${API_CONFIG.BASE_URL}/menu/categories/`);
-      console.log('Categories API Response:', response);
-      console.log('Categories data:', response.data);
-      
-      let data = response.data || response;
-      let categoriesData = [];
-      
-      if (data.results && Array.isArray(data.results)) {
-        categoriesData = data.results;
-      } else if (Array.isArray(data)) {
-        categoriesData = data;
-      } else {
-        console.error('Unexpected categories API response structure:', data);
-        return;
-      }
-      
-      setCategories(categoriesData);
-      console.log('Categories loaded:', categoriesData);
-    } catch (error: any) {
-      console.error('Error fetching categories:', error);
-      console.error('Error details:', {
-        message: error.message,
-        response: error.response?.data,
-        status: error.response?.status,
-        statusText: error.response?.statusText
-      });
-    }
-  }, []);
 
   const fetchMenu = useCallback(async () => {
     if (!user || !tokens?.access) {
@@ -213,11 +193,14 @@ const ManageMenuScreen: React.FC<ManageMenuScreenProps> = ({ navigation }) => {
             
             if (storeFoodCategories.length > 0) {
               setCategories(prev => {
-                const prevIds = prev.map(c => c.id).sort();
-                const newIds = storeFoodCategories.map(c => c.id).sort();
-                if (JSON.stringify(prevIds) !== JSON.stringify(newIds)) {
+                if (prev.length === 0) {
                   console.log(`Store categories loaded from foods: ${storeFoodCategories.length} categories`);
-                  console.log('Categories:', storeFoodCategories.map((cat: any) => `${cat.name} (ID: ${cat.id})`));
+                  return storeFoodCategories;
+                }
+                const prevIds = prev.map(c => c.id).sort().join(',');
+                const newIds = storeFoodCategories.map(c => c.id).sort().join(',');
+                if (prevIds !== newIds) {
+                  console.log(`Categories changed: ${prev.length} -> ${storeFoodCategories.length}`);
                   return storeFoodCategories;
                 }
                 return prev;
@@ -255,11 +238,7 @@ const ManageMenuScreen: React.FC<ManageMenuScreenProps> = ({ navigation }) => {
     }, [fetchMenu])
   );
 
-  useEffect(() => {
-    fetchCategories();
-  }, [fetchCategories]);
-
-  const filteredMenu = menu.filter(item => {
+  const filteredMenu = React.useMemo(() => menu.filter(item => {
     const matchSearch = searchText.trim() === '' || 
       item.title?.toLowerCase().includes(searchText.toLowerCase()) ||
       item.description?.toLowerCase().includes(searchText.toLowerCase());
@@ -272,19 +251,19 @@ const ManageMenuScreen: React.FC<ManageMenuScreenProps> = ({ navigation }) => {
       );
     }
     const categoryMatch = item.category?.id.toString() === selectedTab;
-    console.log(`Food: ${item.title}, Category: ${item.category?.name} (ID: ${item.category?.id}), Selected tab: ${selectedTab}, Match: ${categoryMatch}`);
     return matchSearch && categoryMatch;
-  });
+  }), [menu, searchText, selectedTab]);
 
-  useEffect(() => {
-    if (menu.length > 0 || categories.length > 0) {
-      console.log('State update:');
-      console.log('- Menu items:', menu.length);
-      console.log('- Categories:', categories.length);
-      console.log('- Selected tab:', selectedTab);
-      console.log('- Filtered menu:', filteredMenu.length);
-    }
-  }, [menu.length, categories.length, selectedTab, filteredMenu.length]);
+  const categoryCounts = React.useMemo(() => {
+    const counts: Record<number, number> = {};
+    menu.forEach(item => {
+      if (item.category?.id) {
+        counts[item.category.id] = (counts[item.category.id] || 0) + 1;
+      }
+    });
+    console.log('Category counts calculated:', counts);
+    return counts;
+  }, [menu]);
 
   const handleToggle = async (id: number) => {
     if (!user || !tokens?.access) return;
@@ -414,14 +393,14 @@ const ManageMenuScreen: React.FC<ManageMenuScreenProps> = ({ navigation }) => {
               onChangeText={setSearchText}
               returnKeyType="search"
             />
-            {searchText.length > 0 && (
+            {searchText.length > 0 ? (
               <TouchableOpacity
                 onPress={() => setSearchText('')}
                 style={styles.clearBtn}
               >
                 <Ionicons name="close-circle" size={16} color="#9ca3af" />
               </TouchableOpacity>
-            )}
+            ) : null}
             <TouchableOpacity style={styles.searchBtn} activeOpacity={0.8}>
               <Ionicons name="search" size={16} color="#fff" />
             </TouchableOpacity>
@@ -468,54 +447,46 @@ const ManageMenuScreen: React.FC<ManageMenuScreenProps> = ({ navigation }) => {
           </TouchableOpacity>
 
           {/* Category tabs */}
-          {categories.length > 0 &&
-            categories.map((category) => {
-              if (!category || !category.id || !category.name) {
-                return null;
-              }
-              const count = menu.filter(
-                (item) => item.category?.id === category.id
-              ).length;
-              const isActive = selectedTab === category.id.toString();
-              return (
-                <TouchableOpacity
-                  key={category.id}
-                  style={[styles.tab, isActive && styles.tabActive]}
-                  onPress={() => {
-                    console.log(
-                      'Selected category:',
-                      category.name,
-                      'ID:',
-                      category.id
-                    );
-                    setSelectedTab(category.id.toString());
-                  }}
-                  activeOpacity={0.7}
-                >
-                  <Text
-                    style={[styles.tabText, isActive && styles.tabTextActive]}
-                    numberOfLines={1}
-                  >
-                    {String(category.name)}
-                  </Text>
-                  <View
-                    style={[
-                      styles.countBadge,
-                      isActive && styles.countBadgeActive,
-                    ]}
-                  >
-                    <Text
-                      style={[
-                        styles.countText,
-                        isActive && styles.countTextActive,
-                      ]}
+          {categories && categories.length > 0
+            ? categories
+                .filter((cat) => cat && cat.id && cat.name)
+                .map((category) => {
+                  const count = categoryCounts[category.id] || 0;
+                  const isActive = selectedTab === category.id.toString();
+                  return (
+                    <TouchableOpacity
+                      key={category.id}
+                      style={[styles.tab, isActive && styles.tabActive]}
+                      onPress={() => {
+                        setSelectedTab(category.id.toString());
+                      }}
+                      activeOpacity={0.7}
                     >
-                      {typeof count === 'number' ? count : 0}
-                    </Text>
-                  </View>
-                </TouchableOpacity>
-              );
-            })}
+                      <Text
+                        style={[styles.tabText, isActive && styles.tabTextActive]}
+                        numberOfLines={1}
+                      >
+                        {category.name}
+                      </Text>
+                      <View
+                        style={[
+                          styles.countBadge,
+                          isActive && styles.countBadgeActive,
+                        ]}
+                      >
+                        <Text
+                          style={[
+                            styles.countText,
+                            isActive && styles.countTextActive,
+                          ]}
+                        >
+                          {count}
+                        </Text>
+                      </View>
+                    </TouchableOpacity>
+                  );
+                })
+            : null}
         </ScrollView>
       </View>
 
@@ -605,17 +576,17 @@ const ManageMenuScreen: React.FC<ManageMenuScreenProps> = ({ navigation }) => {
                       <Text style={styles.menuReviews}>
                         {item.rating_count || 0} đánh giá
                       </Text>
-                      {item.category && item.category.name && (
+                      {item.category?.name ? (
                         <>
                           <Text style={styles.menuDivider}>•</Text>
                           <Text
                             style={styles.categoryBadge}
                             numberOfLines={1}
                           >
-                            {String(item.category.name)}
+                            {item.category.name}
                           </Text>
                         </>
-                      )}
+                      ) : null}
                     </View>
                   </View>
                   <View style={styles.menuActions}>
