@@ -89,7 +89,7 @@ export const menuService = {
     return apiClient.get(`${ENDPOINTS.CATEGORY_FOODS(categoryId)}?${params.toString()}`);
   },
 
-  async searchFoodsGrouped(query: string): Promise<{
+  async searchFoodsGrouped(query: string, category?: number): Promise<{
     query: string;
     total_stores: number;
     total_foods: number;
@@ -100,7 +100,9 @@ export const menuService = {
       foods: Array<{ id: number; title: string; price: number; image?: string | null }>;
     }>;
   }> {
-    const params = new URLSearchParams({ q: query });
+    const params = new URLSearchParams();
+    if (query) params.append('q', query);
+    if (category) params.append('category', category.toString());
     return apiClient.get(`${ENDPOINTS.SEARCH_FOODS_GROUPED}?${params.toString()}`);
   },
 };

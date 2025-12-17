@@ -52,12 +52,23 @@ def _build_media_url(request, file_field):
 def search_foods_grouped(request):
     """Search foods by keyword and group results by store."""
     query = request.GET.get('q') or request.GET.get('search')
-    if not query:
+    category_id = request.GET.get('category')
+
+    if not query and not category_id:
         return Response({'error': 'Vui lòng nhập từ khóa tìm kiếm'}, status=status.HTTP_400_BAD_REQUEST)
 
-    foods = Food.objects.select_related('store').filter(
-        Q(title__icontains=query) | Q(description__icontains=query)
-    )
+    foods = Food.objects.select_related('store', 'category')
+
+    if query:
+        foods = foods.filter(
+            Q(title__icontains=query) | Q(description__icontains=query)
+        )
+
+    if category_id:
+        try:
+            foods = foods.filter(category_id=int(category_id))
+        except ValueError:
+            pass
 
     grouped = {}
     total_foods = 0
@@ -80,6 +91,8 @@ def search_foods_grouped(request):
             'title': food.title,
             'price': food.price,
             'image': _build_media_url(request, food.image),
+            'category_id': food.category_id,
+            'category_name': food.category.cate_name if getattr(food, 'category', None) else None,
         })
 
     results = list(grouped.values())
@@ -97,7 +110,7 @@ def search_foods_grouped(request):
 def category_list(request):
     """Get all categories"""
     categories = Category.objects.all()
-    serializer = CategorySerializer(categories, many=True)
+    serializer = CategorySerializer(categories, many=True, context={'request': request})
     # Return in paginated response format for frontend compatibility
     return Response({
         'count': categories.count(),
