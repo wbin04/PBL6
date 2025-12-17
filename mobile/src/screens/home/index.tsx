@@ -70,7 +70,7 @@ const mockBanners = [
 export default function HomeScreen() {
   const navigation = useNavigation<Nav>();
   const dispatch = useDispatch<AppDispatch>();
-  
+
   // Redux selectors
   const { categories, foods, loading: menuLoading, currentCategory } = useSelector((state: RootState) => state.menu);
   const { stores, loading: storesLoading } = useSelector((state: RootState) => state.stores);
@@ -83,6 +83,7 @@ export default function HomeScreen() {
   const [selectedCategoryId, setSelectedCategoryId] = useState<number | null>(0); // Start with "Tất cả" selected
   const [profileDrawerOpen, setProfileDrawerOpen] = useState(false);
   const [showNotificationModal, setShowNotificationModal] = useState(false);
+  const [searchText, setSearchText] = useState(""); // Thêm state cho search
   
   // Scroll states for arrows
   const [categoriesCanScrollLeft, setCategoriesCanScrollLeft] = useState(false);
@@ -267,6 +268,13 @@ export default function HomeScreen() {
     setActiveDiscountIndex(idx);
   };
 
+  // Hàm xử lý tìm kiếm
+  const handleSearch = () => {
+    const keyword = searchText.trim();
+    if (!keyword) return;
+    navigation.navigate("SearchResults", { keyword });
+  };
+
   // Show loading state
   if (menuLoading || storesLoading) {
     return (
@@ -333,10 +341,18 @@ export default function HomeScreen() {
                 placeholder="Tìm kiếm"
                 placeholderTextColor="#676767"
                 style={styles.searchInput}
+                value={searchText}
+                onChangeText={setSearchText}
+                returnKeyType="search"
+                onSubmitEditing={handleSearch}
               />
-              <View style={styles.searchIcon}>
+              <TouchableOpacity
+                style={styles.searchIcon}
+                onPress={handleSearch}
+                disabled={!searchText.trim()}
+              >
                 <Search size={16} color="#fff" />
-              </View>
+              </TouchableOpacity>
             </View>
 
             {/* Cart */}

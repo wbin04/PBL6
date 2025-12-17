@@ -78,9 +78,9 @@ WSGI_APPLICATION = 'fastfood_api.wsgi.application'
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.postgresql',
-        'NAME': config('DB_NAME', default='fastfood_data'),
+        'NAME': config('DB_NAME', default='fastfood_db'),
         'USER': config('DB_USER', default='postgres'),
-        'PASSWORD': config('DB_PASSWORD', default=' 456'),
+        'PASSWORD': config('DB_PASSWORD', default='123456'),
         'HOST': config('DB_HOST', default='localhost'),
         'PORT': config('DB_PORT', default='5432'),
     }

@@ -1,1 +1,0 @@
-# Shipper app migrations

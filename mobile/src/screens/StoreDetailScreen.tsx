@@ -10,6 +10,8 @@ import {
   Dimensions,
   Image,
   Alert,
+  Modal,
+  Pressable,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
@@ -21,6 +23,7 @@ import { fetchStoreDetail } from '@/store/slices/storesSlice';
 import { fetchCategories } from '@/store/slices/menuSlice';
 import { FoodCard } from '@/components';
 import { Ionicons } from '@expo/vector-icons';
+import { MoreHorizontal, Home as HomeIcon } from 'lucide-react-native';
 import { COLORS, SPACING, BORDER_RADIUS, SHADOWS, API_CONFIG } from '@/constants';
 import { storesService } from '@/services';
 import { Fonts } from '@/constants/Fonts';
@@ -53,6 +56,13 @@ export const StoreDetailScreen: React.FC<StoreDetailProps> = () => {
   const { currentStore, loading } = useSelector((state: RootState) => state.stores);
   const { categories } = useSelector((state: RootState) => state.menu);
   
+  // Popup menu state
+  const [menuVisible, setMenuVisible] = useState(false);
+  const goHome = () => {
+    setMenuVisible(false);
+    navigation.navigate('MainTabs');
+  };
+
   const [refreshing, setRefreshing] = useState(false);
   const [storeFoods, setStoreFoods] = useState<Food[]>([]);
   const [selectedCategory, setSelectedCategory] = useState<number | null>(null);
@@ -289,7 +299,27 @@ export const StoreDetailScreen: React.FC<StoreDetailProps> = () => {
                 >
                   <Ionicons name="arrow-back" size={18} color={COLORS.text} />
                 </TouchableOpacity>
+                <Pressable
+                  style={styles.topBtn}
+                  onPress={() => setMenuVisible(true)}
+                >
+                  <MoreHorizontal size={20} color={COLORS.text} />
+                </Pressable>
               </View>
+                  {/* ===== MENU POPUP ===== */}
+                  <Modal transparent visible={menuVisible} animationType="fade">
+                    <Pressable
+                      style={styles.menuOverlay}
+                      onPress={() => setMenuVisible(false)}
+                    >
+                      <View style={styles.menuBox}>
+                        <Pressable style={styles.menuItem} onPress={goHome}>
+                          <HomeIcon size={18} color={COLORS.text} />
+                          <Text style={styles.menuText}>Về trang chủ</Text>
+                        </Pressable>
+                      </View>
+                    </Pressable>
+                  </Modal>
             </View>
 
             {/* Thông tin cửa hàng + stats */}
@@ -407,6 +437,39 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: COLORS.background,
+  },
+
+  /* ===== MENU POPUP ===== */
+  menuOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.15)',
+    justifyContent: 'flex-start',
+    paddingTop: 90,
+    paddingRight: 16,
+    alignItems: 'flex-end',
+  },
+  menuBox: {
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    width: 180,
+    paddingVertical: 8,
+    elevation: 4,
+    shadowColor: '#000',
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    shadowOffset: { width: 1, height: 2 },
+  },
+  menuItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+  },
+  menuText: {
+    fontFamily: Fonts.LeagueSpartanMedium,
+    fontSize: 14,
+    color: COLORS.text,
   },
 
   centerContent: {

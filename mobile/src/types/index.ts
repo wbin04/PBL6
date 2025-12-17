@@ -283,6 +283,7 @@ export type RootStackParamList = {
   Profile: undefined;
   EditProfile: undefined;
   AdminHome: undefined;
+  SearchResults: { keyword?: string };
 };
 
 export type MainTabParamList = {
