@@ -199,6 +199,7 @@ export const ENDPOINTS = {
   REFRESH: '/auth/refresh/',
   PROFILE: '/auth/profile/',
   PROFILE_UPDATE: '/auth/profile/update/',
+  CHANGE_PASSWORD: '/auth/change-password/',
   RESET_PASSWORD: '/auth/reset-password/',
   
   // Menu

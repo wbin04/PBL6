@@ -342,6 +342,10 @@ function AppNavigator() {
                   options={{ gestureEnabled: false }}
                 />
                 <Stack.Screen name="Register" component={RegisterScreen} />
+                <Stack.Screen 
+                  name="ForgotPassword" 
+                  component={require('./src/screens/ForgotPasswordScreen').ForgotPasswordScreen} 
+                />
               </>
             ) : (
               <>

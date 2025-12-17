@@ -67,8 +67,16 @@ class LoginSerializer(serializers.Serializer):
             msg = 'Unable to log in with provided credentials.'
             raise serializers.ValidationError(msg, code='authorization')
 
-        # Verify password (plaintext comparison since passwords are stored as plaintext)
-        if user.password != password:
+        # Support both hashed (preferred) and legacy plaintext passwords
+        password_matches = user.check_password(password)
+
+        # Handle legacy plaintext passwords by comparing directly and migrating to hashed
+        if not password_matches and user.password == password:
+            user.set_password(password)
+            user.save(update_fields=['password'])
+            password_matches = True
+
+        if not password_matches:
             msg = 'Unable to log in with provided credentials.'
             raise serializers.ValidationError(msg, code='authorization')
 
@@ -94,11 +102,11 @@ class RegisterSerializer(serializers.ModelSerializer):
     def create(self, validated_data):
         # Remove password confirmation
         validated_data.pop('password_confirm', None)
-        # Extract raw password to store directly
+        # Extract raw password
         raw_password = validated_data.pop('password')
         # Get or create customer role
         customer_role, _ = Role.objects.get_or_create(role_name='Khách hàng')
-        # Create user instance without hashing
+        # Create user instance and hash password
         user = User(
             email=validated_data['email'],
             username=validated_data['username'],
@@ -109,8 +117,7 @@ class RegisterSerializer(serializers.ModelSerializer):
             longitude=validated_data.get('longitude'),
             role=customer_role
         )
-        # Store raw password directly (max 30 chars)
-        user.password = raw_password
+        user.set_password(raw_password)
         user.save()
         return user
 

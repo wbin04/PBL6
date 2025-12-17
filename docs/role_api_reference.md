@@ -11,6 +11,7 @@ Tài liệu này liệt kê toàn bộ endpoint backend hiện có, được nh�
 | POST | `/api/auth/refresh/` | Đổi refresh token lấy access token mới. | Xem “Response mẫu – Refresh token”. |
 | GET | `/api/auth/profile/` | Lấy thông tin người dùng hiện tại. | Xem “Response mẫu – Thông tin hồ sơ”. |
 | PUT | `/api/auth/profile/update/` | Cập nhật hồ sơ (partial update). | Xem “Response mẫu – Thông tin hồ sơ”. |
+| POST | `/api/auth/change-password/` | Đổi mật khẩu (yêu cầu đăng nhập, kiểm tra mật khẩu cũ). | Xem “Response mẫu – Đổi mật khẩu”. |
 | POST | `/api/auth/reset-password/` | Đặt lại mật khẩu bằng email/tên đăng nhập/số điện thoại. | Xem “Response mẫu – Đặt lại mật khẩu”. |
 | POST | `/api/auth/registration/shipper/` | Gửi/ngừng đăng ký làm shipper. | Xem “Response mẫu – Cờ đăng ký shipper”. |
 | POST | `/api/auth/registration/store/` | Gửi/ngừng đăng ký mở cửa hàng. | Xem “Response mẫu – Cờ đăng ký cửa hàng”. |
@@ -89,6 +90,20 @@ Tài liệu này liệt kê toàn bộ endpoint backend hiện có, được nh�
 ```json
 {
 	"message": "Đặt lại mật khẩu thành công"
+}
+```
+
+- Đổi mật khẩu (`POST /api/auth/change-password/`):
+```json
+{
+	"message": "Đổi mật khẩu thành công"
+}
+```
+
+- Lỗi đổi mật khẩu (ví dụ sai mật khẩu cũ):
+```json
+{
+	"error": "Mật khẩu cũ không đúng"
 }
 ```
 

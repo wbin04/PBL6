@@ -99,6 +99,32 @@ def update_profile_view(request):
     
     return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def change_password_view(request):
+    """Change password for authenticated user after verifying old password."""
+    old_password = request.data.get('old_password')
+    new_password = request.data.get('new_password')
+    confirm = request.data.get('new_password_confirm')
+
+    if not old_password or not new_password or not confirm:
+        return Response({'error': 'Vui lòng điền đầy đủ thông tin'}, status=status.HTTP_400_BAD_REQUEST)
+
+    if not request.user.check_password(old_password):
+        return Response({'error': 'Mật khẩu cũ không đúng'}, status=status.HTTP_400_BAD_REQUEST)
+
+    if new_password != confirm:
+        return Response({'error': 'Mật khẩu xác nhận không khớp'}, status=status.HTTP_400_BAD_REQUEST)
+
+    if len(new_password) < 6:
+        return Response({'error': 'Mật khẩu phải có ít nhất 6 ký tự'}, status=status.HTTP_400_BAD_REQUEST)
+
+    request.user.set_password(new_password)
+    request.user.save(update_fields=['password'])
+
+    return Response({'message': 'Đổi mật khẩu thành công'}, status=status.HTTP_200_OK)
+
 @api_view(['POST'])
 @permission_classes([AllowAny])
 def reset_password_view(request):
@@ -106,10 +132,22 @@ def reset_password_view(request):
     identifier = request.data.get('identifier')
     new_password = request.data.get('new_password')
     confirm = request.data.get('new_password_confirm')
+    
     if not identifier or not new_password or not confirm:
-        return Response({'error': 'Vui lòng điền đầy đủ thông tin'}, status=status.HTTP_400_BAD_REQUEST)
+        return Response({
+            'error': 'Vui lòng điền đầy đủ thông tin'
+        }, status=status.HTTP_400_BAD_REQUEST)
+    
     if new_password != confirm:
-        return Response({'error': 'Mật khẩu xác nhận không khớp'}, status=status.HTTP_400_BAD_REQUEST)
+        return Response({
+            'error': 'Mật khẩu xác nhận không khớp'
+        }, status=status.HTTP_400_BAD_REQUEST)
+    
+    if len(new_password) < 6:
+        return Response({
+            'error': 'Mật khẩu phải có ít nhất 6 ký tự'
+        }, status=status.HTTP_400_BAD_REQUEST)
+    
     try:
         user = User.objects.get(
             Q(email__iexact=identifier) |
@@ -117,11 +155,21 @@ def reset_password_view(request):
             Q(phone_number__iexact=identifier)
         )
     except User.DoesNotExist:
-        return Response({'error': 'Không tìm thấy người dùng'}, status=status.HTTP_404_NOT_FOUND)
-    # Update plaintext password
-    user.password = new_password
+        return Response({
+            'error': 'Không tìm thấy người dùng với thông tin này'
+        }, status=status.HTTP_404_NOT_FOUND)
+    
+    # IMPORTANT: Use set_password() to properly hash the password
+    user.set_password(new_password)
     user.save()
-    return Response({'message': 'Đặt lại mật khẩu thành công'})
+    
+    return Response({
+        'message': 'Đặt lại mật khẩu thành công',
+        'user': {
+            'email': user.email,
+            'username': user.username
+        }
+    }, status=status.HTTP_200_OK)
 
 
 # Admin-only views (require role_id = 2)
