@@ -6,6 +6,7 @@ urlpatterns = [
     path('stores/', views.store_list, name='stores'),
     path('items/', views.food_list, name='food_list'),
     path('items/<int:pk>/', views.food_detail, name='food_detail'),
+    path('search/', views.search_foods_grouped, name='search_foods_grouped'),
     path('categories/<int:category_id>/foods/', views.category_foods, name='category_foods'),
     
     # Store manager endpoints

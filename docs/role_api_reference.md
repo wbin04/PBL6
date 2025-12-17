@@ -271,6 +271,7 @@ Tài liệu này liệt kê toàn bộ endpoint backend hiện có, được nh�
 | GET | `/api/menu/categories/` | Danh sách danh mục. | Xem “Response mẫu – Danh mục”. |
 | GET | `/api/menu/stores/` | Danh sách cửa hàng public. | Xem “Response mẫu – Danh sách cửa hàng”. |
 | GET | `/api/menu/items/` | Danh sách món + bộ lọc (category, store, search, price, sort). | Xem “Response mẫu – Danh sách món”. |
+| GET | `/api/menu/search/?q=` | Tìm kiếm món và nhóm theo cửa hàng (trả về danh sách cửa hàng + các món khớp). | Xem “Response mẫu – Tìm kiếm món theo cửa hàng”. |
 | GET | `/api/menu/items/<id>/` | Chi tiết món ăn. | Xem “Response mẫu – Chi tiết món”. |
 | GET | `/api/menu/categories/<category_id>/foods/` | Món theo danh mục, có phân trang. | Xem “Response mẫu – Món theo danh mục”. |
 
@@ -308,6 +309,34 @@ Tài liệu này liệt kê toàn bộ endpoint backend hiện có, được nh�
 			"image": "assets/store-icon.png",
 			"description": "Chuỗi đồ ăn nhanh",
 			"address": "12 Nguyễn Huệ, Quận 1",
+
+- `GET /api/menu/search/?q=burger`
+```json
+{
+	"query": "burger",
+	"total_stores": 2,
+	"total_foods": 3,
+	"results": [
+		{
+			"store_id": 3,
+			"store_name": "FastFood ABC",
+			"store_image": "http://localhost:8000/media/assets/stores/logo.png",
+			"foods": [
+				{ "id": 11, "title": "Burger Bò Gấp Đôi", "price": 75000.0, "image": "http://localhost:8000/media/assets/foods/burger.png" }
+			]
+		},
+		{
+			"store_id": 4,
+			"store_name": "Burger King",
+			"store_image": null,
+			"foods": [
+				{ "id": 21, "title": "Burger Gà", "price": 65000.0, "image": null },
+				{ "id": 22, "title": "Burger Phô Mai", "price": 70000.0, "image": null }
+			]
+		}
+	]
+}
+```
 			"latitude": 10.773281,
 			"longitude": 106.704147,
 			"manager": "storemanager01"

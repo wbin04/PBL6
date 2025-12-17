@@ -6,10 +6,90 @@ from rest_framework import status
 from django.core.paginator import Paginator
 from django.db.models import Q, Avg, Count, Value
 from django.db.models.functions import Coalesce
+from django.conf import settings
 from .models import Category, Food, FoodSize
 from .serializers import CategorySerializer, FoodSerializer, FoodListSerializer, FoodSizeSerializer
 from apps.stores.models import Store
 from apps.stores.serializers import StoreSerializer
+
+
+def _build_media_url(request, file_field):
+    if not file_field:
+        return None
+    try:
+        # Support both FileField objects and plain string paths stored in DB
+        if hasattr(file_field, 'url'):
+            path = file_field.url
+        else:
+            path = str(file_field)
+
+        if not path:
+            return None
+
+        # If already an absolute URL, return as-is
+        if str(path).startswith('http'):
+            return str(path)
+
+        normalized = str(path).lstrip('/')
+        normalized = normalized.replace('\\', '/')
+
+        # Strip leading media/ if present and ensure assets/ prefix for consistency
+        if normalized.startswith('media/'):
+            normalized = normalized[len('media/'):]
+        if not normalized.startswith('assets/'):
+            normalized = f'assets/{normalized}'
+
+        full_path = f"{settings.MEDIA_URL}{normalized}"
+        if request:
+            return request.build_absolute_uri(full_path)
+        return f"http://localhost:8000{full_path}"
+    except Exception:
+        return None
+
+
+@api_view(['GET'])
+@permission_classes([AllowAny])
+def search_foods_grouped(request):
+    """Search foods by keyword and group results by store."""
+    query = request.GET.get('q') or request.GET.get('search')
+    if not query:
+        return Response({'error': 'Vui lòng nhập từ khóa tìm kiếm'}, status=status.HTTP_400_BAD_REQUEST)
+
+    foods = Food.objects.select_related('store').filter(
+        Q(title__icontains=query) | Q(description__icontains=query)
+    )
+
+    grouped = {}
+    total_foods = 0
+    for food in foods:
+        if not food.store:
+            continue
+
+        total_foods += 1
+        store = food.store
+        if store.id not in grouped:
+            grouped[store.id] = {
+                'store_id': store.id,
+                'store_name': store.store_name,
+                'store_image': _build_media_url(request, store.image),
+                'foods': [],
+            }
+
+        grouped[store.id]['foods'].append({
+            'id': food.id,
+            'title': food.title,
+            'price': food.price,
+            'image': _build_media_url(request, food.image),
+        })
+
+    results = list(grouped.values())
+
+    return Response({
+        'query': query,
+        'total_stores': len(results),
+        'total_foods': total_foods,
+        'results': results,
+    })
 
 
 @api_view(['GET'])

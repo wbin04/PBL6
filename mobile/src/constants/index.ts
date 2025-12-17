@@ -205,6 +205,7 @@ export const ENDPOINTS = {
   // Menu
   CATEGORIES: '/menu/categories/',
   FOODS: '/menu/items/',
+  SEARCH_FOODS_GROUPED: '/menu/search/',
   FOOD_DETAIL: (id: number) => `/menu/items/${id}/`,
   CATEGORY_FOODS: (id: number) => `/menu/categories/${id}/foods/`,
   

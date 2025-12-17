@@ -60,6 +60,7 @@ import AddressPickerScreen from "@/screens/address/AddressPickerScreen";
 import { ProfileScreen } from "@/screens/ProfileScreen";
 import RatingScreen from "@/screens/RatingScreen";
 import ChatbotScreen from "@/screens/ChatbotScreen";
+import SearchResultsScreen from "@/screens/SearchResultsScreen";
 
 // Redux
 import { Provider, useSelector, useDispatch } from "react-redux";
@@ -408,6 +409,7 @@ function AppNavigator() {
                 <Stack.Screen name="WalletTransactions" component={WalletTransactionsScreen} />
                 <Stack.Screen name="NotificationSettings" component={NotificationSettingsScreen} />
                 <Stack.Screen name="WithdrawalMethods" component={WithdrawalMethodsScreen} />
+                <Stack.Screen name="SearchResults" component={SearchResultsScreen} />
               </>
             )}
           </Stack.Navigator>

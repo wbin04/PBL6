@@ -83,6 +83,7 @@ export default function HomeScreen() {
   const [selectedCategoryId, setSelectedCategoryId] = useState<number | null>(0); // Start with "Tất cả" selected
   const [profileDrawerOpen, setProfileDrawerOpen] = useState(false);
   const [showNotificationModal, setShowNotificationModal] = useState(false);
+  const [searchText, setSearchText] = useState('');
   
   // Scroll states for arrows
   const [categoriesCanScrollLeft, setCategoriesCanScrollLeft] = useState(false);
@@ -166,6 +167,12 @@ export default function HomeScreen() {
     
     setStoresCanScrollLeft(!isAtLeft);
     setStoresCanScrollRight(!isAtRight);
+  };
+
+  const handleSearch = () => {
+    const trimmed = searchText.trim();
+    if (!trimmed) return;
+    navigation.navigate('SearchResults', { query: trimmed });
   };
 
   // Scroll functions
@@ -333,10 +340,14 @@ export default function HomeScreen() {
                 placeholder="Tìm kiếm"
                 placeholderTextColor="#676767"
                 style={styles.searchInput}
+                value={searchText}
+                onChangeText={setSearchText}
+                returnKeyType="search"
+                onSubmitEditing={handleSearch}
               />
-              <View style={styles.searchIcon}>
+              <TouchableOpacity style={styles.searchIcon} activeOpacity={0.85} onPress={handleSearch}>
                 <Search size={16} color="#fff" />
-              </View>
+              </TouchableOpacity>
             </View>
 
             {/* Cart */}

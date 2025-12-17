@@ -88,6 +88,21 @@ export const menuService = {
     
     return apiClient.get(`${ENDPOINTS.CATEGORY_FOODS(categoryId)}?${params.toString()}`);
   },
+
+  async searchFoodsGrouped(query: string): Promise<{
+    query: string;
+    total_stores: number;
+    total_foods: number;
+    results: Array<{
+      store_id: number;
+      store_name: string;
+      store_image?: string | null;
+      foods: Array<{ id: number; title: string; price: number; image?: string | null }>;
+    }>;
+  }> {
+    const params = new URLSearchParams({ q: query });
+    return apiClient.get(`${ENDPOINTS.SEARCH_FOODS_GROUPED}?${params.toString()}`);
+  },
 };
 
 export type StoreUpdatePayload = {
