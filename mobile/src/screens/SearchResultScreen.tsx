@@ -47,24 +47,31 @@ export default function SearchResultsScreen() {
   const route = useRoute<SearchRoute>();
 
   const initialKeyword = route.params?.keyword || "";
+  const initialCategoryId = route.params?.categoryId || 0;
+  const initialCategoryName = route.params?.categoryName || "";
 
   const [searchQuery, setSearchQuery] = useState(initialKeyword);
   const [submittedQuery, setSubmittedQuery] = useState(initialKeyword);
   const [rawFoods, setRawFoods] = useState<Food[]>([]);
+  const [categoryId, setCategoryId] = useState(initialCategoryId);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [showFilter, setShowFilter] = useState(false);
-  const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
+  const [selectedCategories, setSelectedCategories] = useState<string[]>(initialCategoryName ? [initialCategoryName] : []);
   const [priceRange, setPriceRange] = useState("all");
   const [sortBy, setSortBy] = useState("relevance");
 
   useEffect(() => {
     setSearchQuery(initialKeyword);
-    if (initialKeyword) {
-      fetchResults(initialKeyword);
-      setSubmittedQuery(initialKeyword);
+    setCategoryId(initialCategoryId);
+    if (initialCategoryName) {
+      setSelectedCategories([initialCategoryName]);
     }
-  }, [initialKeyword]);
+    if (initialKeyword || initialCategoryId) {
+      fetchResults(initialKeyword, initialCategoryId);
+      if (initialKeyword) setSubmittedQuery(initialKeyword);
+    }
+  }, [initialKeyword, initialCategoryId, initialCategoryName]);
 
   const resolveImageUrl = (img?: string | null) => {
     if (!img) return undefined;
@@ -109,18 +116,18 @@ export default function SearchResultsScreen() {
     };
   };
 
-  const fetchResults = async (queryValue: string) => {
+  const fetchResults = async (queryValue: string, category?: number) => {
     const trimmed = queryValue.trim();
-    if (!trimmed) {
+    if (!trimmed && !category) {
       setRawFoods([]);
-      setError("Vui lòng nhập từ khóa tìm kiếm");
+      setError("Vui lòng nhập từ khóa hoặc chọn danh mục");
       return;
     }
 
     setLoading(true);
     setError(null);
     try {
-      const data = await menuService.searchFoodsGrouped(trimmed);
+      const data = await menuService.searchFoodsGrouped(trimmed, category);
       const mapped = (data.results || []).flatMap((store) =>
         (store.foods || []).map((food) => normalizeFood(food, store))
       );
@@ -180,6 +187,7 @@ export default function SearchResultsScreen() {
     setSelectedCategories([]);
     setPriceRange("all");
     setSortBy("relevance");
+    setCategoryId(0);
   };
 
   // Đếm số filter đang bật
@@ -221,14 +229,14 @@ export default function SearchResultsScreen() {
               placeholderTextColor="#9ca3af"
               style={styles.searchInput}
               returnKeyType="search"
-              onSubmitEditing={() => fetchResults(searchQuery)}
+              onSubmitEditing={() => fetchResults(searchQuery, categoryId)}
             />
             {searchQuery.length > 0 && (
               <Pressable onPress={() => setSearchQuery('')} style={styles.clearBtn}>
                 <Ionicons name="close-circle" size={16} color="#9ca3af" />
               </Pressable>
             )}
-            <Pressable style={styles.searchBtn} onPress={() => fetchResults(searchQuery)}>
+            <Pressable style={styles.searchBtn} onPress={() => fetchResults(searchQuery, categoryId)}>
               <Ionicons name="search" size={16} color="#fff" />
             </Pressable>
           </View>

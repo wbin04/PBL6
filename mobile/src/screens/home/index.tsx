@@ -245,16 +245,15 @@ export default function HomeScreen() {
   };
 
   const handleCategorySelect = (category: any) => {
-    const isActive = selectedCategoryId === category.id;
-    
-    // Handle "Tất cả" category (id = 0) - load all foods
     if (category.id === 0) {
-      setSelectedCategoryId(isActive ? null : 0);
-      dispatch(setCurrentCategory(null)); // Clear current category to show all
-    } else {
-      setSelectedCategoryId(isActive ? null : category.id);
-      dispatch(setCurrentCategory(isActive ? null : category));
+      navigation.navigate("SearchResults", {});
+      return;
     }
+
+    navigation.navigate("SearchResults", {
+      categoryId: category.id,
+      categoryName: category.cate_name,
+    });
   };
 
   const handleNotificationPress = () => {
