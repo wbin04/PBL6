@@ -70,7 +70,7 @@ const mockBanners = [
 export default function HomeScreen() {
   const navigation = useNavigation<Nav>();
   const dispatch = useDispatch<AppDispatch>();
-  
+
   // Redux selectors
   const { categories, foods, loading: menuLoading, currentCategory } = useSelector((state: RootState) => state.menu);
   const { stores, loading: storesLoading } = useSelector((state: RootState) => state.stores);
@@ -83,7 +83,7 @@ export default function HomeScreen() {
   const [selectedCategoryId, setSelectedCategoryId] = useState<number | null>(0); // Start with "Tất cả" selected
   const [profileDrawerOpen, setProfileDrawerOpen] = useState(false);
   const [showNotificationModal, setShowNotificationModal] = useState(false);
-  const [searchText, setSearchText] = useState('');
+  const [searchText, setSearchText] = useState(""); // Thêm state cho search
   
   // Scroll states for arrows
   const [categoriesCanScrollLeft, setCategoriesCanScrollLeft] = useState(false);
@@ -169,12 +169,6 @@ export default function HomeScreen() {
     setStoresCanScrollRight(!isAtRight);
   };
 
-  const handleSearch = () => {
-    const trimmed = searchText.trim();
-    if (!trimmed) return;
-    navigation.navigate('SearchResults', { query: trimmed });
-  };
-
   // Scroll functions
   const scrollCategoriesLeft = () => {
     categoriesFlatListRef.current?.scrollToOffset({ offset: 0, animated: true });
@@ -251,12 +245,16 @@ export default function HomeScreen() {
   };
 
   const handleCategorySelect = (category: any) => {
-    // Navigate to SearchResults with category filter; no filtering on home
-    navigation.navigate('SearchResults', {
-      query: category.id === 0 ? '' : category.cate_name,
-      categoryId: category.id,
-      categoryName: category.cate_name,
-    });
+    const isActive = selectedCategoryId === category.id;
+    
+    // Handle "Tất cả" category (id = 0) - load all foods
+    if (category.id === 0) {
+      setSelectedCategoryId(isActive ? null : 0);
+      dispatch(setCurrentCategory(null)); // Clear current category to show all
+    } else {
+      setSelectedCategoryId(isActive ? null : category.id);
+      dispatch(setCurrentCategory(isActive ? null : category));
+    }
   };
 
   const handleNotificationPress = () => {
@@ -268,6 +266,13 @@ export default function HomeScreen() {
   const onScrollBanner = (e: any) => {
     const idx = Math.round(e.nativeEvent.contentOffset.x / (width - 48));
     setActiveDiscountIndex(idx);
+  };
+
+  // Hàm xử lý tìm kiếm
+  const handleSearch = () => {
+    const keyword = searchText.trim();
+    if (!keyword) return;
+    navigation.navigate("SearchResults", { keyword });
   };
 
   // Show loading state
@@ -341,7 +346,11 @@ export default function HomeScreen() {
                 returnKeyType="search"
                 onSubmitEditing={handleSearch}
               />
-              <TouchableOpacity style={styles.searchIcon} activeOpacity={0.85} onPress={handleSearch}>
+              <TouchableOpacity
+                style={styles.searchIcon}
+                onPress={handleSearch}
+                disabled={!searchText.trim()}
+              >
                 <Search size={16} color="#fff" />
               </TouchableOpacity>
             </View>

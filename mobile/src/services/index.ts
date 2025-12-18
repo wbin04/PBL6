@@ -52,10 +52,6 @@ export const authService = {
   async resetPassword(data: { identifier: string; new_password: string; new_password_confirm: string }): Promise<{ message: string }> {
     return apiClient.post(ENDPOINTS.RESET_PASSWORD, data);
   },
-
-  async changePassword(data: { old_password: string; new_password: string; new_password_confirm: string }): Promise<{ message: string }> {
-    return apiClient.post(ENDPOINTS.CHANGE_PASSWORD, data);
-  },
 };
 
 // Menu Service
@@ -87,23 +83,6 @@ export const menuService = {
     params.append('page', page.toString());
     
     return apiClient.get(`${ENDPOINTS.CATEGORY_FOODS(categoryId)}?${params.toString()}`);
-  },
-
-  async searchFoodsGrouped(query: string, category?: number): Promise<{
-    query: string;
-    total_stores: number;
-    total_foods: number;
-    results: Array<{
-      store_id: number;
-      store_name: string;
-      store_image?: string | null;
-      foods: Array<{ id: number; title: string; price: number; image?: string | null }>;
-    }>;
-  }> {
-    const params = new URLSearchParams();
-    if (query) params.append('q', query);
-    if (category) params.append('category', category.toString());
-    return apiClient.get(`${ENDPOINTS.SEARCH_FOODS_GROUPED}?${params.toString()}`);
   },
 };
 

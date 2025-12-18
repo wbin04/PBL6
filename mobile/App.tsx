@@ -60,7 +60,7 @@ import AddressPickerScreen from "@/screens/address/AddressPickerScreen";
 import { ProfileScreen } from "@/screens/ProfileScreen";
 import RatingScreen from "@/screens/RatingScreen";
 import ChatbotScreen from "@/screens/ChatbotScreen";
-import SearchResultsScreen from "@/screens/SearchResultsScreen";
+import SearchResultsScreen from '@/screens/SearchResultScreen';
 
 // Redux
 import { Provider, useSelector, useDispatch } from "react-redux";
@@ -305,7 +305,7 @@ function MainTabs() {
       />
       <Tab.Screen
         name="Support"
-        component={ChatbotScreen}
+        component={ShipperSupportScreen}
         options={{ tabBarIcon: ({ color }) => <Headphones color={color} size={24} /> }}
       />
     </Tab.Navigator>
@@ -343,10 +343,6 @@ function AppNavigator() {
                   options={{ gestureEnabled: false }}
                 />
                 <Stack.Screen name="Register" component={RegisterScreen} />
-                <Stack.Screen 
-                  name="ForgotPassword" 
-                  component={require('./src/screens/ForgotPasswordScreen').ForgotPasswordScreen} 
-                />
               </>
             ) : (
               <>

@@ -10,7 +10,6 @@ import {
   StatusBar,
   Alert,
   ActivityIndicator,
-  Modal,
 } from 'react-native';
 import { ChevronLeft, Camera, MapPin } from 'lucide-react-native';
 import { useNavigation } from '@react-navigation/native';
@@ -20,7 +19,6 @@ import { RootState, AppDispatch } from '@/store';
 import { updateProfile, clearError } from '@/store/slices/authSlice';
 import { User } from '@/types';
 import { AddressPickerModal } from '@/components';
-import { authService } from '@/services';
 
 type Nav = any;
 
@@ -48,13 +46,6 @@ export const ProfileScreen: React.FC = () => {
   });
   const [isUpdating, setIsUpdating] = useState(false);
   const [isAddressPickerVisible, setAddressPickerVisible] = useState(false);
-  const [isChangePasswordVisible, setChangePasswordVisible] = useState(false);
-  const [changePasswordData, setChangePasswordData] = useState({
-    oldPassword: '',
-    newPassword: '',
-    confirmPassword: '',
-  });
-  const [isChangingPassword, setIsChangingPassword] = useState(false);
 
   // Load user data when component mounts
   useEffect(() => {
@@ -132,47 +123,6 @@ export const ProfileScreen: React.FC = () => {
       longitude: data.longitude,
     }));
     setAddressPickerVisible(false);
-  };
-
-  const handleChangePassword = async () => {
-    const { oldPassword, newPassword, confirmPassword } = changePasswordData;
-
-    if (!oldPassword || !newPassword || !confirmPassword) {
-      Alert.alert('Lỗi', 'Vui lòng nhập đầy đủ thông tin');
-      return;
-    }
-
-    if (newPassword.length < 6) {
-      Alert.alert('Lỗi', 'Mật khẩu mới phải có ít nhất 6 ký tự');
-      return;
-    }
-
-    if (newPassword !== confirmPassword) {
-      Alert.alert('Lỗi', 'Mật khẩu mới không khớp');
-      return;
-    }
-
-    setIsChangingPassword(true);
-    try {
-      await authService.changePassword({
-        old_password: oldPassword,
-        new_password: newPassword,
-        new_password_confirm: confirmPassword,
-      });
-
-      Alert.alert('Thành công', 'Đổi mật khẩu thành công', [
-        {
-          text: 'OK',
-          onPress: () => setChangePasswordVisible(false),
-        },
-      ]);
-      setChangePasswordData({ oldPassword: '', newPassword: '', confirmPassword: '' });
-    } catch (err: any) {
-      const message = err?.message || 'Không thể đổi mật khẩu. Vui lòng thử lại.';
-      Alert.alert('Lỗi', message);
-    } finally {
-      setIsChangingPassword(false);
-    }
   };
 
   return (
@@ -285,16 +235,6 @@ export const ProfileScreen: React.FC = () => {
           </View>
         )}
 
-        {/* Change Password Button */}
-        <View style={styles.buttonContainer}>
-          <TouchableOpacity
-            style={styles.changePasswordButton}
-            onPress={() => setChangePasswordVisible(true)}
-          >
-            <Text style={styles.changePasswordText}>Thay đổi mật khẩu</Text>
-          </TouchableOpacity>
-        </View>
-
         {/* Update Button */}
         <View style={styles.buttonContainer}>
           <TouchableOpacity 
@@ -310,68 +250,6 @@ export const ProfileScreen: React.FC = () => {
           </TouchableOpacity>
         </View>
       </ScrollView>
-
-      <Modal
-        visible={isChangePasswordVisible}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setChangePasswordVisible(false)}
-      >
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>Thay đổi mật khẩu</Text>
-
-            <TextInput
-              style={styles.modalInput}
-              placeholder="Nhập mật khẩu cũ"
-              placeholderTextColor="#999"
-              secureTextEntry
-              value={changePasswordData.oldPassword}
-              onChangeText={(value) => setChangePasswordData(prev => ({ ...prev, oldPassword: value }))}
-            />
-            <TextInput
-              style={styles.modalInput}
-              placeholder="Nhập mật khẩu mới"
-              placeholderTextColor="#999"
-              secureTextEntry
-              value={changePasswordData.newPassword}
-              onChangeText={(value) => setChangePasswordData(prev => ({ ...prev, newPassword: value }))}
-            />
-            <TextInput
-              style={styles.modalInput}
-              placeholder="Nhập lại mật khẩu mới"
-              placeholderTextColor="#999"
-              secureTextEntry
-              value={changePasswordData.confirmPassword}
-              onChangeText={(value) => setChangePasswordData(prev => ({ ...prev, confirmPassword: value }))}
-            />
-
-            <View style={styles.modalActions}>
-              <TouchableOpacity
-                style={[styles.modalButton, styles.modalButtonSecondary]}
-                onPress={() => {
-                  setChangePasswordData({ oldPassword: '', newPassword: '', confirmPassword: '' });
-                  setChangePasswordVisible(false);
-                }}
-                disabled={isChangingPassword}
-              >
-                <Text style={styles.modalButtonText}>Hủy</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.modalButton, styles.modalButtonPrimary]}
-                onPress={handleChangePassword}
-                disabled={isChangingPassword}
-              >
-                {isChangingPassword ? (
-                  <ActivityIndicator size="small" color="#fff" />
-                ) : (
-                  <Text style={[styles.modalButtonText, styles.modalButtonPrimaryText]}>Lưu</Text>
-                )}
-              </TouchableOpacity>
-            </View>
-          </View>
-        </View>
-      </Modal>
 
       <AddressPickerModal
         visible={isAddressPickerVisible}
@@ -508,20 +386,6 @@ const styles = StyleSheet.create({
     paddingTop: 20,
     paddingBottom: 40,
   },
-  changePasswordButton: {
-    backgroundColor: '#fff',
-    borderRadius: 12,
-    paddingVertical: 14,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: '#e95322',
-  },
-  changePasswordText: {
-    color: '#e95322',
-    fontSize: 16,
-    fontFamily: Fonts.LeagueSpartanBold,
-  },
   errorContainer: {
     paddingHorizontal: 24,
     paddingVertical: 12,
@@ -546,65 +410,6 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 16,
     fontFamily: Fonts.LeagueSpartanBold,
-  },
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.4)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 20,
-  },
-  modalContent: {
-    width: '100%',
-    backgroundColor: '#fff',
-    borderRadius: 16,
-    padding: 20,
-  },
-  modalTitle: {
-    fontSize: 18,
-    fontFamily: Fonts.LeagueSpartanBold,
-    color: '#333',
-    marginBottom: 16,
-    textAlign: 'center',
-  },
-  modalInput: {
-    backgroundColor: '#f5f5f5',
-    borderRadius: 12,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    fontSize: 15,
-    fontFamily: Fonts.LeagueSpartanRegular,
-    color: '#333',
-    marginBottom: 12,
-    borderWidth: 1,
-    borderColor: '#e0e0e0',
-  },
-  modalActions: {
-    flexDirection: 'row',
-    justifyContent: 'flex-end',
-    gap: 12,
-    marginTop: 8,
-  },
-  modalButton: {
-    paddingVertical: 12,
-    paddingHorizontal: 16,
-    borderRadius: 10,
-    minWidth: 90,
-    alignItems: 'center',
-  },
-  modalButtonSecondary: {
-    backgroundColor: '#f1f1f1',
-  },
-  modalButtonPrimary: {
-    backgroundColor: '#e95322',
-  },
-  modalButtonText: {
-    fontSize: 15,
-    fontFamily: Fonts.LeagueSpartanMedium,
-    color: '#333',
-  },
-  modalButtonPrimaryText: {
-    color: '#fff',
   },
 });
 

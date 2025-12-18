@@ -199,13 +199,11 @@ export const ENDPOINTS = {
   REFRESH: '/auth/refresh/',
   PROFILE: '/auth/profile/',
   PROFILE_UPDATE: '/auth/profile/update/',
-  CHANGE_PASSWORD: '/auth/change-password/',
   RESET_PASSWORD: '/auth/reset-password/',
   
   // Menu
   CATEGORIES: '/menu/categories/',
   FOODS: '/menu/items/',
-  SEARCH_FOODS_GROUPED: '/menu/search/',
   FOOD_DETAIL: (id: number) => `/menu/items/${id}/`,
   CATEGORY_FOODS: (id: number) => `/menu/categories/${id}/foods/`,
   
