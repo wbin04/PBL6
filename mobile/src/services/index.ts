@@ -84,6 +84,42 @@ export const menuService = {
     
     return apiClient.get(`${ENDPOINTS.CATEGORY_FOODS(categoryId)}?${params.toString()}`);
   },
+
+  async searchFoodsGrouped(
+    query: string,
+    category?: number
+  ): Promise<{
+    query: string;
+    total_stores: number;
+    total_foods: number;
+    results: Array<{
+      store_id: number;
+      store_name: string;
+      store_image?: string | null;
+      foods: Array<{
+        id: number;
+        title: string;
+        price: number | string;
+        image?: string | null;
+        category_id?: number | null;
+        category_name?: string | null;
+      }>;
+    }>;
+  }> {
+    const params = new URLSearchParams();
+    if (query) {
+      params.append('q', query);
+    }
+    if (category) {
+      params.append('category', category.toString());
+    }
+
+    const endpoint = params.toString()
+      ? `${ENDPOINTS.SEARCH_FOODS_GROUPED}?${params.toString()}`
+      : ENDPOINTS.SEARCH_FOODS_GROUPED;
+
+    return apiClient.get(endpoint);
+  },
 };
 
 export type StoreUpdatePayload = {

@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import SearchFilters from "@/components/SearchFilters";
 import {
   View,
@@ -7,201 +7,141 @@ import {
   Pressable,
   StyleSheet,
   FlatList,
+  ActivityIndicator,
 } from "react-native";
-import { useNavigation } from "@react-navigation/native";
-import { ArrowLeft, SlidersHorizontal, X } from "lucide-react-native";
+import { useNavigation, useRoute, RouteProp } from "@react-navigation/native";
+import { ArrowLeft, SlidersHorizontal } from "lucide-react-native";
 import { FoodCard } from "@/components/FoodCard";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { Ionicons } from "@expo/vector-icons"; 
+import { Ionicons } from "@expo/vector-icons";
 import { Fonts } from "@/constants/Fonts";
+import { menuService } from "@/services";
+import { Food, RootStackParamList } from "@/types";
+
+interface FoodResult {
+  id: number;
+  title: string;
+  price: number | string;
+  image?: string | null;
+  category_id?: number | null;
+  category_name?: string | null;
+  average_rating?: number;
+  rating_count?: number;
+  availability?: string | boolean;
+}
+
+interface StoreResult {
+  store_id: number;
+  store_name: string;
+  store_image?: string | null;
+  foods: FoodResult[];
+}
 
 
+
+type SearchRoute = RouteProp<RootStackParamList, "SearchResults">;
 
 export default function SearchResultsScreen() {
   const navigation = useNavigation<any>();
-  const [searchQuery, setSearchQuery] = useState("");
-  // Đã loại bỏ tab, chỉ tìm kiếm món ăn
+  const route = useRoute<SearchRoute>();
+
+  const initialKeyword = route.params?.keyword || "";
+
+  const [searchQuery, setSearchQuery] = useState(initialKeyword);
+  const [submittedQuery, setSubmittedQuery] = useState(initialKeyword);
+  const [rawFoods, setRawFoods] = useState<Food[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [showFilter, setShowFilter] = useState(false);
-  // State cho filter
   const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
   const [priceRange, setPriceRange] = useState("all");
   const [sortBy, setSortBy] = useState("relevance");
 
-  const allFoods = [
-    {
-      id: 1,
-      title: "Gà rán giòn cay",
-      price: "45000",
-      category: { id: 1, cate_name: "Gà giòn", image: require("@/assets/images/assorted-sushi.png") },
-      image: require("@/assets/images/assorted-sushi.png"),
-      image_url: "",
-      average_rating: 4.8,
-      rating_count: 98,
-      availability: "true",
-      description: "Gà rán giòn cay hấp dẫn, chuẩn vị.",
-      store: {
-        id: 1,
-        store_name: "Chicken Express",
-        image: require("@/assets/images/assorted-sushi.png"),
-        description: "Nhà hàng gà rán nổi tiếng.",
-      },
-    },
-    {
-      id: 2,
-      title: "Burger bò phô mai",
-      price: "55000",
-      category: { id: 2, cate_name: "Burger", image: require("@/assets/images/assorted-sushi.png") },
-      image: require("@/assets/images/assorted-sushi.png"),
-      image_url: "",
-      average_rating: 4.7,
-      rating_count: 120,
-      availability: "true",
-      description: "Burger bò phô mai thơm ngon, béo ngậy.",
-      store: {
-        id: 2,
-        store_name: "Burger House",
-        image: require("@/assets/images/assorted-sushi.png"),
-        description: "Nhà hàng chuyên burger bò.",
-      },
-    },
-    {
-      id: 3,
-      title: "Mỳ Ý sốt bò bằm",
-      price: "65000",
-      category: { id: 3, cate_name: "Mỳ ý", image: require("@/assets/images/assorted-sushi.png") },
-      image: require("@/assets/images/assorted-sushi.png"),
-      image_url: "",
-      average_rating: 4.5,
-      rating_count: 80,
-      availability: "true",
-      description: "Mỳ Ý sốt bò bằm đậm đà, chuẩn vị Ý.",
-      store: {
-        id: 3,
-        store_name: "Pasta Corner",
-        image: require("@/assets/images/assorted-sushi.png"),
-        description: "Mỳ Ý và pasta các loại.",
-      },
-    },
-    {
-      id: 4,
-      title: "Khoai tây chiên",
-      price: "30000",
-      category: { id: 4, cate_name: "Khoai tây chiên", image: require("@/assets/images/assorted-sushi.png") },
-      image: require("@/assets/images/assorted-sushi.png"),
-      average_rating: 4.3,
-      rating_count: 60,
-      availability: "true",
-      description: "Khoai tây chiên giòn rụm, vàng ươm.",
-      store: {
-        id: 4,
-        store_name: "Snack Bar",
-        image: require("@/assets/images/assorted-sushi.png"),
-        description: "Đồ ăn vặt và món phụ.",
-      },
-    },
-    {
-      id: 5,
-      title: "Taco bò phô mai",
-      price: "40000",
-      category: { id: 5, cate_name: "Món phụ", image: require("@/assets/images/assorted-sushi.png") },
-      image: require("@/assets/images/assorted-sushi.png"),
-      image_url: "",
-      average_rating: 4.2,
-      rating_count: 45,
-      availability: "true",
-      description: "Taco bò phô mai béo ngậy, thơm ngon.",
-      store: {
-        id: 5,
-        store_name: "Taco Town",
-        image: require("@/assets/images/assorted-sushi.png"),
-        description: "Taco và món phụ đa dạng.",
-      },
-    },
-    {
-      id: 6,
-      title: "Bánh hot dog",
-      price: "35000",
-      category: { id: 6, cate_name: "Tráng miệng", image: require("@/assets/images/assorted-sushi.png") },
-      image: require("@/assets/images/assorted-sushi.png"),
-      image_url: "",
-      average_rating: 4.1,
-      rating_count: 30,
-      availability: "true",
-      description: "Bánh hot dog mềm, nhân xúc xích thơm ngon.",
-      store: {
-        id: 6,
-        store_name: "Dessert House",
-        image: require("@/assets/images/assorted-sushi.png"),
-        description: "Đồ ngọt và tráng miệng.",
-      },
-    },
-    {
-      id: 7,
-      title: "Sữa lắc dâu",
-      price: "25000",
-      category: { id: 7, cate_name: "Nước giải khát", image: require("@/assets/images/assorted-sushi.png") },
-      image: require("@/assets/images/assorted-sushi.png"),
-      image_url: "",
-      average_rating: 4.6,
-      rating_count: 55,
-      availability: "true",
-      description: "Sữa lắc dâu tươi mát, ngọt dịu.",
-      store: {
-        id: 7,
-        store_name: "Drink Station",
-        image: require("@/assets/images/assorted-sushi.png"),
-        description: "Nước giải khát các loại.",
-      },
-    },
-    {
-      id: 8,
-      title: "Gà viên chiên",
-      price: "35000",
-      category: { id: 8, cate_name: "Món thêm", image: require("@/assets/images/assorted-sushi.png") },
-      image: require("@/assets/images/assorted-sushi.png"),
-      image_url: "",
-      average_rating: 4.0,
-      rating_count: 25,
-      availability: "true",
-      description: "Gà viên chiên giòn, ăn kèm sốt đặc biệt.",
-      store: {
-        id: 8,
-        store_name: "Snack Bar",
-        image: require("@/assets/images/assorted-sushi.png"),
-        description: "Đồ ăn vặt và món thêm.",
-      },
-    },
-  ];
+  useEffect(() => {
+    setSearchQuery(initialKeyword);
+    if (initialKeyword) {
+      fetchResults(initialKeyword);
+      setSubmittedQuery(initialKeyword);
+    }
+  }, [initialKeyword]);
 
+  const normalizeFood = (food: FoodResult, store: StoreResult): Food => {
+    const priceStr = typeof food.price === "number" ? food.price.toString() : (food.price || "0");
+    const imageUrl = food.image ? encodeURI(food.image) : undefined;
+
+    return {
+      id: food.id,
+      title: food.title,
+      description: "",
+      price: priceStr,
+      image: food.image || "",
+      image_url: imageUrl,
+      category_name: food.category_name || undefined,
+      availability: food.availability ?? "true",
+      average_rating: food.average_rating ?? 0,
+      rating_count: food.rating_count ?? 0,
+      store: {
+        id: store.store_id,
+        store_name: store.store_name,
+        image: store.store_image || "",
+      },
+    };
+  };
+
+  const fetchResults = async (queryValue: string) => {
+    const trimmed = queryValue.trim();
+    if (!trimmed) {
+      setRawFoods([]);
+      setError("Vui lòng nhập từ khóa tìm kiếm");
+      return;
+    }
+
+    setLoading(true);
+    setError(null);
+    try {
+      const data = await menuService.searchFoodsGrouped(trimmed);
+      const mapped = (data.results || []).flatMap((store) =>
+        (store.foods || []).map((food) => normalizeFood(food, store))
+      );
+      setRawFoods(mapped);
+      setSubmittedQuery(trimmed);
+      if (mapped.length === 0) {
+        setError("Không tìm thấy kết quả phù hợp.");
+      }
+    } catch (err: any) {
+      setError(err?.message || "Không thể tìm kiếm. Vui lòng thử lại.");
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const filteredFoods = useMemo(() => {
-    let foods = allFoods;
-    // Search
-    if (searchQuery.trim()) {
-      foods = foods.filter(
-        (food) =>
-          food.title.toLowerCase().includes(searchQuery.toLowerCase())
-      );
-    }
+    let foods = [...rawFoods];
+
     if (selectedCategories.length > 0) {
-      foods = foods.filter((f) => selectedCategories.includes(f.category?.cate_name || ""));
+      foods = foods.filter((f) => {
+        const cateName = f.category_name || f.category?.cate_name || "";
+        return selectedCategories.includes(cateName);
+      });
     }
-    // Price
+
     if (priceRange !== "all") {
       foods = foods.filter((f) => {
         const price = parseInt(f.price, 10);
+        if (Number.isNaN(price)) return false;
         if (priceRange === "low") return price < 50000;
         if (priceRange === "medium") return price >= 50000 && price <= 100000;
         if (priceRange === "high") return price > 100000;
         return true;
       });
     }
-    // Sort
-    if (sortBy === "price-low") foods = [...foods].sort((a, b) => parseInt(a.price,10) - parseInt(b.price,10));
-    if (sortBy === "price-high") foods = [...foods].sort((a, b) => parseInt(b.price,10) - parseInt(a.price,10));
-    if (sortBy === "rating") foods = [...foods].sort((a, b) => b.average_rating - a.average_rating);
+
+    if (sortBy === "price-low") foods = [...foods].sort((a, b) => parseInt(a.price, 10) - parseInt(b.price, 10));
+    if (sortBy === "price-high") foods = [...foods].sort((a, b) => parseInt(b.price, 10) - parseInt(a.price, 10));
+    if (sortBy === "rating") foods = [...foods].sort((a, b) => (b.average_rating || 0) - (a.average_rating || 0));
+
     return foods;
-  }, [allFoods, searchQuery, selectedCategories, priceRange, sortBy]);
+  }, [rawFoods, selectedCategories, priceRange, sortBy]);
 
   const resultCount = filteredFoods.length;
 
@@ -260,15 +200,16 @@ export default function SearchResultsScreen() {
               placeholderTextColor="#9ca3af"
               style={styles.searchInput}
               returnKeyType="search"
+              onSubmitEditing={() => fetchResults(searchQuery)}
             />
             {searchQuery.length > 0 && (
               <Pressable onPress={() => setSearchQuery('')} style={styles.clearBtn}>
                 <Ionicons name="close-circle" size={16} color="#9ca3af" />
               </Pressable>
             )}
-            <View style={styles.searchBtn}>
+            <Pressable style={styles.searchBtn} onPress={() => fetchResults(searchQuery)}>
               <Ionicons name="search" size={16} color="#fff" />
-            </View>
+            </Pressable>
           </View>
         </View>
       </View>
@@ -276,7 +217,16 @@ export default function SearchResultsScreen() {
       {/* ===== RESULT BAR (giống shipper) ===== */}
       <View style={styles.foundWrap}>
         <Text style={styles.foundText}>
-          Tìm thấy <Text style={styles.foundNum}>{resultCount}</Text> kết quả
+          {loading
+            ? "Đang tìm kiếm..."
+            : error
+              ? error
+              : (
+                <>
+                  Tìm thấy <Text style={styles.foundNum}>{resultCount}</Text> kết quả
+                  {submittedQuery ? ` cho "${submittedQuery}"` : ''}
+                </>
+              )}
         </Text>
       </View>
 
@@ -303,6 +253,14 @@ export default function SearchResultsScreen() {
         numColumns={2}
         contentContainerStyle={styles.listContent}
         columnWrapperStyle={{ justifyContent: "space-between" }}
+        ListHeaderComponent={
+          loading ? (
+            <View style={styles.loadingWrap}>
+              <ActivityIndicator color="#e95322" />
+              <Text style={styles.loadingText}>Đang tải kết quả...</Text>
+            </View>
+          ) : null
+        }
         renderItem={({ item }) => (
           <FoodCard
             food={item}
@@ -312,9 +270,11 @@ export default function SearchResultsScreen() {
           />
         )}
         ListEmptyComponent={
-          <Text style={styles.emptyText}>
-            Không tìm thấy kết quả phù hợp.
-          </Text>
+          !loading ? (
+            <Text style={styles.emptyText}>
+              {error || "Không tìm thấy kết quả phù hợp."}
+            </Text>
+          ) : null
         }
       />
     </SafeAreaView>
@@ -478,6 +438,17 @@ const styles = StyleSheet.create({
   /* List */
   listContent: {
     padding: 16,
+  },
+
+  loadingWrap: {
+    alignItems: 'center',
+    paddingVertical: 16,
+  },
+
+  loadingText: {
+    marginTop: 6,
+    color: '#6B7280',
+    fontFamily: Fonts.LeagueSpartanRegular,
   },
 
   emptyText: {
