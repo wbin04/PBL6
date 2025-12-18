@@ -15,6 +15,7 @@ import { FoodCard } from "@/components/FoodCard";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { Fonts } from "@/constants/Fonts";
+import { API_CONFIG } from "@/constants";
 import { menuService } from "@/services";
 import { Food, RootStackParamList } from "@/types";
 
@@ -65,9 +66,28 @@ export default function SearchResultsScreen() {
     }
   }, [initialKeyword]);
 
+  const resolveImageUrl = (img?: string | null) => {
+    if (!img) return undefined;
+    if (img.startsWith("http")) return img;
+
+    const base = API_CONFIG.BASE_URL.replace("/api", "");
+    let path = img.replace(/\\/g, "/");
+    if (path.startsWith("/")) path = path.slice(1);
+    if (!path.startsWith("media/")) path = `media/${path}`;
+
+    try {
+      // Encode only once to avoid %25 double-encoding
+      const decoded = decodeURI(path);
+      return `${base}/${encodeURI(decoded)}`;
+    } catch {
+      return `${base}/${path}`;
+    }
+  };
+
   const normalizeFood = (food: FoodResult, store: StoreResult): Food => {
     const priceStr = typeof food.price === "number" ? food.price.toString() : (food.price || "0");
-    const imageUrl = food.image ? encodeURI(food.image) : undefined;
+    const imageUrl = resolveImageUrl(food.image);
+    const storeImageUrl = resolveImageUrl(store.store_image);
 
     return {
       id: food.id,
@@ -84,6 +104,7 @@ export default function SearchResultsScreen() {
         id: store.store_id,
         store_name: store.store_name,
         image: store.store_image || "",
+        image_url: storeImageUrl,
       },
     };
   };
