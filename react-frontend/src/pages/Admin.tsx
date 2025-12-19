@@ -1,8 +1,7 @@
-//$env:DB_PASSWORD="123456"
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { API, getImageUrl, formatDate, isAuthenticated, getUser } from '@/lib/api';
-import type { Store, Food, Category, Customer, AdminOrder } from '@/types/index-tuan';
+import type { Store, Food, Category, Customer, AdminOrder, ShipperApplication } from '@/types/index-tuan';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 
@@ -46,15 +45,15 @@ interface StoreApplication {
   created_date: string;
 }
 
-// *** START: Thêm interface cho Khuyến mãi (Admin) ***
+// Interface cho Khuyến mãi (Admin)
 interface AdminPromotion {
   id: number;
   name: string;
   scope: string; // "GLOBAL"
   discount_type: "PERCENT" | "AMOUNT";
   discount_value: string;
-  start_date: string; // ISO format (e.g., 2025-11-01T00:00:00Z)
-  end_date: string; // ISO format
+  start_date: string; 
+  end_date: string; 
   minimum_pay: string | null;
   max_discount_amount: string | null;
   store_id: number; // 0
@@ -63,9 +62,8 @@ interface AdminPromotion {
     store_name: string;
   };
   is_active: boolean;
-  category: string; // "AMOUNT" or "PERCENT"
+  category: string; 
 }
-// *** END: Thêm interface cho Khuyến mãi (Admin) ***
 
 
 const Admin: React.FC = () => {
@@ -82,6 +80,7 @@ const Admin: React.FC = () => {
     totalStores: 0
   });
   const [loading, setLoading] = useState(false);
+  
   //Khách hàng
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [totalPages, setTotalPages] = useState(1);
@@ -90,6 +89,7 @@ const Admin: React.FC = () => {
   const [search, setSearch] = useState('');
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
   const [showCustomerModal, setShowCustomerModal] = useState(false);
+  
   //Cửa hàng
   const [stores, setStores] = useState<Store[]>([]);
   const [newStore, setNewStore] = useState({
@@ -111,6 +111,13 @@ const Admin: React.FC = () => {
   const [totalApplications, setTotalApplications] = useState(0);
   const [applicationsSearch, setApplicationsSearch] = useState('');
 
+  // *** START: State cho mục Shipper (Mới) ***
+  const [shipperApps, setShipperApps] = useState<ShipperApplication[]>([]);
+  const [shipperLoading, setShipperLoading] = useState(false);
+  const [shipperPage, setShipperPage] = useState(1);
+  const [totalShipperPages, setTotalShipperPages] = useState(1);
+  const [totalShipperApps, setTotalShipperApps] = useState(0);
+  // *** END: State cho mục Shipper ***
 
   //Món ăn
   const [foods, setFoods] = useState<Food[]>([]);
@@ -123,6 +130,12 @@ const Admin: React.FC = () => {
     store_id: '',
     availability: 'Còn hàng',
   });
+   interface FoodSize {
+    id: number;
+    size_name: string;
+    price: string; 
+    food: number;
+  }
   const [foodSearch, setFoodSearch] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('');
   const [storeFilter, setStoreFilter] = useState('');
@@ -132,6 +145,12 @@ const Admin: React.FC = () => {
   const [totalFoods, setTotalFoods] = useState(0);
   const [selectedFood, setSelectedFood] = useState<Food | null>(null);
   const [showEditFoodModal, setShowEditFoodModal] = useState(false);
+  const [showManageSizesModal, setShowManageSizesModal] = useState(false);
+  const [foodSizes, setFoodSizes] = useState<FoodSize[]>([]);
+  const [newSize, setNewSize] = useState({ size_name: '', price: '' });
+  const [editingSizeId, setEditingSizeId] = useState<number | null>(null);
+  const [editingSizeData, setEditingSizeData] = useState({ size_name: '', price: '' });
+  
   //Đơn hàng
   const [orders, setOrders] = useState<AdminOrder[]>([]);
   const [selectedOrder, setSelectedOrder] = useState<AdminOrder | null>(null);
@@ -158,11 +177,11 @@ const Admin: React.FC = () => {
   const [popularFoodsFilters, setPopularFoodsFilters] = useState({
     start_date: '',
     end_date: '',
-    limit: '10', // Mặc định là 10 theo API doc
+    limit: '10', 
   });
   const [popularFoodsLoading, setPopularFoodsLoading] = useState(false);
   
-  // *** START: Thêm state cho Khuyến mãi ***
+  // State cho Khuyến mãi
   const [promotions, setPromotions] = useState<AdminPromotion[]>([]);
   const [promoLoading, setPromoLoading] = useState(false);
   const [showAddPromoModal, setShowAddPromoModal] = useState(false);
@@ -171,14 +190,13 @@ const Admin: React.FC = () => {
     name: '',
     discount_type: 'PERCENT' as 'PERCENT' | 'AMOUNT',
     discount_value: '',
-    start_date: '', // Sẽ dùng YYYY-MM-DD
-    end_date: '', // Sẽ dùng YYYY-MM-DD
+    start_date: '', 
+    end_date: '', 
     minimum_pay: '',
     max_discount_amount: '',
     is_active: true,
   });
   const [selectedPromo, setSelectedPromo] = useState<AdminPromotion | null>(null);
-  // *** END: Thêm state cho Khuyến mãi ***
   
   const navigate = useNavigate();
 
@@ -193,7 +211,7 @@ const Admin: React.FC = () => {
   }, []);
 
   useEffect(() => {
-    // backup persist (nếu có trường hợp setActiveSection mà không gọi changeSection)
+    // backup persist 
     try { localStorage.setItem('admin_active_section', activeSection); } catch { }
 
     switch (activeSection) {
@@ -202,6 +220,10 @@ const Admin: React.FC = () => {
         break;
       case 'customers':
         loadCustomers(1, '');
+        break;
+      // *** NEW CASE: Shippers ***
+      case 'shippers':
+        loadShipperApplications(1);
         break;
       case 'foods':
         loadCategories();
@@ -214,24 +236,18 @@ const Admin: React.FC = () => {
         loadOrders(1);
         break;
       case 'stores':
-        // Khi chuyển sang tab Cửa hàng, luôn mặc định tải danh sách cửa hàng
-        // Việc tải applications sẽ do người dùng nhấn nút
         setStoreViewMode('list'); 
         loadStores();
         break;
-      // *** START: Thêm case cho Khuyến mãi ***
       case 'promotions':
         loadPromotions();
         break;
-      // *** END: Thêm case cho Khuyến mãi ***
       case 'revenueReport':
-        // Tải danh sách cửa hàng nếu chưa có để dùng cho bộ lọc
         if (stores.length === 0) {
           loadStores();
         }
         break;
       case 'popularFoodsReport':
-        // Không cần tải gì trước khi người dùng nhấn nút
         break;
       default:
         loadDashboard();
@@ -255,14 +271,12 @@ const Admin: React.FC = () => {
 
   const changeSection = (section: string) => {
     setActiveSection(section);
-    setOpenDropdown(null); // Tự động đóng dropdown khi chọn
+    setOpenDropdown(null); 
   };
 
   const loadDashboard = async () => {
     try {
       setLoading(true);
-
-      // Load basic stats (simplified)
       const [customersRes, foodsRes, ordersRes, storesRes] = await Promise.all([
         API.get('/auth/admin/customers/?page=1').catch(() => ({ customers: [], total_customers: 0 })),
         API.get('/menu/admin/foods/?page=1').catch(() => ({ foods: [], total_foods: 0 })),
@@ -288,7 +302,7 @@ const Admin: React.FC = () => {
     try {
       setLoading(true);
       const res = await API.get('/stores/');
-      setStores(res.results || []); // vì chắc chắn backend trả { results: [...] }
+      setStores(res.results || []); 
     } catch (error) {
       console.error('Error loading stores:', error);
       alert('Không thể tải danh sách cửa hàng');
@@ -380,7 +394,7 @@ const Admin: React.FC = () => {
     try {
       await API.post(`/auth/store/applications/${userId}/approve/`);
       alert('Duyệt đăng ký thành công!');
-      loadStoreApplications(applicationsPage, applicationsSearch); // Refresh applications list
+      loadStoreApplications(applicationsPage, applicationsSearch); 
     } catch (error) {
       console.error('Error approving application:', error);
       alert(`Không thể duyệt đăng ký: ${error}`);
@@ -392,7 +406,7 @@ const Admin: React.FC = () => {
     try {
       await API.post(`/auth/store/applications/${userId}/reject/`);
       alert('Từ chối đăng ký thành công!');
-      loadStoreApplications(applicationsPage, applicationsSearch); // Refresh applications list
+      loadStoreApplications(applicationsPage, applicationsSearch); 
     } catch (error) {
       console.error('Error rejecting application:', error);
       alert(`Không thể từ chối đăng ký: ${error}`);
@@ -402,9 +416,8 @@ const Admin: React.FC = () => {
   // Helper to switch view
   const showStoreApplications = () => {
     setStoreViewMode('applications');
-    loadStoreApplications(1, ''); // Load data when switching
+    loadStoreApplications(1, ''); 
   };
-
 
   // ==== Hàm load customers (có phân trang & tìm kiếm) ====
   const loadCustomers = async (page = 1, searchQuery = '') => {
@@ -454,11 +467,54 @@ const Admin: React.FC = () => {
       alert('Không thể cập nhật thông tin khách hàng');
     }
   };
+
+  // --- CÁC HÀM QUẢN LÝ SHIPPER (MỚI) ---
+  const loadShipperApplications = async (page = 1) => {
+    setShipperLoading(true);
+    try {
+      const res = await API.get(`/auth/shipper/applications/?page=${page}`); //
+      setShipperApps(res.applications || []);
+      setTotalShipperPages(res.total_pages || 1);
+      setShipperPage(res.current_page || 1);
+      setTotalShipperApps(res.total_applications || 0);
+    } catch (error) {
+      console.error('Error loading shipper apps:', error);
+      alert('Không thể tải danh sách đăng ký shipper.');
+    } finally {
+      setShipperLoading(false);
+    }
+  };
+
+  const handleApproveShipper = async (userId: number) => {
+    if (!window.confirm('Bạn có chắc muốn duyệt đăng ký Shipper này?')) return;
+    try {
+      await API.post(`/auth/shipper/applications/${userId}/approve/`); //
+      alert('Đã duyệt đăng ký shipper thành công!');
+      loadShipperApplications(shipperPage);
+    } catch (error) {
+      console.error(error);
+      alert('Lỗi khi duyệt đăng ký shipper.');
+    }
+  };
+
+  const handleRejectShipper = async (userId: number) => {
+    if (!window.confirm('Bạn có chắc muốn từ chối đăng ký này?')) return;
+    try {
+      await API.post(`/auth/shipper/applications/${userId}/reject/`); //
+      alert('Đã từ chối đăng ký shipper.');
+      loadShipperApplications(shipperPage);
+    } catch (error) {
+      console.error(error);
+      alert('Lỗi khi từ chối đăng ký shipper.');
+    }
+  };
+
+
   // ==== Load categories cho filter & thêm món ăn ====
   const loadCategories = async () => {
     try {
       const res = await API.get('/menu/categories/');
-      setCategories(res.results || []); // backend trả {results: [...]}
+      setCategories(res.results || []); 
     } catch (error) {
       console.error('Error loading categories:', error);
       setCategories([]);
@@ -498,7 +554,7 @@ const Admin: React.FC = () => {
         store_id: '',
         availability: 'Còn hàng',
       });
-      loadFoods(); // reload lại danh sách
+      loadFoods(); 
     } catch (error) {
       console.error('Error adding food:', error);
       alert('Không thể thêm món ăn');
@@ -547,6 +603,85 @@ const Admin: React.FC = () => {
     }
   };
 
+  // === CÁC HÀM MỚI QUẢN LÝ SIZE CHO ADMIN ===
+
+  const openManageSizesModal = async (food: Food) => {
+    setSelectedFood(food);
+    await loadFoodSizes(food.id);
+    // Reset edit state
+    setEditingSizeId(null);
+    setEditingSizeData({ size_name: '', price: '' });
+    setNewSize({ size_name: '', price: '' });
+    setShowManageSizesModal(true);
+  };
+
+  const loadFoodSizes = async (foodId: number) => {
+    try {
+      const res = await API.get(`/menu/admin/foods/${foodId}/sizes/`);
+      setFoodSizes(res);
+    } catch (error) {
+      console.error('Error loading food sizes:', error);
+      setFoodSizes([]);
+    }
+  };
+
+  const handleAddSize = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedFood || !newSize.size_name || !newSize.price) {
+      alert('Vui lòng nhập tên và giá cho size.');
+      return;
+    }
+    try {
+      await API.post(`/menu/admin/foods/${selectedFood.id}/sizes/`, newSize);
+      setNewSize({ size_name: '', price: '' });
+      loadFoodSizes(selectedFood.id);
+    } catch (error) {
+      alert(`Lỗi khi thêm size: ${error}`);
+      console.error(error);
+    }
+  };
+
+  const startEditingSize = (size: FoodSize) => {
+    setEditingSizeId(size.id);
+    setEditingSizeData({ 
+      size_name: size.size_name, 
+      price: size.price.toString() 
+    });
+  };
+
+  const cancelEditingSize = () => {
+    setEditingSizeId(null);
+    setEditingSizeData({ size_name: '', price: '' });
+  };
+
+  const handleUpdateSize = async (sizeId: number) => {
+    if (!selectedFood || !editingSizeData.size_name || !editingSizeData.price) {
+      alert('Vui lòng nhập tên và giá.');
+      return;
+    }
+    try {
+      await API.put(`/menu/admin/foods/${selectedFood.id}/sizes/${sizeId}/`, editingSizeData);
+      alert('Cập nhật size thành công!');
+      setEditingSizeId(null);
+      loadFoodSizes(selectedFood.id);
+    } catch (error: any) {
+      console.error('Error updating size:', error);
+      const message = error.message || 'Không thể cập nhật size.';
+      alert(`Lỗi: ${message}`);
+    }
+  };
+
+  const deleteSize = async (sizeId: number) => {
+    if (!selectedFood || !window.confirm('Bạn có chắc muốn xóa size này?')) return;
+    try {
+      await API.delete(`/menu/admin/foods/${selectedFood.id}/sizes/${sizeId}/`);
+      loadFoodSizes(selectedFood.id);
+    } catch (error) {
+      alert('Không thể xóa size');
+      console.error(error);
+    }
+  };
+
 
   const loadOrders = async (page = 1) => {
     try {
@@ -581,19 +716,17 @@ const Admin: React.FC = () => {
 
   const updateOrderStatus = async (orderId: number, newStatus: string) => {
     try {
-      // Sửa từ .put thành .patch và thêm /status/ vào cuối URL
       await API.patch(`/orders/admin/${orderId}/status/`, {
         order_status: newStatus
       });
 
       alert('Cập nhật trạng thái đơn hàng thành công');
       
-      // Tùy chọn: Cập nhật lại list ngay sau khi thành công
       if (selectedOrder) {
           setSelectedOrder({ ...selectedOrder, order_status: newStatus });
       }
-      loadOrders(orderPage); // Tải lại danh sách đơn hàng
-      setShowOrderModal(false); // Đóng modal
+      loadOrders(orderPage); 
+      setShowOrderModal(false); 
 
     } catch (error) {
       console.error('Error updating order status:', error);
@@ -605,7 +738,6 @@ const Admin: React.FC = () => {
   const loadPromotions = async () => {
     setPromoLoading(true);
     try {
-      // API doc: GET /api/promotions/admin/
       const res = await API.get<AdminPromotion[]>('/promotions/admin/');
       setPromotions(res || []);
     } catch (error) {
@@ -629,15 +761,14 @@ const Admin: React.FC = () => {
   const handleAddPromo = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      // API doc: POST /api/promotions/admin/create/
       await API.post('/promotions/admin/create/', {
         ...newPromo,
-        minimum_pay: newPromo.minimum_pay || null, // Chuyển chuỗi rỗng thành null
-        max_discount_amount: newPromo.max_discount_amount || null, // Chuyển chuỗi rỗng thành null
+        minimum_pay: newPromo.minimum_pay || null, 
+        max_discount_amount: newPromo.max_discount_amount || null, 
       });
       alert('Thêm khuyến mãi thành công');
       setShowAddPromoModal(false);
-      setNewPromo({ // Reset form
+      setNewPromo({ 
         name: '',
         discount_type: 'PERCENT',
         discount_value: '',
@@ -647,30 +778,31 @@ const Admin: React.FC = () => {
         max_discount_amount: '',
         is_active: true,
       });
-      loadPromotions(); // Tải lại danh sách
+      loadPromotions(); 
     } catch (error) {
       console.error('Error adding promotion:', error);
       alert(`Lỗi khi thêm khuyến mãi: ${error}`);
     }
   };
 
+  // --- FIX LOGIC NGÀY THÁNG TẠI ĐÂY ---
   const openEditPromoModal = (promo: AdminPromotion) => {
-    // API trả về kiểu "2025-11-01T00:00:00Z"
-    // Input type="date" cần "YYYY-MM-DD"
     const formatForDateInput = (dateStr: string) => {
       if (!dateStr) return '';
-      return dateStr.split('T')[0];
+      // Lấy chính xác 10 ký tự đầu (YYYY-MM-DD) để tránh lỗi time/timezone
+      return dateStr.substring(0, 10);
     };
 
     setSelectedPromo({
       ...promo,
       start_date: formatForDateInput(promo.start_date),
       end_date: formatForDateInput(promo.end_date),
-      minimum_pay: promo.minimum_pay || '', // Chuyển null thành chuỗi rỗng
-      max_discount_amount: promo.max_discount_amount || '', // Chuyển null thành chuỗi rỗng
+      minimum_pay: promo.minimum_pay || '', 
+      max_discount_amount: promo.max_discount_amount || '', 
     });
     setShowEditPromoModal(true);
   };
+  // --- KẾT THÚC FIX ---
 
   const handleEditPromoChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     if (!selectedPromo) return;
@@ -688,21 +820,20 @@ const Admin: React.FC = () => {
     if (!selectedPromo) return;
 
     try {
-      // API doc: PUT/PATCH /api/promotions/admin/{promo_id}/update/
       await API.put(`/promotions/admin/${selectedPromo.id}/update/`, {
         name: selectedPromo.name,
         discount_type: selectedPromo.discount_type,
         discount_value: selectedPromo.discount_value,
-        start_date: selectedPromo.start_date, // Đã là YYYY-MM-DD
-        end_date: selectedPromo.end_date, // Đã là YYYY-MM-DD
-        minimum_pay: selectedPromo.minimum_pay || null, // Chuyển chuỗi rỗng thành null
-        max_discount_amount: selectedPromo.max_discount_amount || null, // Chuyển chuỗi rỗng thành null
+        start_date: selectedPromo.start_date, 
+        end_date: selectedPromo.end_date, 
+        minimum_pay: selectedPromo.minimum_pay || null, 
+        max_discount_amount: selectedPromo.max_discount_amount || null, 
         is_active: selectedPromo.is_active,
       });
       alert('Cập nhật khuyến mãi thành công');
       setShowEditPromoModal(false);
       setSelectedPromo(null);
-      loadPromotions(); // Tải lại danh sách
+      loadPromotions(); 
     } catch (error) {
       console.error('Error updating promotion:', error);
       alert(`Lỗi khi cập nhật: ${error}`);
@@ -712,10 +843,9 @@ const Admin: React.FC = () => {
   const deletePromo = async (promoId: number) => {
     if (!window.confirm('Bạn có chắc muốn xóa khuyến mãi này?')) return;
     try {
-      // API doc: DELETE /api/promotions/admin/{promo_id}/delete/
       await API.delete(`/promotions/admin/${promoId}/delete/`);
       alert('Xóa khuyến mãi thành công');
-      loadPromotions(); // Tải lại danh sách
+      loadPromotions(); 
     } catch (error) {
       console.error('Error deleting promotion:', error);
       alert(`Lỗi khi xóa: ${error}`);
@@ -788,7 +918,7 @@ const Admin: React.FC = () => {
       'Chờ xác nhận': 'bg-yellow-100 text-yellow-800',
       'Đã xác nhận': 'bg-green-100 text-green-800',
       'Đang chuẩn bị': 'bg-blue-100 text-blue-800',
-      'Đang giao': 'bg-teal-100 text-teal-800', // <-- đổi sang teal
+      'Đang giao': 'bg-teal-100 text-teal-800', 
       'Đã giao': 'bg-cyan-100 text-cyan-800',
       'Đã huỷ': 'bg-red-100 text-red-800'
     };
@@ -797,14 +927,12 @@ const Admin: React.FC = () => {
   
 
   const formatCurrency = (amount: number | string) => {
-    // Chuyển đổi amount thành number trước khi format
     return new Intl.NumberFormat('vi-VN', {
       style: 'currency',
       currency: 'VND'
     }).format(Number(amount));
   };
   
-  // Helper format ngày cho bảng khuyến mãi
   const formatPromoDate = (dateString: string) => {
     if (!dateString) return 'N/A';
     return new Date(dateString).toLocaleDateString('vi-VN');
@@ -828,10 +956,8 @@ const Admin: React.FC = () => {
     );
   }
 
-  // Helper consts để kiểm tra active section cho dropdown
-  // *** START: Cập nhật isManagementActive ***
-  const isManagementActive = ['stores', 'customers', 'foods', 'orders', 'promotions'].includes(activeSection);
-  // *** END: Cập nhật isManagementActive ***
+  // Helper check active section
+  const isManagementActive = ['stores', 'customers', 'foods', 'orders', 'promotions', 'shippers'].includes(activeSection);
   const isReportsActive = ['revenueReport', 'popularFoodsReport'].includes(activeSection);
 
   return (
@@ -843,7 +969,6 @@ const Admin: React.FC = () => {
             <div>
               <h1 className="text-2xl font-bold text-gray-900">🍔 Admin Panel</h1>
             </div>
-            
             
             <nav className="flex space-x-4">
               {/* Dashboard */}
@@ -894,14 +1019,20 @@ const Admin: React.FC = () => {
                     >
                       Đơn hàng
                     </button>
-                    {/* *** START: Thêm nút Khuyến mãi *** */}
                     <button
                       className="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
                       onClick={() => changeSection('promotions')}
                     >
                       Khuyến mãi
                     </button>
-                    {/* *** END: Thêm nút Khuyến mãi *** */}
+                    {/* *** START: Thêm nút Shipper vào dropdown *** */}
+                    <button
+                      className="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
+                      onClick={() => changeSection('shippers')}
+                    >
+                      Shipper
+                    </button>
+                    {/* *** END: Thêm nút Shipper vào dropdown *** */}
                   </div>
                 )}
               </div>
@@ -951,7 +1082,6 @@ const Admin: React.FC = () => {
                 Đăng xuất
               </button>
             </nav>
-            {/* *** KẾT THÚC THAY ĐỔI 3 *** */}
 
           </div>
         </div>
@@ -1063,7 +1193,7 @@ const Admin: React.FC = () => {
                             <td className="px-4 py-4">{store.description}</td>
                             <td className="px-4 py-4">{store.manager}</td>
                             <td className="px-4 py-4">
-                              <Button size="sm" onClick={() => viewStoreDetail(store.id)}>✏️ Sửa</Button>
+                              <Button size="sm" variant="outline" onClick={() => viewStoreDetail(store.id)}>✏️ Sửa</Button>
                             </td>
                             <td className="px-4 py-4">
                               <Button size="sm" variant="destructive" onClick={() => deleteStore(store.id)}>🗑️ Xóa</Button>
@@ -1160,7 +1290,74 @@ const Admin: React.FC = () => {
         </div>
       )}
 
+      {/* *** SECTION SHIPPER (MỚI) *** */}
+      {activeSection === 'shippers' && (
+        <div>
+          <div className="flex justify-between items-center mb-6">
+            <h2 className="text-xl font-semibold">Quản lý đăng ký Shipper</h2>
+          </div>
 
+          <Card>
+            <CardContent className="p-0">
+              <div className="overflow-x-auto">
+                <table className="w-full">
+                  <thead className="bg-gray-50">
+                    <tr>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">ID</th>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Tên đăng nhập</th>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Họ tên</th>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Trạng thái</th>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Hành động</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-200">
+                    {shipperApps.length === 0 ? (
+                      <tr>
+                        <td colSpan={5} className="px-4 py-8 text-center text-gray-500">
+                          {shipperLoading ? 'Đang tải...' : 'Không có đơn đăng ký nào'}
+                        </td>
+                      </tr>
+                    ) : (
+                      shipperApps.map((app) => (
+                        <tr key={app.id}>
+                          <td className="px-4 py-4 text-sm">{app.id}</td>
+                          <td className="px-4 py-4 text-sm">{app.username}</td>
+                          <td className="px-4 py-4 text-sm font-medium">{app.fullname}</td>
+                          <td className="px-4 py-4 text-sm">
+                            {app.is_shipper_registered ? (
+                              <span className="text-yellow-600 font-semibold">Đang chờ duyệt</span>
+                            ) : (
+                              <span className="text-gray-500">Chưa đăng ký</span>
+                            )}
+                          </td>
+                          <td className="px-4 py-4 flex gap-2">
+                            <Button size="sm" className="bg-green-600 hover:bg-green-700 text-white" onClick={() => handleApproveShipper(app.id)}>
+                              ✅ Duyệt
+                            </Button>
+                            <Button size="sm" variant="destructive" onClick={() => handleRejectShipper(app.id)}>
+                              ❌ Từ chối
+                            </Button>
+                          </td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Pagination for shippers */}
+          <div className="flex justify-between items-center mt-4">
+            <p className="text-sm text-gray-600">Tổng: {totalShipperApps} đơn</p>
+            <div>
+              <Button disabled={shipperPage === 1} onClick={() => loadShipperApplications(shipperPage - 1)}>Trang trước</Button>
+              <span className="mx-2">Trang {shipperPage}/{totalShipperPages}</span>
+              <Button disabled={shipperPage === totalShipperPages} onClick={() => loadShipperApplications(shipperPage + 1)}>Trang sau</Button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Customers Section */}
       {activeSection === 'customers' && (
@@ -1304,6 +1501,7 @@ const Admin: React.FC = () => {
                       <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Trạng thái</th>
                       <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Đánh giá TB</th>
                       <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Lượt đánh giá</th>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Sizes</th>
                       <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Sửa</th>
                       <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Xóa</th>
                     </tr>
@@ -1355,7 +1553,12 @@ const Admin: React.FC = () => {
                           <td className="px-4 py-4 text-sm text-gray-900">{food.average_rating ?? 'N/A'}</td>
                           <td className="px-4 py-4 text-sm text-gray-900">{food.rating_count ?? 0}</td>
                           <td className="px-4 py-4">
-                            <Button size="sm" onClick={() => viewFoodDetail(food.id)}>✏️ Sửa</Button>
+                            <Button size="sm" onClick={() => openManageSizesModal(food)}>
+                              Sizes
+                            </Button>
+                          </td>
+                          <td className="px-4 py-4">
+                            <Button size="sm" variant="outline"  onClick={() => viewFoodDetail(food.id)}>✏️ Sửa</Button>
                           </td>
                           <td className="px-4 py-4">
                             <Button size="sm" variant="destructive" onClick={() => deleteFood(food.id)}>🗑️ Xóa</Button>
@@ -1521,6 +1724,104 @@ const Admin: React.FC = () => {
           </div>
         </div>
       )}
+      {/* --- MODAL QUẢN LÝ SIZE (MỚI) --- */}
+      {showManageSizesModal && selectedFood && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg w-full max-w-md p-6">
+            <h2 className="text-xl font-bold mb-4">Quản lý Sizes - {selectedFood.title}</h2>
+            
+            {/* Form thêm mới */}
+            <form onSubmit={handleAddSize} className="flex gap-2 mb-4 border-b pb-4">
+              <div className="flex-1">
+                <label className="text-xs text-gray-500">Tên size mới</label>
+                <input 
+                  required 
+                  value={newSize.size_name} 
+                  onChange={e => setNewSize({ ...newSize, size_name: e.target.value })} 
+                  placeholder="VD: Lớn" 
+                  className="w-full p-2 border rounded text-sm" 
+                />
+              </div>
+              <div className="w-24">
+                <label className="text-xs text-gray-500">Giá thêm</label>
+                <input 
+                  required 
+                  type="number" 
+                  value={newSize.price} 
+                  onChange={e => setNewSize({ ...newSize, price: e.target.value })} 
+                  placeholder="0" 
+                  className="w-full p-2 border rounded text-sm" 
+                />
+              </div>
+              <div className="flex items-end">
+                <Button type="submit" size="sm">Thêm</Button>
+              </div>
+            </form>
+
+            {/* Danh sách Sizes (Hỗ trợ View / Edit / Delete) */}
+            <div className="max-h-60 overflow-y-auto space-y-2">
+              {foodSizes.length > 0 ? foodSizes.map(size => (
+                <div key={size.id} className="flex justify-between items-center p-2 bg-gray-50 rounded border">
+                  
+                  {editingSizeId === size.id ? (
+                    // Chế độ Sửa
+                    <div className="flex gap-2 w-full items-center">
+                      <input 
+                        className="flex-1 p-1 border rounded text-sm"
+                        value={editingSizeData.size_name}
+                        onChange={(e) => setEditingSizeData({...editingSizeData, size_name: e.target.value})}
+                        placeholder="Tên size"
+                      />
+                      <input 
+                        className="w-20 p-1 border rounded text-sm"
+                        type="number"
+                        value={editingSizeData.price}
+                        onChange={(e) => setEditingSizeData({...editingSizeData, price: e.target.value})}
+                        placeholder="Giá"
+                      />
+                      <Button size="sm" variant="default" onClick={() => handleUpdateSize(size.id)}>Lưu</Button>
+                      <Button size="sm" variant="ghost" onClick={cancelEditingSize}>Hủy</Button>
+                    </div>
+                  ) : (
+                    // Chế độ Xem
+                    <>
+                      <span className="text-sm font-medium">
+                        {size.size_name} <span className="text-gray-500">(+{formatCurrency(size.price)})</span>
+                      </span>
+                      <div className="flex gap-1">
+                        <Button 
+                          variant="outline" 
+                          size="sm" 
+                          className="h-7 px-2 text-xs"
+                          onClick={() => startEditingSize(size)}
+                        >
+                          Sửa
+                        </Button>
+                        <Button 
+                          variant="destructive" 
+                          size="sm" 
+                          className="h-7 px-2 text-xs"
+                          onClick={() => deleteSize(size.id)}
+                        >
+                          Xóa
+                        </Button>
+                      </div>
+                    </>
+                  )}
+                </div>
+              )) : (
+                <p className="text-gray-500 text-sm text-center py-4">Chưa có size nào.</p>
+              )}
+            </div>
+
+            <div className="flex justify-end pt-4 border-t mt-4">
+              <Button variant="outline" onClick={() => setShowManageSizesModal(false)}>Đóng</Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+
 
       {/* Orders Section */}
       {activeSection === 'orders' && (
