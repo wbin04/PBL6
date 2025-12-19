@@ -121,31 +121,16 @@ const Home: React.FC = () => {
     try {
       setLoading(true);
 
-      // Fetch all stores (backend returns all without pagination)
-      const url = `http://127.0.0.1:8000/api/stores/`;
+      // Fetch all stores using PUBLIC endpoint (so all users see all stores)
+      const url = `http://127.0.0.1:8000/api/stores/public/`;
       console.log("🔄 Fetching stores from:", url);
 
       let storesResponse = await fetch(url, {
         method: "GET",
-        headers: getAuthHeaders(),
+        headers: { "Content-Type": "application/json" },
       });
 
       console.log("📡 Response status:", storesResponse.status);
-
-      if (storesResponse.status === 401) {
-        console.log("🔑 Token expired, refreshing...");
-        const newAccess = await refreshAccessToken();
-        if (newAccess) {
-          storesResponse = await fetch(url, {
-            method: "GET",
-            headers: {
-              Authorization: `Bearer ${newAccess}`,
-              "Content-Type": "application/json",
-            },
-          });
-          console.log("📡 Retry response status:", storesResponse.status);
-        }
-      }
 
       if (!storesResponse.ok) {
         throw new Error(`HTTP error! status: ${storesResponse.status}`);
@@ -164,30 +149,15 @@ const Home: React.FC = () => {
         storesData: storesData,
       });
 
-      // fetch foods for each store (keep only 3 foods per store)
+      // fetch foods for each store using PUBLIC menu API (keep only 3 foods per store)
       const storesWithFoods: Store[] = await Promise.all(
         storesData.map(async (store) => {
           try {
-            let foodsResponse = await fetch(
-              `http://127.0.0.1:8000/api/stores/${store.id}/foods/`,
-              { method: "GET", headers: getAuthHeaders() }
+            // Use public menu API with store filter instead of authenticated stores API
+            const foodsResponse = await fetch(
+              `http://127.0.0.1:8000/api/menu/items/?store=${store.id}&page_size=3`,
+              { method: "GET", headers: { "Content-Type": "application/json" } }
             );
-
-            if (foodsResponse.status === 401) {
-              const newAccess = await refreshAccessToken();
-              if (newAccess) {
-                foodsResponse = await fetch(
-                  `http://127.0.0.1:8000/api/stores/${store.id}/foods/`,
-                  {
-                    method: "GET",
-                    headers: {
-                      Authorization: `Bearer ${newAccess}`,
-                      "Content-Type": "application/json",
-                    },
-                  }
-                );
-              }
-            }
 
             if (!foodsResponse.ok) {
               throw new Error(
