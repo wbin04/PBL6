@@ -69,36 +69,65 @@ def order_list_create(request):
         try:
             # Get cart
             cart = Cart.objects.get(user=request.user)
-            # Retrieve cart items via raw SQL to get food_option_id
+
+            # Retrieve cart items via raw SQL to get item id and food_option_id
             with connection.cursor() as cursor:
                 cursor.execute(
-                    "SELECT i.food_id, i.quantity, i.item_note, f.store_id, i.food_option_id FROM item i JOIN food f ON i.food_id = f.id WHERE i.cart_id = %s", 
+                    "SELECT i.id, i.food_id, i.quantity, i.item_note, f.store_id, i.food_option_id FROM item i JOIN food f ON i.food_id = f.id WHERE i.cart_id = %s",
                     [cart.id]
                 )
                 cart_rows = cursor.fetchall()
+
+            # Optional: filter cart items by selected_item_ids from frontend (for partial checkout)
+            raw_selected_ids = request.data.get('selected_item_ids') or request.data.get('selected_items') or []
+            selected_item_ids = set()
+            if raw_selected_ids:
+                if not isinstance(raw_selected_ids, (list, tuple, set)):
+                    raw_selected_ids = [raw_selected_ids]
+                for raw_id in raw_selected_ids:
+                    try:
+                        selected_item_ids.add(int(raw_id))
+                    except (TypeError, ValueError):
+                        continue
+
+                if selected_item_ids:
+                    cart_rows = [row for row in cart_rows if row[0] in selected_item_ids]
+
+            if selected_item_ids and not cart_rows:
+                return Response({'error': 'Selected items not found in cart'}, status=status.HTTP_400_BAD_REQUEST)
             if not cart_rows:
                 return Response({'error': 'Cart is empty'}, status=status.HTTP_400_BAD_REQUEST)
             
             # Group cart items by store
             items_by_store = {}
-            for food_id, quantity, item_note, store_id, food_option_id in cart_rows:
+            for item_id, food_id, quantity, item_note, store_id, food_option_id in cart_rows:
                 if store_id not in items_by_store:
                     items_by_store[store_id] = []
-                items_by_store[store_id].append((food_id, quantity, item_note, food_option_id))
+                items_by_store[store_id].append((item_id, food_id, quantity, item_note, food_option_id))
 
             store_ids = [store_id for store_id in items_by_store.keys() if store_id is not None]
             stores_cache = {store.id: store for store in Store.objects.filter(id__in=store_ids)}
             
             # Get food prices for calculating totals
-            food_ids = [food_id for food_id, _, _, _, _ in cart_rows]
+            food_ids = [food_id for _, food_id, _, _, _, _ in cart_rows]
             foods = {f.id: f for f in Food.objects.filter(id__in=food_ids)}
             
             # Get food options for price calculations
-            food_option_ids = [food_option_id for _, _, _, _, food_option_id in cart_rows if food_option_id]
+            food_option_ids = [food_option_id for _, _, _, _, _, food_option_id in cart_rows if food_option_id]
             food_options = {}
             if food_option_ids:
                 from apps.menu.models import FoodSize
                 food_options = {fs.id: fs for fs in FoodSize.objects.filter(id__in=food_option_ids)}
+
+            # Calculate selected cart total (only chosen items)
+            selected_cart_total = Decimal('0')
+            for _, food_id, quantity, _, _, food_option_id in cart_rows:
+                food = foods.get(food_id)
+                if food:
+                    item_price = food.price
+                    if food_option_id and food_option_id in food_options:
+                        item_price += food_options[food_option_id].price
+                    selected_cart_total += item_price * Decimal(str(quantity))
             
             # Determine drop-off coordinates (prefer request payload, fallback to profile)
             customer_latitude = normalize_coordinate(request.data.get('ship_latitude'))
@@ -123,6 +152,7 @@ def order_list_create(request):
             # Apply promo if provided
             promo_discount = Decimal('0')
             applied_promos = []
+            multi_promo_support = False
             
             # Debug: Print received promo data
             print(f"Received promo data: promo_ids={request.data.get('promo_ids')}, discount_amount={request.data.get('discount_amount')}")
@@ -162,13 +192,13 @@ def order_list_create(request):
                         from django.utils import timezone
                         now = timezone.now()
                         promo = Promo.objects.get(
-                            id=promo_id, 
+                            id=promo_id,
                             start_date__lte=now,
                             end_date__gte=now
                         )
-                        if cart.total_money >= promo.minimum_pay:
+                        if selected_cart_total >= promo.minimum_pay:
                             # Sử dụng method calculate_discount từ model
-                            promo_discount = promo.calculate_discount(cart.total_money)
+                            promo_discount = promo.calculate_discount(selected_cart_total)
                             base_order_data['promo'] = promo.id
                             applied_promos = [promo_id]
                             print(f"Applied single promo: {promo_id}, discount: {promo_discount}")
@@ -184,7 +214,7 @@ def order_list_create(request):
             store_subtotals = {}
             for store_id, store_items in items_by_store.items():
                 store_subtotal = Decimal('0')
-                for food_id, quantity, item_note, food_option_id in store_items:
+                for _, food_id, quantity, item_note, food_option_id in store_items:
                     food = foods.get(food_id)
                     if food:
                         # Calculate item total: food_price + food_option_price (if any)
@@ -329,7 +359,7 @@ def order_list_create(request):
                     
                     # Insert order details for this store
                     with connection.cursor() as cursor:
-                        for food_id, quantity, item_note, food_option_id in store_items:
+                        for _, food_id, quantity, item_note, food_option_id in store_items:
                             food = foods.get(food_id)
                             if food:
                                 # Get food_option price if exists
@@ -347,9 +377,17 @@ def order_list_create(request):
                 else:
                     return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
             
-            # Clear cart items via raw SQL and update total
+            # Clear only the items that were actually ordered; if none specified, clear all
             with connection.cursor() as cursor:
-                cursor.execute("DELETE FROM item WHERE cart_id = %s", [cart.id])
+                if selected_item_ids:
+                    placeholders = ','.join(['%s'] * len(selected_item_ids))
+                    params = [cart.id, *selected_item_ids]
+                    cursor.execute(
+                        f"DELETE FROM item WHERE cart_id = %s AND id IN ({placeholders})",
+                        params
+                    )
+                else:
+                    cursor.execute("DELETE FROM item WHERE cart_id = %s", [cart.id])
             cart.update_total()
             
             # Return all created orders

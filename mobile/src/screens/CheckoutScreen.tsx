@@ -912,6 +912,14 @@ export default function CheckoutScreen() {
         shipping_fee: getTotalDeliveryFee()
       };
 
+      // Only send the subset of cart items chosen in Cart screen
+      const selectedItemIdsPayload = (selectedIds && selectedIds.length > 0)
+        ? selectedIds
+        : selectedItems.map(item => item.id);
+      if (selectedItemIdsPayload.length > 0) {
+        orderData.selected_item_ids = selectedItemIdsPayload;
+      }
+
       // Add promo data if promos are applied
       if (appliedPromos && appliedPromos.length > 0) {
         orderData.promo_ids = appliedPromos.map(ap => ap.promo.id);
@@ -1044,6 +1052,13 @@ export default function CheckoutScreen() {
               total_money: getFinalTotal(),
               shipping_fee: getTotalDeliveryFee()
             };
+
+            const selectedItemIdsPayload = (selectedIds && selectedIds.length > 0)
+              ? selectedIds
+              : selectedItems.map(item => item.id);
+            if (selectedItemIdsPayload.length > 0) {
+              orderData.selected_item_ids = selectedItemIdsPayload;
+            }
 
             // Add promo data if promos are applied
             if (appliedPromos && appliedPromos.length > 0) {
