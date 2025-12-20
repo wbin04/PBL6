@@ -412,6 +412,11 @@ export const authApi = {
   rejectShipperApplication: async (userId: number) => {
     return apiClient.post(`/auth/shipper/applications/${userId}/reject/`);
   },
+
+  // Admin toggle user status (used for customers, store managers, shippers)
+  toggleCustomerStatus: async (userId: number) => {
+    return apiClient.post(`/auth/admin/customers/${userId}/toggle-status/`);
+  },
   
   // Store application management (admin only)
   getStoreApplications: async (params?: { page?: number; search?: string }) => {

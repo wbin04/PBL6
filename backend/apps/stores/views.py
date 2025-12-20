@@ -15,7 +15,7 @@ from apps.orders.serializers import OrderSerializer
 @permission_classes([AllowAny])
 def store_list_public(request):
     """Public endpoint to get all stores (excluding system-wide store)"""
-    stores = Store.objects.exclude(id=0)  # Exclude system-wide store
+    stores = Store.objects.exclude(id=0).select_related('manager')  # Exclude system-wide store
     serializer = StoreSerializer(stores, many=True, context={'request': request})
     return Response(serializer.data)
 

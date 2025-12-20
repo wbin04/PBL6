@@ -23,6 +23,8 @@ type Store = {
   foods?: any[];
   foodCount?: number;
   totalReviews?: number;
+  manager_id?: number; // backend may expose the manager user id
+  is_active?: boolean; // manager account status
 };
 
 interface StoreApplication {
@@ -58,6 +60,7 @@ const StoreListScreen = ({ onMenuPress }: StoreListScreenProps = {}) => {
   const [loading, setLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [searchText, setSearchText] = useState('');
+  const [togglingStoreId, setTogglingStoreId] = useState<number | null>(null);
 
   // Try to use admin context if available
   let adminContext: ReturnType<typeof useAdmin> | undefined;
@@ -166,6 +169,19 @@ const StoreListScreen = ({ onMenuPress }: StoreListScreenProps = {}) => {
           // Fetch statistics for this store
           const stats = await fetchStoreStatistics(store.id);
           
+          const managerActive =
+            store.manager_is_active !== undefined
+              ? store.manager_is_active
+              : (store.manager?.is_active ?? store.is_active ?? true);
+
+          const managerId =
+            store.manager_id ??
+            store.managerId ??
+            store.manager_user_id ??
+            store.managerUserId ??
+            store.manager_userId ??
+            store.manager?.id;
+
           return {
             ...store,
             name: store.store_name, // Map store_name to name for UI compatibility
@@ -174,6 +190,8 @@ const StoreListScreen = ({ onMenuPress }: StoreListScreenProps = {}) => {
             foods: [], // Empty foods array, will be loaded separately if needed
             foodCount: stats.foodCount, // Use fetched food count
             totalReviews: stats.totalReviews, // Use fetched total reviews
+            is_active: managerActive,
+            manager_id: managerId,
           };
         });
         
@@ -329,6 +347,57 @@ const StoreListScreen = ({ onMenuPress }: StoreListScreenProps = {}) => {
     );
   };
 
+  const handleToggleStoreStatus = async (store: Store) => {
+    // try to resolve the manager's user id from multiple possible keys
+    const managerId =
+      (store as any).manager_id ||
+      (store as any).managerId ||
+      (store as any).manager_user_id ||
+      (store as any).managerUserId ||
+      (store as any).manager_userId;
+
+    if (!managerId) {
+      Alert.alert('Lỗi', 'Không tìm thấy ID quản lý cửa hàng để khoá/mở tài khoản');
+      return;
+    }
+
+    try {
+      setTogglingStoreId(store.id);
+      const response: any = await apiClient.post(
+        `/auth/admin/customers/${managerId}/toggle-status/`,
+      );
+
+      // Determine next is_active flag from response or fallback to toggling current
+      const updatedCustomer = response?.data?.customer || response?.data;
+      const nextActive =
+        updatedCustomer?.is_active !== undefined
+          ? updatedCustomer.is_active
+          : !(store as any).is_active;
+
+      setStores((prev) =>
+        prev.map((s) => (s.id === store.id ? { ...s, is_active: nextActive } : s)),
+      );
+
+      Alert.alert(
+        'Thành công',
+        response?.data?.message || 'Đã thay đổi trạng thái tài khoản cửa hàng',
+      );
+    } catch (error: any) {
+      console.error('Error toggling store status:', error);
+
+      let errorMessage = 'Không thể thay đổi trạng thái tài khoản cửa hàng';
+      if (error?.response?.data?.message) {
+        errorMessage = error.response.data.message;
+      } else if (error?.message) {
+        errorMessage += ': ' + error.message;
+      }
+
+      Alert.alert('Lỗi', errorMessage);
+    } finally {
+      setTogglingStoreId(null);
+    }
+  };
+
   // Search functionality
   const filteredStores = stores.filter(store => 
     store.name?.toLowerCase().includes(searchText.toLowerCase()) ||
@@ -348,56 +417,83 @@ const StoreListScreen = ({ onMenuPress }: StoreListScreenProps = {}) => {
       return getImageSource(item.image as any);
     };
 
+    const isActive = (item as any).is_active !== undefined ? (item as any).is_active : true;
+    const isToggling = togglingStoreId === item.id;
+
     return (
-      <TouchableOpacity
-        style={styles.card}
-        activeOpacity={0.9}
-        onPress={() => navigation.navigate('StoreDetailScreenV2', {
-          storeId: item.id,
-          name: item.name || item.store_name,
-          address: item.address,
-          image: item.image,
-          foods: item.foods,
-          rating: item.rating || 0,
-          delivery: 'Miễn phí',
-          time: '20 phút',
-          vouchers: [
-            {
-              id: 'v1',
-              percent: 20,
-              minOrder: '200.000 VND',
-              code: 'SAVE20',
-              desc: 'Giảm 20% cho đơn hàng từ 200.000 VND',
-            },
-          ],
-        })}
-      >
+      <View style={styles.card}>
         <View style={styles.cardContent}>
-          <Image
-            source={getImage()}
-            style={styles.storeImage}
-            onError={() => console.log('Image load error for store:', item.store_name)}
-          />
-          <View style={styles.storeInfo}>
-            <Text style={styles.storeName} numberOfLines={1}>
-              {item.name || item.store_name}
-            </Text>
-            <View style={styles.ratingRow}>
-              <Star size={14} color="#f59e0b" fill="#f59e0b" />
-              <Text style={styles.rating}>
-                {item.rating && item.rating > 0 ? item.rating.toFixed(1) : 'N/A'}
+          <TouchableOpacity
+            style={styles.cardMain}
+            activeOpacity={0.9}
+            onPress={() =>
+              navigation.navigate('StoreDetailScreenV2', {
+                storeId: item.id,
+                name: item.name || item.store_name,
+                address: item.address,
+                image: item.image,
+                foods: item.foods,
+                rating: item.rating || 0,
+                delivery: 'Miễn phí',
+                time: '20 phút',
+                vouchers: [
+                  {
+                    id: 'v1',
+                    percent: 20,
+                    minOrder: '200.000 VND',
+                    code: 'SAVE20',
+                    desc: 'Giảm 20% cho đơn hàng từ 200.000 VND',
+                  },
+                ],
+              })
+            }
+          >
+            <Image
+              source={getImage()}
+              style={styles.storeImage}
+              onError={() => console.log('Image load error for store:', item.store_name)}
+            />
+            <View style={styles.storeInfo}>
+              <Text style={styles.storeName} numberOfLines={1}>
+                {item.name || item.store_name}
               </Text>
-              <Text style={styles.reviewCount}>
-                ({item.totalReviews || 0})
+              <View style={styles.ratingRow}>
+                <Star size={14} color="#f59e0b" fill="#f59e0b" />
+                <Text style={styles.rating}>
+                  {item.rating && item.rating > 0 ? item.rating.toFixed(1) : 'N/A'}
+                </Text>
+                <Text style={styles.reviewCount}>
+                  ({item.totalReviews || 0})
+                </Text>
+                <Text style={styles.foodCount}>• {item.foodCount || 0} món</Text>
+              </View>
+              <Text style={styles.address} numberOfLines={1}>
+                📍 {item.address}
               </Text>
-              <Text style={styles.foodCount}>• {item.foodCount || 0} món</Text>
             </View>
-            <Text style={styles.address} numberOfLines={1}>
-              📍 {item.address}
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[
+              styles.toggleButton,
+              isActive ? styles.toggleActive : styles.toggleLocked,
+              isToggling && styles.toggleDisabled,
+            ]}
+            onPress={() => handleToggleStoreStatus(item)}
+            disabled={isToggling}
+            activeOpacity={0.8}
+          >
+            <Text
+              style={[
+                styles.toggleText,
+                isActive ? styles.toggleTextActive : styles.toggleTextLocked,
+              ]}
+            >
+              {isToggling ? 'Đang xử lý...' : isActive ? 'Đang mở' : 'Đã khoá'}
             </Text>
-          </View>
+          </TouchableOpacity>
         </View>
-      </TouchableOpacity>
+      </View>
     );
   };
 
@@ -782,6 +878,13 @@ const styles = StyleSheet.create({
   cardContent: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  cardMain: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginRight: 12,
   },
   storeImage: {
     width: 64,
@@ -827,6 +930,37 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: '#6b7280',
     fontFamily: Fonts.LeagueSpartanRegular,
+  },
+
+  toggleButton: {
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#e5e7eb',
+    minWidth: 90,
+    alignItems: 'center',
+  },
+  toggleActive: {
+    backgroundColor: 'rgba(16,185,129,0.08)',
+    borderColor: '#10b981',
+  },
+  toggleLocked: {
+    backgroundColor: 'rgba(239,68,68,0.08)',
+    borderColor: '#ef4444',
+  },
+  toggleDisabled: {
+    opacity: 0.6,
+  },
+  toggleText: {
+    fontSize: 13,
+    fontFamily: Fonts.LeagueSpartanSemiBold,
+  },
+  toggleTextActive: {
+    color: '#047857',
+  },
+  toggleTextLocked: {
+    color: '#b91c1c',
   },
 
   // Application Card

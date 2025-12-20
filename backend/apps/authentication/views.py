@@ -183,8 +183,8 @@ def admin_customers_list(request):
     if not is_admin(request.user):
         return Response({'error': 'Admin access required'}, status=status.HTTP_403_FORBIDDEN)
     
-    # Get all customers (role_id = 1) and apply search filter if provided
-    customers = User.objects.filter(role_id=1)
+    # Get all admin-manageable users (roles 2, 3, 4) and apply search filter if provided
+    customers = User.objects.filter(role_id__in=[2, 3, 4])
     search = request.GET.get('search')
     if search:
         customers = customers.filter(
@@ -194,9 +194,24 @@ def admin_customers_list(request):
         )
     customers = customers.order_by('-created_date')
     
-    # Pagination
+    # Pagination with optional page_size override; allow page_size=all to fetch everything
+    page_size_param = request.GET.get('page_size')
+    if page_size_param and str(page_size_param).lower() == 'all':
+        serializer = UserSerializer(customers, many=True)
+        return Response({
+            'customers': serializer.data,
+            'total_pages': 1,
+            'current_page': 1,
+            'total_customers': len(serializer.data)
+        })
+
+    try:
+        page_size = int(page_size_param) if page_size_param else 10
+    except ValueError:
+        page_size = 10
+
     page = request.GET.get('page', 1)
-    paginator = Paginator(customers, 10)  # 10 customers per page
+    paginator = Paginator(customers, 50)
     page_obj = paginator.get_page(page)
     
     serializer = UserSerializer(page_obj, many=True)
@@ -205,7 +220,8 @@ def admin_customers_list(request):
         'customers': serializer.data,
         'total_pages': paginator.num_pages,
         'current_page': int(page),
-        'total_customers': paginator.count
+        'total_customers': paginator.count,
+        'page_size': page_size
     })
 
 
@@ -216,7 +232,7 @@ def admin_customer_detail(request, customer_id):
         return Response({'error': 'Admin access required'}, status=status.HTTP_403_FORBIDDEN)
     
     try:
-        customer = User.objects.get(id=customer_id, role_id=1)
+        customer = User.objects.get(id=customer_id, role_id__in=[2, 3, 4])
     except User.DoesNotExist:
         return Response({'error': 'Customer not found'}, status=status.HTTP_404_NOT_FOUND)
     
@@ -244,7 +260,7 @@ def admin_toggle_customer_status(request, customer_id):
         return Response({'error': 'Admin access required'}, status=status.HTTP_403_FORBIDDEN)
     
     try:
-        customer = User.objects.get(id=customer_id, role_id=1)
+        customer = User.objects.get(id=customer_id, role_id__in=[2, 3, 4])
     except User.DoesNotExist:
         return Response({'error': 'Customer not found'}, status=status.HTTP_404_NOT_FOUND)
     

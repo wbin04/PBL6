@@ -27,12 +27,14 @@ interface Shipper {
   phone: string;
   email: string;
   address: string;
+  is_active?: boolean;
   user?: {
     id: number;
     fullname: string;
     phone: string;
     email: string;
     address: string;
+    is_active?: boolean;
   };
 }
 
@@ -71,6 +73,7 @@ const ShipperListScreen: React.FC<ShipperListScreenProps> = ({ onMenuPress }) =>
   const [error, setError] = useState<string | null>(null);
   const [statistics, setStatistics] = useState<any>(null);
   const [searchText, setSearchText] = useState('');
+  const [togglingId, setTogglingId] = useState<number | null>(null);
 
   // Try to use admin context if available
   let adminContext: ReturnType<typeof useAdmin> | undefined;
@@ -106,14 +109,25 @@ const ShipperListScreen: React.FC<ShipperListScreenProps> = ({ onMenuPress }) =>
 
       console.log('Shippers API Response:', response);
 
+      const normalize = (arr: any[]) =>
+        arr.map((item) => ({
+          ...item,
+          is_active:
+            item.is_active !== undefined
+              ? item.is_active
+              : item.user_is_active !== undefined
+              ? item.user_is_active
+              : item.user?.is_active,
+        }));
+
       if (response?.results) {
-        setShippers(response.results);
+        setShippers(normalize(response.results));
       } else if (response?.data?.results) {
-        setShippers(response.data.results);
+        setShippers(normalize(response.data.results));
       } else if (response?.shippers) {
-        setShippers(response.shippers);
+        setShippers(normalize(response.shippers));
       } else if (Array.isArray(response)) {
-        setShippers(response);
+        setShippers(normalize(response));
       } else {
         console.warn('Unexpected response format:', response);
         setShippers([]);
@@ -268,6 +282,40 @@ const ShipperListScreen: React.FC<ShipperListScreenProps> = ({ onMenuPress }) =>
     );
   };
 
+  const handleToggleShipperStatus = async (shipper: Shipper) => {
+    const userId = shipper?.user_id ?? shipper?.user?.id;
+    if (!userId) return;
+
+    try {
+      setTogglingId(userId);
+      const res = await authApi.toggleCustomerStatus(userId);
+      const updatedUser = res?.customer || res?.data?.customer || res;
+      const updatedIsActive =
+        updatedUser?.is_active ?? updatedUser?.user?.is_active ?? !shipper.is_active;
+
+      setShippers((prev) =>
+        prev.map((s) => {
+          if ((s.user_id ?? s.user?.id) !== userId) return s;
+          const nextUser = s.user ? { ...s.user, is_active: updatedIsActive } : s.user;
+          return {
+            ...s,
+            is_active: updatedIsActive,
+            user: nextUser,
+          };
+        }),
+      );
+      Alert.alert('Thành công', updatedIsActive ? 'Đã mở khóa tài khoản' : 'Đã khóa tài khoản');
+    } catch (error: any) {
+      console.error('Error toggling shipper status:', error);
+      Alert.alert(
+        'Lỗi',
+        error?.response?.data?.message || 'Không thể cập nhật trạng thái tài khoản',
+      );
+    } finally {
+      setTogglingId(null);
+    }
+  };
+
   // Search functionality
   const filteredShippers = shippers.filter(
     (shipper) =>
@@ -286,73 +334,118 @@ const ShipperListScreen: React.FC<ShipperListScreenProps> = ({ onMenuPress }) =>
       app.phone_number?.toLowerCase().includes(searchText.toLowerCase()),
   );
 
-  const renderShipperItem = ({ item }: { item: Shipper }) => (
-    <TouchableOpacity
-      style={styles.card}
-      activeOpacity={0.9}
-      onPress={() => navigation.navigate('ShipperDetailScreen', { shipper: item })}
-    >
-      <View style={styles.cardHeader}>
-        <View style={styles.shipperIcon}>
-          <Text style={styles.shipperIconText}>
-            {(item.fullname || item.user?.fullname || 'S').charAt(0).toUpperCase()}
-          </Text>
-        </View>
-        <View style={styles.shipperInfo}>
-          <Text style={styles.shipperName}>
-            {item.fullname || item.user?.fullname || 'Chưa có tên'}
-          </Text>
-          <View style={styles.phoneRow}>
-            <Text style={styles.shipperPhone}>
-              📞 {item.phone || item.user?.phone || 'Chưa có SĐT'}
-            </Text>
-            {(item.phone || item.user?.phone) && (
-              <TouchableOpacity
-                style={styles.callButton}
-                onPress={(e) => {
-                  e.stopPropagation();
-                  Linking.openURL(`tel:${item.phone || item.user?.phone}`);
-                }}
-              >
-                <Phone size={14} color="#fff" />
-              </TouchableOpacity>
-            )}
-          </View>
-          <Text style={styles.shipperEmail}>
-            ✉️ {item.email || item.user?.email || 'Chưa có email'}
-          </Text>
-          <Text style={styles.shipperAddress} numberOfLines={2}>
-            📍 {item.address || item.user?.address || 'Chưa có địa chỉ'}
-          </Text>
-        </View>
-        <TouchableOpacity
-          style={styles.editButton}
-          onPress={(e) => {
-            e.stopPropagation();
-            navigation.navigate('ShipperEditScreen', { shipper: item });
-          }}
-        >
-          <Ionicons name="create-outline" size={18} color="#fff" />
-        </TouchableOpacity>
-      </View>
+  const renderShipperItem = ({ item }: { item: Shipper }) => {
+    const isActive = item.is_active ?? item.user?.is_active ?? true;
+    const userId = item.user_id ?? item.user?.id;
 
-      <View style={styles.statsRow}>
-        <View style={styles.statBox}>
-          <Text style={styles.statValue}>0</Text>
-          <Text style={styles.statLabel}>Đã giao</Text>
+    return (
+      <TouchableOpacity
+        style={styles.card}
+        activeOpacity={0.9}
+        onPress={() => navigation.navigate('ShipperDetailScreen', { shipper: item })}
+      >
+        <View style={styles.cardHeader}>
+          <View style={styles.shipperIcon}>
+            <Text style={styles.shipperIconText}>
+              {(item.fullname || item.user?.fullname || 'S').charAt(0).toUpperCase()}
+            </Text>
+          </View>
+          <View style={styles.shipperInfo}>
+            <Text style={styles.shipperName}>
+              {item.fullname || item.user?.fullname || 'Chưa có tên'}
+            </Text>
+            <View style={styles.shipperMetaRow}>
+              <View
+                style={[
+                  styles.statusBadge,
+                  isActive ? styles.statusBadgeActive : styles.statusBadgeLocked,
+                ]}
+              >
+                <Text
+                  style={[
+                    styles.statusText,
+                    isActive ? styles.statusTextActive : styles.statusTextLocked,
+                  ]}
+                >
+                  {isActive ? 'Đang hoạt động' : 'Đã khóa'}
+                </Text>
+              </View>
+            </View>
+            <View style={styles.phoneRow}>
+              <Text style={styles.shipperPhone}>
+                📞 {item.phone || item.user?.phone || 'Chưa có SĐT'}
+              </Text>
+              {(item.phone || item.user?.phone) && (
+                <TouchableOpacity
+                  style={styles.callButton}
+                  onPress={(e) => {
+                    e.stopPropagation();
+                    Linking.openURL(`tel:${item.phone || item.user?.phone}`);
+                  }}
+                >
+                  <Phone size={14} color="#fff" />
+                </TouchableOpacity>
+              )}
+            </View>
+            <Text style={styles.shipperEmail}>
+              ✉️ {item.email || item.user?.email || 'Chưa có email'}
+            </Text>
+            <Text style={styles.shipperAddress} numberOfLines={2}>
+              📍 {item.address || item.user?.address || 'Chưa có địa chỉ'}
+            </Text>
+          </View>
+          <TouchableOpacity
+            style={styles.editButton}
+            onPress={(e) => {
+              e.stopPropagation();
+              navigation.navigate('ShipperEditScreen', { shipper: item });
+            }}
+          >
+            <Ionicons name="create-outline" size={18} color="#fff" />
+          </TouchableOpacity>
         </View>
-        <View style={styles.statBox}>
-          <Text style={styles.statValue}>0</Text>
-          <Text style={styles.statLabel}>Đánh giá</Text>
-        </View>
-        <View style={styles.statBox}>
-          <View style={styles.statusBadge}>
-            <Text style={styles.statusText}>Sẵn sàng</Text>
+
+        <View style={styles.statsRow}>
+          <View style={styles.statBox}>
+            <Text style={styles.statValue}>0</Text>
+            <Text style={styles.statLabel}>Đã giao</Text>
+          </View>
+          <View style={styles.statBox}>
+            <Text style={styles.statValue}>0</Text>
+            <Text style={styles.statLabel}>Đánh giá</Text>
+          </View>
+          <View style={[styles.statBox, styles.toggleStatBox]}>
+            <TouchableOpacity
+              style={[
+                styles.toggleBtn,
+                isActive ? styles.toggleBtnActive : styles.toggleBtnLocked,
+                togglingId === userId && styles.toggleBtnDisabled,
+              ]}
+              disabled={togglingId === userId}
+              onPress={(e) => {
+                e.stopPropagation();
+                handleToggleShipperStatus(item);
+              }}
+              activeOpacity={0.8}
+            >
+              <Text
+                style={[
+                  styles.toggleBtnText,
+                  isActive ? styles.toggleBtnTextActive : styles.toggleBtnTextLocked,
+                ]}
+              >
+                {togglingId === userId
+                  ? 'Đang xử lý...'
+                  : isActive
+                  ? 'Khóa'
+                  : 'Mở khóa'}
+              </Text>
+            </TouchableOpacity>
           </View>
         </View>
-      </View>
-    </TouchableOpacity>
-  );
+      </TouchableOpacity>
+    );
+  };
 
   const renderApplicationItem = ({ item }: { item: ShipperApplication }) => (
     <View style={styles.applicationCard}>
@@ -866,15 +959,61 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
   statusBadge: {
-    backgroundColor: '#dcfce7',
     paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: 999,
   },
+  statusBadgeActive: {
+    backgroundColor: '#dcfce7',
+  },
+  statusBadgeLocked: {
+    backgroundColor: '#fee2e2',
+  },
   statusText: {
     fontSize: 11,
-    color: '#22c55e',
     fontFamily: Fonts.LeagueSpartanBold,
+  },
+  statusTextActive: {
+    color: '#22c55e',
+  },
+  statusTextLocked: {
+    color: '#ef4444',
+  },
+  shipperMetaRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 6,
+  },
+  toggleBtn: {
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 10,
+    borderWidth: 1,
+  },
+  toggleBtnActive: {
+    borderColor: '#ef4444',
+    backgroundColor: '#fff5f5',
+  },
+  toggleBtnLocked: {
+    borderColor: '#22c55e',
+    backgroundColor: '#ecfdf3',
+  },
+  toggleBtnDisabled: {
+    opacity: 0.6,
+  },
+  toggleBtnText: {
+    fontSize: 12,
+    fontFamily: Fonts.LeagueSpartanSemiBold,
+  },
+  toggleBtnTextActive: {
+    color: '#ef4444',
+  },
+  toggleBtnTextLocked: {
+    color: '#16a34a',
+  },
+  toggleStatBox: {
+    justifyContent: 'center',
   },
 
   // Application Card

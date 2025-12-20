@@ -8,6 +8,7 @@ class ShipperSerializer(serializers.ModelSerializer):
     """Serializer chính cho Shipper với thông tin User"""
     user = UserSerializer(read_only=True)
     user_id = serializers.IntegerField(write_only=True, required=False)
+    user_is_active = serializers.BooleanField(source='user.is_active', read_only=True)
     
     # Các field từ User để hiển thị trực tiếp
     fullname = serializers.CharField(source='user.fullname', read_only=True)
@@ -18,7 +19,7 @@ class ShipperSerializer(serializers.ModelSerializer):
     
     class Meta:
         model = Shipper
-        fields = ['id', 'user_id', 'user', 'fullname', 'phone', 'email', 'address', 'role']
+        fields = ['id', 'user_id', 'user', 'user_is_active', 'fullname', 'phone', 'email', 'address', 'role']
     
     def to_representation(self, instance):
         data = super().to_representation(instance)
