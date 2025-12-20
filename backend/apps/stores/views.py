@@ -3,6 +3,8 @@ from rest_framework.decorators import action, api_view, permission_classes
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated, AllowAny
 from django.shortcuts import get_object_or_404
+from django.db.models import F
+from decimal import Decimal
 from .models import Store
 from .serializers import StoreSerializer
 from apps.menu.models import Food
@@ -102,11 +104,18 @@ class StoreViewSet(viewsets.ModelViewSet):
         
         # Validate status
         new_status = request.data.get('order_status')
+        refund_requested = request.data.get('refund_requested')
+        refund_status = request.data.get('refund_status')
+        bank_name = request.data.get('bank_name')
+        bank_account = request.data.get('bank_account')
         valid_statuses = [choice[0] for choice in Order.ORDER_STATUS_CHOICES]
         
         if new_status not in valid_statuses:
             return Response({'error': 'Invalid status'}, status=status.HTTP_400_BAD_REQUEST)
         
+        # Preserve previous refund status to detect state change
+        previous_refund_status = order.refund_status
+
         # Update order status
         order.order_status = new_status
         
@@ -116,8 +125,26 @@ class StoreViewSet(viewsets.ModelViewSet):
             order.cancelled_by_role = 'Cửa hàng'
             from django.utils import timezone
             order.cancelled_date = timezone.now()
+
+        # Update refund info if provided
+        if refund_requested is not None:
+            order.refund_requested = bool(refund_requested)
+        if refund_status:
+            order.refund_status = refund_status
+        if bank_name:
+            order.bank_name = bank_name
+        if bank_account:
+            order.bank_account = bank_account
         
         order.save()
+
+        # If refund just completed, deduct deposit by the order's total_after_discount
+        if previous_refund_status != 'Đã hoàn thành' and refund_status == 'Đã hoàn thành':
+            order_total = order.total_after_discount or Decimal('0')
+            store.deposit = F('deposit') - order_total
+            store.save(update_fields=['deposit'])
+            # Refresh from DB to return updated value
+            store.refresh_from_db(fields=['deposit'])
         
         serializer = OrderSerializer(order, context={'request': request})
         return Response(serializer.data)

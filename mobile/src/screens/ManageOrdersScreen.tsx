@@ -29,6 +29,9 @@ const formatCurrency = (amount: number): string => {
   return `${amount.toLocaleString()}đ`;
 };
 
+// Canonical cancelled status (match DB spelling)
+const CANCELLED_STATUS_VALUE = 'Đã huỷ';
+
 // Helper to get status color
 const getStatusColor = (status: string): string => {
   switch (status) {
@@ -199,7 +202,12 @@ const ManageOrdersScreen: React.FC = () => {
   };
 
   // Function để cập nhật trạng thái đơn hàng
-  const updateOrderStatus = async (orderId: number, newStatus: string, cancelReason?: string) => {
+  const updateOrderStatus = async (
+    orderId: number,
+    newStatus: string,
+    cancelReason?: string,
+    refundPayload?: { refund_requested?: boolean; bank_name?: string; bank_account?: string },
+  ) => {
     try {
       setIsLoading(true);
       console.log('=== UPDATE ORDER STATUS ===');
@@ -213,10 +221,10 @@ const ManageOrdersScreen: React.FC = () => {
       let updatedOrder;
       if (user && user.role === 'Quản lý') {
         console.log('Using admin endpoint...');
-        updatedOrder = await ordersService.adminUpdateOrderStatus(orderId, newStatus, cancelReason);
+        updatedOrder = await ordersService.adminUpdateOrderStatus(orderId, newStatus, cancelReason, refundPayload);
       } else {
         console.log('Using customer endpoint...');
-        updatedOrder = await ordersService.updateOrderStatus(orderId, newStatus, cancelReason);
+        updatedOrder = await ordersService.updateOrderStatus(orderId, newStatus, cancelReason, refundPayload);
       }
 
       console.log('Updated order response:', updatedOrder);
@@ -225,8 +233,8 @@ const ManageOrdersScreen: React.FC = () => {
         prevOrders.map(order => (order.id === orderId ? updatedOrder : order))
       );
 
-      if (newStatus === 'Đã hủy') {
-        setSelectedTab(ORDER_STATUS_LABELS[ORDER_STATUS.CANCELLED]);
+      if (newStatus === 'Đã hủy' || newStatus === 'Đã huỷ') {
+        setSelectedTab(CANCELLED_STATUS_VALUE);
       }
 
       console.log('Order status updated successfully');
@@ -249,7 +257,13 @@ const ManageOrdersScreen: React.FC = () => {
     }
   };
 
-  const filteredOrders = orders.filter(order => order.order_status === selectedTab);
+  const filteredOrders = orders.filter(order => {
+    const status = order.order_status;
+    if (selectedTab === CANCELLED_STATUS_VALUE) {
+      return status === 'Đã huỷ' || status === 'Đã hủy';
+    }
+    return status === selectedTab;
+  });
 
   const sortOrders = (orders: Order[]): Order[] => {
     return [...orders].sort((a, b) => {
@@ -314,13 +328,28 @@ const ManageOrdersScreen: React.FC = () => {
             onPress={() =>
               (navigation as any).navigate('Cancel', {
                 orderId: order.id,
+                paymentMethod: order.payment_method,
                 onOrderCancelled: async (
                   orderId: string,
                   status: string,
-                  cancelReason?: string
+                  cancelReason?: string,
+                  refundPayload?: { bank_name?: string; bank_account?: string }
                 ) => {
                   try {
-                    await updateOrderStatus(parseInt(orderId), status, cancelReason);
+                    const refundData = refundPayload
+                      ? {
+                          refund_requested: true,
+                          bank_name: refundPayload?.bank_name,
+                          bank_account: refundPayload?.bank_account,
+                        }
+                      : undefined;
+
+                    await updateOrderStatus(
+                      parseInt(orderId),
+                      status,
+                      cancelReason,
+                      refundData,
+                    );
                   } catch (error) {
                     console.error(
                       'Failed to cancel order from callback:',
@@ -419,6 +448,9 @@ const ManageOrdersScreen: React.FC = () => {
       .map(it => it.food.title + (it.quantity ? ` x${it.quantity}` : ''))
       .join(', ');
 
+    const refundStatus = order.refund_status;
+    const showRefund = order.order_status === CANCELLED_STATUS_VALUE && refundStatus;
+
     const createdDate = new Date(order.created_date);
     const dateText =
       createdDate.toLocaleDateString('vi-VN') +
@@ -473,6 +505,15 @@ const ManageOrdersScreen: React.FC = () => {
           <Text style={styles.itemsText} numberOfLines={2}>
             {itemsSummary}
           </Text>
+
+          {showRefund && (
+            <View style={styles.refundRow}>
+              <Text style={styles.refundLabel}>Hoàn tiền:</Text>
+              <View style={styles.refundBadge}>
+                <Text style={styles.refundText}>{refundStatus}</Text>
+              </View>
+            </View>
+          )}
 
           {/* Tổng & thời gian */}
           <View style={styles.cardFooterRow}>
@@ -564,7 +605,7 @@ const ManageOrdersScreen: React.FC = () => {
             <Ionicons name="chevron-back" size={24} color="#eb552d" />
           </TouchableOpacity>
 
-          <Text style={styles.headerTitle}>Danh sách đơn hàng</Text>
+          <Text style={styles.headerTitle}>Danh sách đơn hàng1</Text>
 
           <TouchableOpacity
             style={styles.iconCircle}
@@ -606,8 +647,8 @@ const ManageOrdersScreen: React.FC = () => {
             'Đã giao'
           )}
           {renderTabButton(
-            ORDER_STATUS_LABELS[ORDER_STATUS.CANCELLED],
-            'Đã hủy'
+            CANCELLED_STATUS_VALUE,
+            'Đã huỷ'
           )}
         </ScrollView>
 
@@ -816,6 +857,30 @@ const styles = StyleSheet.create({
     marginTop: 4,
     marginBottom: 8,
     fontFamily: Fonts.LeagueSpartanRegular,
+  },
+  refundRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 8,
+    gap: 8,
+  },
+  refundLabel: {
+    fontSize: 12,
+    color: '#6b7280',
+    fontFamily: Fonts.LeagueSpartanMedium,
+  },
+  refundBadge: {
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 10,
+    backgroundColor: '#fef3c7',
+    borderWidth: 1,
+    borderColor: '#f59e0b',
+  },
+  refundText: {
+    fontSize: 12,
+    color: '#b45309',
+    fontFamily: Fonts.LeagueSpartanSemiBold,
   },
   cardFooterRow: {
     flexDirection: 'row',

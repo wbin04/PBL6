@@ -238,18 +238,34 @@ export const ordersService = {
     return apiClient.get(ENDPOINTS.ORDER_DETAIL(id));
   },
 
-  async updateOrderStatus(id: number, status: string, cancelReason?: string): Promise<Order> {
+  async updateOrderStatus(
+    id: number,
+    status: string,
+    cancelReason?: string,
+    refundData?: { refund_requested?: boolean; bank_name?: string; bank_account?: string }
+  ): Promise<Order> {
     const data: any = { order_status: status };
     if (cancelReason) {
       data.cancel_reason = cancelReason;
     }
+    if (refundData) {
+      Object.assign(data, refundData);
+    }
     return apiClient.put(ENDPOINTS.UPDATE_ORDER_STATUS(id), data);
   },
 
-  async adminUpdateOrderStatus(id: number, status: string, cancelReason?: string): Promise<Order> {
+  async adminUpdateOrderStatus(
+    id: number,
+    status: string,
+    cancelReason?: string,
+    refundData?: { refund_requested?: boolean; bank_name?: string; bank_account?: string }
+  ): Promise<Order> {
     const data: any = { order_status: status };
     if (cancelReason) {
       data.cancel_reason = cancelReason;
+    }
+    if (refundData) {
+      Object.assign(data, refundData);
     }
     return apiClient.put(ENDPOINTS.ADMIN_UPDATE_ORDER_STATUS(id), data);
   },

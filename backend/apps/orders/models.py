@@ -37,6 +37,12 @@ class Order(models.Model):
         ('Cửa hàng', 'Cửa hàng'),
         ('Quản lý', 'Quản lý'),
     ]
+
+    REFUND_STATUS_CHOICES = [
+        ('Không', 'Không'),
+        ('Chờ xử lý', 'Chờ xử lý'),
+        ('Đã hoàn thành', 'Đã hoàn thành'),
+    ]
     
     created_date = models.DateTimeField(default=get_vietnam_time)
     
@@ -70,6 +76,12 @@ class Order(models.Model):
     cancelled_by_role = models.CharField(max_length=20, choices=CANCELLED_BY_ROLE_CHOICES, null=True, blank=True)  # Ai hủy đơn
     group_id = models.IntegerField(null=True, blank=True)  # Group orders from same checkout together
     store = models.ForeignKey(Store, on_delete=models.CASCADE, db_column='store_id', null=True, blank=True)  # Store for this specific order
+
+    # Refund info
+    refund_requested = models.BooleanField(default=False)
+    refund_status = models.CharField(max_length=20, choices=REFUND_STATUS_CHOICES, default='Không')
+    bank_name = models.CharField(max_length=100, null=True, blank=True)
+    bank_account = models.CharField(max_length=50, null=True, blank=True)
     
     # New many-to-many relationship with promotions
     promotions = models.ManyToManyField('promotions.Promo', through='promotions.OrderPromo', blank=True, related_name='orders')

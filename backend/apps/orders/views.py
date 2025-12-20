@@ -398,12 +398,15 @@ def update_order_status(request, pk):
     
     new_status = request.data.get('order_status')
     cancel_reason = request.data.get('cancel_reason')
+    bank_name = request.data.get('bank_name')
+    bank_account = request.data.get('bank_account')
+    refund_requested_flag = request.data.get('refund_requested')
     
     print(f"New status: {new_status}")
     print(f"Cancel reason: {cancel_reason}")
     
     # Only allow customer to cancel with Vietnamese status
-    if new_status not in ['Đã huỷ']:
+    if new_status not in ['Đã huỷ', 'Đã hủy']:
         return Response({'error': 'Trạng thái không hợp lệ'}, status=status.HTTP_400_BAD_REQUEST)
     
     # Only cancel if current status is 'Chờ xác nhận'
@@ -421,6 +424,17 @@ def update_order_status(request, pk):
         order.cancelled_date = get_vietnam_time()
         order.cancelled_by_role = 'Khách hàng'  # Customer is cancelling
         print(f"Set cancelled_date and cancelled_by_role: Khách hàng")
+
+        # Handle refund info when non-cash payment
+        non_cash_payment = str(order.payment_method).lower() not in ['cash', 'cod']
+        refund_requested = refund_requested_flag is True or non_cash_payment
+        if refund_requested:
+            order.refund_requested = True
+            order.refund_status = 'Chờ xử lý'
+            if bank_name:
+                order.bank_name = bank_name
+            if bank_account:
+                order.bank_account = bank_account
     
     order.save()
     print(f"Order saved successfully")
@@ -775,13 +789,16 @@ def admin_update_order_status(request, pk):
         
         new_status = request.data.get('order_status')
         cancel_reason = request.data.get('cancel_reason')
+        bank_name = request.data.get('bank_name')
+        bank_account = request.data.get('bank_account')
+        refund_requested_flag = request.data.get('refund_requested')
         
         if not new_status:
             return Response({'error': 'order_status is required'}, status=status.HTTP_400_BAD_REQUEST)
         
         # Determine cancellation role based on user role
         cancelled_by_role = None
-        if new_status == 'Đã huỷ':
+        if new_status in ['Đã huỷ', 'Đã hủy']:
             if request.user.role == 'Quản lý':
                 cancelled_by_role = 'Quản lý'
             else:
@@ -798,10 +815,21 @@ def admin_update_order_status(request, pk):
             order.cancel_reason = cancel_reason
         
         # Set cancellation info if being cancelled
-        if new_status == 'Đã huỷ':
+        if new_status in ['Đã huỷ', 'Đã hủy']:
             from apps.orders.models import get_vietnam_time
             order.cancelled_date = get_vietnam_time()
             order.cancelled_by_role = cancelled_by_role
+
+            # Handle refund info if supplied or required
+            non_cash_payment = str(order.payment_method).lower() not in ['cash', 'cod']
+            refund_requested = refund_requested_flag is True or non_cash_payment
+            if refund_requested:
+                order.refund_requested = True
+                order.refund_status = 'Chờ xử lý'
+                if bank_name:
+                    order.bank_name = bank_name
+                if bank_account:
+                    order.bank_account = bank_account
         
         order.save()
         

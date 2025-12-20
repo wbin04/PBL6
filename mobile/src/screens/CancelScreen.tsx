@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { View, Text, StyleSheet, TouchableOpacity, TextInput, ScrollView, StatusBar, Alert } from "react-native";
+import { View, Text, StyleSheet, TouchableOpacity, TextInput, ScrollView, StatusBar, Alert, KeyboardAvoidingView, Platform } from "react-native";
 import { useNavigation, useRoute } from "@react-navigation/native";
 import { useDispatch } from "react-redux";
 import { updateOrderStatus } from "@/store/slices/ordersSlice";
@@ -18,21 +18,38 @@ const reasons = [
 export default function CancelScreen() {
   const [selected, setSelected] = useState<number | null>(null);
   const [otherReason, setOtherReason] = useState("");
+  const [bankName, setBankName] = useState("");
+  const [bankAccount, setBankAccount] = useState("");
   const navigation = useNavigation();
   const route = useRoute();
   const dispatch = useDispatch<AppDispatch>();
   
   // Get orderId and callback function from route params
-  const { orderId, onOrderCancelled } = route.params as { 
+  const { orderId, paymentMethod, onOrderCancelled } = route.params as { 
     orderId: string; 
-    onOrderCancelled: (orderId: string, status: 'Đã hủy', cancelReason?: string) => void;
+    paymentMethod?: string;
+    onOrderCancelled: (
+      orderId: string,
+      status: 'Đã huỷ',
+      cancelReason?: string,
+      refundPayload?: { bank_name?: string; bank_account?: string },
+    ) => void;
   };
+
+  const isNonCash = (paymentMethod || '').toLowerCase() !== 'cash' && (paymentMethod || '').toLowerCase() !== 'cod';
 
   const handleCancelOrder = async () => {
     // Validate that a reason is selected or entered
     if (selected === null && !otherReason.trim()) {
       Alert.alert("Thông báo", "Vui lòng chọn lý do hủy đơn hoặc nhập lý do khác");
       return;
+    }
+
+    if (isNonCash) {
+      if (!bankName.trim() || !bankAccount.trim()) {
+        Alert.alert("Thiếu thông tin", "Vui lòng nhập tên ngân hàng và số tài khoản để hoàn tiền");
+        return;
+      }
     }
 
     try {
@@ -52,7 +69,17 @@ export default function CancelScreen() {
       console.log('=== END CANCEL ORDER DEBUG ===');
 
       // Cập nhật trạng thái đơn hàng thành "Đã hủy" với lý do
-      await onOrderCancelled(orderId, 'Đã hủy', cancelReason);
+      await onOrderCancelled(
+        orderId,
+        'Đã huỷ',
+        cancelReason,
+        isNonCash
+          ? {
+              bank_name: bankName.trim() || undefined,
+              bank_account: bankAccount.trim() || undefined,
+            }
+          : undefined,
+      );
       
       // Navigate back to ManageOrdersScreen  
       navigation.goBack();
@@ -65,7 +92,11 @@ export default function CancelScreen() {
   };
 
   return (
-    <View style={styles.container}>
+    <KeyboardAvoidingView
+      style={styles.container}
+      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      keyboardVerticalOffset={Platform.OS === 'ios' ? 60 : 0}
+    >
       <StatusBar barStyle="light-content" backgroundColor="#E95322" />
       {/* Header tự tạo */}
       <View style={styles.header}>
@@ -76,7 +107,11 @@ export default function CancelScreen() {
         <View style={styles.placeholder} />
       </View>
       
-      <ScrollView contentContainerStyle={styles.content}>
+      <ScrollView
+        contentContainerStyle={styles.content}
+        keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="on-drag"
+      >
         <Text style={styles.cancelTitle}>Lý do hủy đơn hàng</Text>
         {reasons.map((reason, idx) => (
           <TouchableOpacity
@@ -100,11 +135,33 @@ export default function CancelScreen() {
           onChangeText={setOtherReason}
           multiline
         />
+
+        {isNonCash && (
+          <>
+            <Text style={styles.othersLabel}>Tên ngân hàng *</Text>
+            <TextInput
+              style={styles.textInput}
+              placeholder="Nhập tên ngân hàng"
+              placeholderTextColor="#B8A97F"
+              value={bankName}
+              onChangeText={setBankName}
+            />
+            <Text style={styles.othersLabel}>Số tài khoản *</Text>
+            <TextInput
+              style={styles.textInput}
+              placeholder="Nhập số tài khoản"
+              placeholderTextColor="#B8A97F"
+              value={bankAccount}
+              onChangeText={setBankAccount}
+              keyboardType="numeric"
+            />
+          </>
+        )}
         <TouchableOpacity style={styles.submitBtn} onPress={handleCancelOrder}>
           <Text style={styles.submitText}>Hủy đơn hàng</Text>
         </TouchableOpacity>
       </ScrollView>
-    </View>
+    </KeyboardAvoidingView>
   );
 }
 
@@ -140,6 +197,7 @@ const styles = StyleSheet.create({
     borderTopRightRadius: 32,
     marginTop: 24,
     flexGrow: 1,
+    paddingBottom: 48,
   },
   desc: {
     color: "#7C6F62",

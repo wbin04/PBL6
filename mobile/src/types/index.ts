@@ -141,7 +141,7 @@ export interface Order {
   user?: User;
   order_status: 'Chờ xác nhận' | 'Đã xác nhận' | 'Đang chuẩn bị' | 'Đang giao' | 'Đã giao' | 'Đã huỷ';
   total_money: string; // Food items total only (no shipping, no discount)
-  payment_method: 'cash' | 'vnpay' | 'momo';
+  payment_method: 'cash' | 'COD' | 'vnpay' | 'momo';
   receiver_name: string;
   phone_number: string;
   ship_address: string;
@@ -160,6 +160,11 @@ export interface Order {
   total_discount?: string; // Total discount applied
   total_after_discount?: string; // Final amount to pay (after discount)
   shipping_fee?: string; // Shipping fee
+  // Refund info
+  refund_requested?: boolean;
+  refund_status?: 'Không' | 'Chờ xử lý' | 'Đã hoàn thành';
+  bank_name?: string | null;
+  bank_account?: string | null;
 }
 
 export interface OrderPromo {

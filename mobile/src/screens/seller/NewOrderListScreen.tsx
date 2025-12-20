@@ -10,6 +10,7 @@ import { Fonts } from '@/constants/Fonts';
 import { useSelector } from 'react-redux';
 import { RootState } from '@/store';
 import Sidebar from '@/components/sidebar';
+import * as Clipboard from 'expo-clipboard';
 
 const menuItems = [
   { title: 'Trang chủ', icon: Menu, section: 'dashboard' },
@@ -52,6 +53,11 @@ type OrderWithDisplayData = {
   shipping_fee: number;        // Shipping fee
   promo_discount: number;      // Promo discount
   total_after_discount: number; // Final total
+  // Refund info
+  refund_requested?: boolean;
+  refund_status?: 'Không' | 'Chờ xử lý' | 'Đã hoàn thành';
+  bank_name?: string | null;
+  bank_account?: string | null;
 };
 
 const NewOrderListScreen = ({ navigation }: any) => {
@@ -65,6 +71,9 @@ const NewOrderListScreen = ({ navigation }: any) => {
   const [storeId, setStoreId] = useState<number | null>(null);
   const [sidebarVisible, setSidebarVisible] = useState(false);
   const [searchText, setSearchText] = useState('');
+  const [refundModalVisible, setRefundModalVisible] = useState(false);
+  const [refundOrder, setRefundOrder] = useState<OrderWithDisplayData | null>(null);
+  const [isCompletingRefund, setIsCompletingRefund] = useState(false);
   const { user } = useSelector((state: RootState) => state.auth);
 
   // Helper function to convert API order to display format
@@ -103,7 +112,11 @@ const NewOrderListScreen = ({ navigation }: any) => {
       total_after_discount: totalAfterDiscount,
       status: mapOrderStatus(order.order_status),
       payment: order.payment_method === 'cash' ? 'COD' : 'Online',
-      notes: order.note
+      notes: order.note,
+      refund_requested: order.refund_requested,
+      refund_status: order.refund_status,
+      bank_name: order.bank_name,
+      bank_account: order.bank_account,
     };
   };
 
@@ -116,7 +129,8 @@ const NewOrderListScreen = ({ navigation }: any) => {
       'Sẵn sàng': 'ready',
       'Đã lấy hàng': 'delivering',
       'Đã giao': 'completed',
-      'Đã huỷ': 'rejected'
+      'Đã huỷ': 'rejected',
+      'Đã hủy': 'rejected'
     };
     return statusMap[apiStatus] || 'pending';
   };
@@ -186,7 +200,16 @@ const NewOrderListScreen = ({ navigation }: any) => {
   };
 
   // Update order status using store-specific endpoint
-  const updateOrderStatusAsync = async (orderId: string | number, newStatus: string) => {
+  const updateOrderStatusAsync = async (
+    orderId: string | number,
+    newStatus: string,
+    extraData?: {
+      refund_requested?: boolean;
+      refund_status?: 'Không' | 'Chờ xử lý' | 'Đã hoàn thành';
+      bank_name?: string | null;
+      bank_account?: string | null;
+    }
+  ) => {
     try {
       // Get store ID if not already cached
       let currentStoreId = storeId;
@@ -196,24 +219,38 @@ const NewOrderListScreen = ({ navigation }: any) => {
       }
 
       const apiStatus = mapToApiStatus(newStatus);
+      const payload: any = { order_status: apiStatus };
+
+      if (extraData) {
+        if (typeof extraData.refund_requested === 'boolean') {
+          payload.refund_requested = extraData.refund_requested;
+        }
+        if (extraData.refund_status) {
+          payload.refund_status = extraData.refund_status;
+        }
+        if (extraData.bank_name) {
+          payload.bank_name = extraData.bank_name;
+        }
+        if (extraData.bank_account) {
+          payload.bank_account = extraData.bank_account;
+        }
+      }
       
       // Use store-specific endpoint: /stores/{store_id}/orders/{order_id}/status/
-      await apiClient.patch(`/stores/${currentStoreId}/orders/${orderId}/status/`, {
-        order_status: apiStatus
-      });
+      await apiClient.patch(`/stores/${currentStoreId}/orders/${orderId}/status/`, payload);
 
       // Update local state
       setOrderList(prev =>
         prev.map(order =>
           order.id.toString() === orderId.toString()
-            ? { ...order, status: newStatus }
+            ? { ...order, status: newStatus, order_status: apiStatus, ...extraData }
             : order
         )
       );
 
       // Update selected order if it's the same
       if (selectedOrder && selectedOrder.id.toString() === orderId.toString()) {
-        setSelectedOrder({ ...selectedOrder, status: newStatus });
+        setSelectedOrder({ ...selectedOrder, status: newStatus, order_status: apiStatus, ...extraData });
       }
     } catch (err: any) {
       console.error('Error updating order status:', err);
@@ -271,49 +308,40 @@ const NewOrderListScreen = ({ navigation }: any) => {
       <View style={styles.headerWrap}>
         <View style={styles.headerTopRow}>
           <TouchableOpacity
+            style={styles.roundIconBtn}
             onPress={() => setSidebarVisible(true)}
-            style={styles.roundIconBtn}
           >
-            <Menu size={24} color="#eb5523" />
+            <Menu size={22} color="#ea580c" />
           </TouchableOpacity>
-
-          <Text style={styles.headerTitle}>Quản lý đơn hàng</Text>
-
-          <TouchableOpacity 
-            style={styles.roundIconBtn}
-            onPress={() => navigation.navigate('SellerProfileScreen')}
-          >
-            <User size={24} color="#eb5523" />
-          </TouchableOpacity>
+          <Text style={styles.headerTitle}>Quản lí đơn hàng</Text>
+          <View style={{ width: 42 }} />
         </View>
 
-        {/* Search Box */}
         <View style={styles.searchRow}>
           <View style={styles.searchBox}>
+            <Ionicons name="search-outline" size={18} color="#9ca3af" style={{ marginRight: 8 }} />
             <TextInput
               style={styles.searchInput}
-              placeholder="Tìm theo tên, SĐT, mã đơn..."
+              placeholder="Tìm đơn theo tên, số điện thoại hoặc mã đơn"
               placeholderTextColor="#9ca3af"
               value={searchText}
               onChangeText={setSearchText}
               returnKeyType="search"
+              onSubmitEditing={() => fetchOrders()}
             />
-            {searchText.length > 0 ? (
-              <TouchableOpacity
-                onPress={() => setSearchText('')}
-                style={styles.clearBtn}
-              >
-                <Ionicons name="close-circle" size={16} color="#9ca3af" />
+            {searchText ? (
+              <TouchableOpacity style={styles.clearBtn} onPress={() => setSearchText('')}>
+                <X size={18} color="#9ca3af" />
               </TouchableOpacity>
             ) : null}
-            <TouchableOpacity style={styles.searchBtn} activeOpacity={0.8}>
-              <Ionicons name="search" size={16} color="#fff" />
+            <TouchableOpacity style={styles.searchBtn} onPress={() => fetchOrders()}>
+              <Ionicons name="search" size={18} color="#fff" />
             </TouchableOpacity>
           </View>
         </View>
       </View>
 
-      {/* Tabs horizontal scroll */}
+      {/* Tabs */}
       <View style={styles.tabs}>
         <ScrollView
           horizontal
@@ -504,67 +532,30 @@ const NewOrderListScreen = ({ navigation }: any) => {
 
                   <Text style={styles.orderLabel}>Món đã order:</Text>
                   {order.items.map((item, i) => (
-                    <View key={i}>
-                      <View style={styles.itemRow}>
-                        <View style={{ flex: 1 }}>
-                          <Text style={styles.itemName}>{item.name || 'N/A'}</Text>
-                          {item.size_display ? (
-                            <Text style={{ color: '#6b7280', fontSize: 11, marginTop: 1 }}>
-                              Size: {item.size_display}
-                            </Text>
-                          ) : null}
-                        </View>
-                        <Text style={styles.itemQty}>x{typeof item.qty === 'number' ? item.qty : 0}</Text>
-                        <View style={{ alignItems: 'flex-end' }}>
-                          <Text style={styles.itemPrice}>{(typeof item.price === 'number' ? item.price : 0).toLocaleString()} đ</Text>
-                          {item.food_option_price && item.food_option_price > 0 ? (
-                            <Text style={{ color: '#6b7280', fontSize: 10, marginTop: 1 }}>
-                              +{(typeof item.food_option_price === 'number' ? item.food_option_price : 0).toLocaleString()} đ
-                            </Text>
-                          ) : null}
-                        </View>
+                    <View key={i} style={styles.itemRow}>
+                      <View style={{ flex: 1 }}>
+                        <Text style={styles.itemName}>{item.name || 'N/A'}</Text>
+                        {item.size_display ? (
+                          <Text style={styles.itemPrice}>Size: {String(item.size_display)}</Text>
+                        ) : null}
+                        {item.food_note ? (
+                          <Text style={styles.itemPrice}>Ghi chú: {item.food_note}</Text>
+                        ) : null}
                       </View>
-                      {item.food_note && item.food_note.trim() !== '' ? (
-                        <View style={{ marginLeft: 8, marginBottom: 2 }}>
-                          <Text style={{ color: '#6b7280', fontSize: 11, fontStyle: 'italic' }}>
-                            • {item.food_note}
-                          </Text>
-                        </View>
-                      ) : null}
+                      <View style={{ alignItems: 'flex-end' }}>
+                        <Text style={styles.itemQty}>x{typeof item.qty === 'number' ? item.qty : 0}</Text>
+                        <Text style={styles.itemPrice}>
+                          {(typeof item.price === 'number' ? item.price : 0).toLocaleString()} đ
+                        </Text>
+                      </View>
                     </View>
                   ))}
 
-                  {/* Fix: Wrap tất cả inline calculations trong <Text> */}
-                  <View style={styles.totalRow}>
-                    <View style={{ flex: 1 }}>
-                      <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 2 }}>
-                        <Text style={{ color: '#6b7280', fontSize: 13 }}>Tạm tính:</Text>
-                        <Text style={{ color: '#1e293b', fontSize: 13 }}>
-                          {(typeof order.subtotal === 'number' ? order.subtotal : 0).toLocaleString()} đ
-                        </Text>
-                      </View>
-                      <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 2 }}>
-                        <Text style={{ color: '#6b7280', fontSize: 13 }}>Phí vận chuyển:</Text>
-                        <Text style={{ color: '#1e293b', fontSize: 13 }}>
-                          {(typeof order.shipping_fee === 'number' ? order.shipping_fee : 0).toLocaleString()} đ
-                        </Text>
-                      </View>
-                      {typeof order.promo_discount === 'number' && order.promo_discount > 0 ? (
-                        <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 2 }}>
-                          <Text style={{ color: '#10b981', fontSize: 13 }}>Giảm giá:</Text>
-                          <Text style={{ color: '#10b981', fontSize: 13, fontWeight: 'bold' }}>
-                            -{order.promo_discount.toLocaleString()} đ
-                          </Text>
-                        </View>
-                      ) : null}
-                      <View style={{ height: 1, backgroundColor: '#e5e7eb', marginVertical: 4 }} />
-                      <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-                        <Text style={{ fontWeight: 'bold', fontSize: 15, color: '#1e293b' }}>Tổng cộng:</Text>
-                        <Text style={{ color: '#ea580c', fontWeight: 'bold', fontSize: 16 }}>
-                          {(typeof order.total === 'number' ? order.total : 0).toLocaleString()} đ
-                        </Text>
-                      </View>
-                    </View>
+                  <View style={[styles.totalRow, { justifyContent: 'space-between', marginTop: 8 }]}>
+                    <Text style={{ fontWeight: 'bold', fontSize: 15, color: '#1e293b' }}>Tổng cộng:</Text>
+                    <Text style={{ color: '#ea580c', fontWeight: 'bold', fontSize: 16 }}>
+                      {(typeof order.total === 'number' ? order.total : 0).toLocaleString()} đ
+                    </Text>
                   </View>
 
                   <View style={[styles.totalRow, { marginTop: 8 }]}>
@@ -579,6 +570,36 @@ const NewOrderListScreen = ({ navigation }: any) => {
                       <View style={[styles.statusBadge, { backgroundColor: '#ef4444' }]}><Text style={styles.statusBadgeText}>Đã hủy</Text></View>
                     ) : null}
                   </View>
+
+                  {order.status === 'rejected' && order.refund_status ? (
+                    <View style={styles.refundRow}>
+                      <Text style={styles.refundLabel}>Hoàn tiền:</Text>
+                      <View
+                        style={[
+                          styles.refundBadge,
+                          order.refund_status === 'Đã hoàn thành'
+                            ? styles.refundBadgeSuccess
+                            : order.refund_status === 'Chờ xử lý'
+                              ? styles.refundBadgePending
+                              : styles.refundBadgeDefault,
+                        ]}
+                      >
+                        <Text style={styles.refundBadgeText}>{order.refund_status}</Text>
+                      </View>
+
+                      {order.refund_status === 'Chờ xử lý' && (
+                        <TouchableOpacity
+                          style={styles.refundActionBtn}
+                          onPress={() => {
+                            setRefundOrder(order);
+                            setRefundModalVisible(true);
+                          }}
+                        >
+                          <Text style={styles.refundActionText}>Hoàn tiền</Text>
+                        </TouchableOpacity>
+                      )}
+                    </View>
+                  ) : null}
 
                   <View style={styles.actionRow}>
                     {order.status === 'pending' ? (
@@ -611,6 +632,16 @@ const NewOrderListScreen = ({ navigation }: any) => {
                         updateOrderStatusAsync(order.id, 'completed');
                       }}>
                         <Text style={styles.completedText}>Hoàn thành</Text>
+                      </TouchableOpacity>
+                    ) : order.status === 'rejected' && order.refund_status === 'Chờ xử lý' ? (
+                      <TouchableOpacity
+                        style={[styles.actionBtn, styles.completedBtn]}
+                        onPress={() => {
+                          setRefundOrder(order);
+                          setRefundModalVisible(true);
+                        }}
+                      >
+                        <Text style={styles.completedText}>Hoàn tiền</Text>
                       </TouchableOpacity>
                     ) : null}
                     <TouchableOpacity style={[styles.actionBtn, styles.callBtn]} onPress={() => {
@@ -728,6 +759,26 @@ const NewOrderListScreen = ({ navigation }: any) => {
                         </Text>
                       </View>
                     </View>
+                    {selectedOrder.status === 'rejected' && selectedOrder.refund_status ? (
+                      <>
+                        <View style={styles.infoDivider} />
+                        <View style={styles.infoRow}>
+                          <Text style={styles.infoLabel}>Hoàn tiền</Text>
+                          <View
+                            style={[
+                              styles.refundBadge,
+                              selectedOrder.refund_status === 'Đã hoàn thành'
+                                ? styles.refundBadgeSuccess
+                                : selectedOrder.refund_status === 'Chờ xử lý'
+                                  ? styles.refundBadgePending
+                                  : styles.refundBadgeDefault,
+                            ]}
+                          >
+                            <Text style={styles.refundBadgeText}>{selectedOrder.refund_status}</Text>
+                          </View>
+                        </View>
+                      </>
+                    ) : null}
                   </View>
                 </View>
 
@@ -864,6 +915,91 @@ const NewOrderListScreen = ({ navigation }: any) => {
                       : selectedOrder.status === 'ready' ? 'Đang giao' 
                       : selectedOrder.status === 'delivering' ? 'Hoàn thành' 
                       : 'Xác nhận'}
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </View>
+        </Modal>
+      )}
+
+      {refundOrder && (
+        <Modal
+          visible={refundModalVisible}
+          animationType="slide"
+          transparent
+          onRequestClose={() => {
+            setRefundModalVisible(false);
+            setRefundOrder(null);
+          }}
+        >
+          <View style={styles.refundModalOverlay}>
+            <View style={styles.refundModalContent}>
+              <Text style={styles.refundModalTitle}>Thông tin tài khoản</Text>
+
+              <View style={styles.refundField}>
+                <Text style={styles.refundFieldLabel}>Tên ngân hàng</Text>
+                <TextInput
+                  style={styles.refundFieldInput}
+                  value={refundOrder.bank_name || '—'}
+                  editable={false}
+                />
+              </View>
+
+              <View style={styles.refundField}>
+                <Text style={styles.refundFieldLabel}>Số tài khoản</Text>
+                <View style={styles.refundAccountRow}>
+                  <TextInput
+                    style={[styles.refundFieldInput, { flex: 1 }]}
+                    value={refundOrder.bank_account || '—'}
+                    editable={false}
+                  />
+                  <TouchableOpacity
+                    style={styles.copyButton}
+                    onPress={async () => {
+                      await Clipboard.setStringAsync(refundOrder.bank_account || '');
+                      Alert.alert('Đã sao chép', 'Đã sao chép số tài khoản');
+                    }}
+                  >
+                    <Text style={styles.copyButtonText}>Sao chép</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+
+              <View style={styles.refundModalActions}>
+                <TouchableOpacity
+                  style={[styles.refundActionButton, styles.refundCancelButton]}
+                  onPress={() => {
+                    setRefundModalVisible(false);
+                    setRefundOrder(null);
+                  }}
+                  disabled={isCompletingRefund}
+                >
+                  <Text style={styles.refundCancelText}>Hủy</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.refundActionButton, styles.refundConfirmButton]}
+                  onPress={async () => {
+                    if (!refundOrder) return;
+                    try {
+                      setIsCompletingRefund(true);
+                      await updateOrderStatusAsync(refundOrder.id, refundOrder.status, {
+                        refund_requested: false,
+                        refund_status: 'Đã hoàn thành',
+                      });
+                      Alert.alert('Thành công', 'Đã đánh dấu hoàn tiền');
+                      setRefundModalVisible(false);
+                      setRefundOrder(null);
+                    } catch (e: any) {
+                      Alert.alert('Lỗi', e?.message || 'Không thể cập nhật hoàn tiền');
+                    } finally {
+                      setIsCompletingRefund(false);
+                    }
+                  }}
+                  disabled={isCompletingRefund}
+                >
+                  <Text style={styles.refundConfirmText}>
+                    {isCompletingRefund ? 'Đang xử lý...' : 'Hoàn thành'}
                   </Text>
                 </TouchableOpacity>
               </View>
@@ -1236,6 +1372,131 @@ const styles = StyleSheet.create({
     color: '#ea580c', 
     fontWeight: 'bold',
     fontFamily: Fonts.LeagueSpartanBold,
+  },
+
+  refundRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginTop: 8,
+  },
+  refundLabel: {
+    color: '#4b5563',
+    fontSize: 13,
+    fontFamily: Fonts.LeagueSpartanMedium,
+  },
+  refundBadge: {
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 999,
+    backgroundColor: '#e5e7eb',
+  },
+  refundBadgePending: {
+    backgroundColor: '#fef3c7',
+  },
+  refundBadgeSuccess: {
+    backgroundColor: '#d1fae5',
+  },
+  refundBadgeDefault: {
+    backgroundColor: '#e5e7eb',
+  },
+  refundBadgeText: {
+    fontSize: 12,
+    color: '#111827',
+    fontFamily: Fonts.LeagueSpartanSemiBold,
+  },
+  refundActionBtn: {
+    marginLeft: 'auto',
+    backgroundColor: '#ea580c',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 8,
+  },
+  refundActionText: {
+    color: '#fff',
+    fontFamily: Fonts.LeagueSpartanBold,
+    fontSize: 13,
+  },
+
+  refundModalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  refundModalContent: {
+    width: '100%',
+    backgroundColor: '#fff',
+    borderRadius: 16,
+    padding: 20,
+  },
+  refundModalTitle: {
+    fontSize: 18,
+    fontFamily: Fonts.LeagueSpartanBold,
+    color: '#111827',
+    marginBottom: 16,
+  },
+  refundField: {
+    marginBottom: 12,
+  },
+  refundFieldLabel: {
+    fontSize: 13,
+    color: '#6b7280',
+    marginBottom: 6,
+    fontFamily: Fonts.LeagueSpartanMedium,
+  },
+  refundFieldInput: {
+    borderWidth: 1,
+    borderColor: '#e5e7eb',
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    color: '#111827',
+    backgroundColor: '#f9fafb',
+    fontFamily: Fonts.LeagueSpartanRegular,
+  },
+  refundAccountRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  copyButton: {
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    backgroundColor: '#e5e7eb',
+    borderRadius: 10,
+  },
+  copyButtonText: {
+    fontFamily: Fonts.LeagueSpartanSemiBold,
+    color: '#111827',
+  },
+  refundModalActions: {
+    flexDirection: 'row',
+    gap: 12,
+    marginTop: 8,
+  },
+  refundActionButton: {
+    flex: 1,
+    borderRadius: 10,
+    paddingVertical: 12,
+    alignItems: 'center',
+  },
+  refundCancelButton: {
+    backgroundColor: '#f3f4f6',
+  },
+  refundConfirmButton: {
+    backgroundColor: '#ea580c',
+  },
+  refundCancelText: {
+    color: '#111827',
+    fontFamily: Fonts.LeagueSpartanBold,
+    fontSize: 14,
+  },
+  refundConfirmText: {
+    color: '#fff',
+    fontFamily: Fonts.LeagueSpartanBold,
+    fontSize: 14,
   },
 
   // Modal styles - Redesigned
