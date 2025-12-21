@@ -80,6 +80,7 @@ export default function Menu() {
   const [storeId, setStoreId] = useState<number | null>(null);
   const [storeInfo, setStoreInfo] = useState<StoreInfo | null>(null);
   const [loading, setLoading] = useState(false);
+  const [initialLoadDone, setInitialLoadDone] = useState(false);
 
   // Pagination states
   const [currentPage, setCurrentPage] = useState(1);
@@ -109,21 +110,33 @@ export default function Menu() {
     if (storeParam) {
       const id = parseInt(storeParam);
       setStoreId(id);
+      setSelectedCategory(null);
       loadStoreAndFoods(id);
+      setInitialLoadDone(true);
     } else if (categoryParam) {
       const id = parseInt(categoryParam);
       setSelectedCategory(id);
+      setStoreId(null);
+      setInitialLoadDone(true);
+    } else {
+      // No params - show all
+      setSelectedCategory(null);
+      setStoreId(null);
+      setInitialLoadDone(true);
     }
   }, [searchParams]);
 
   // Load foods khi thay đổi filters hoặc pagination
   useEffect(() => {
-    if (storeId) {
-      // Không load lại khi đang ở store view
-      return;
-    }
-    loadFoods(selectedCategory || undefined);
-  }, [selectedCategory, currentPage, sortBy]);
+    // Wait for initial load to complete
+    if (!initialLoadDone) return;
+
+    // Không load nếu đang ở store view
+    if (storeId) return;
+
+    // Load foods with current category filter (null = all foods)
+    loadFoods(selectedCategory === null ? undefined : selectedCategory);
+  }, [selectedCategory, currentPage, sortBy, initialLoadDone, storeId]);
 
   // tải danh mục
   const loadCategories = async () => {
@@ -173,14 +186,32 @@ export default function Menu() {
   const loadStoreAndFoods = async (id: number) => {
     try {
       setLoading(true);
-      const storeRes: StoreInfo = await API.get(`/stores/${id}/`);
-      setStoreInfo(storeRes);
 
-      const foodsRes = await API.get(`/stores/${id}/foods/`);
+      // Gọi API để lấy danh sách món ăn theo store từ menu app
+      const foodsRes = await API.get(`/menu/items/?store=${id}`);
       const foodsData = foodsRes as { results?: Food[] } | Food[];
       setFoods(Array.isArray(foodsData) ? foodsData : foodsData.results || []);
+
+      // Thử lấy thông tin store từ public endpoint (optional, không bắt buộc)
+      try {
+        const allStoresRes = await API.get(`/stores/public/`);
+        const allStores = Array.isArray(allStoresRes) ? allStoresRes : [];
+        const foundStore = allStores.find((s: StoreInfo) => s.id === id);
+        if (foundStore) {
+          setStoreInfo(foundStore);
+        }
+      } catch (storeError) {
+        console.warn(
+          "Store info not found, but foods loaded successfully:",
+          storeError
+        );
+        // Không set error, vì foods đã load được
+      }
     } catch (error) {
-      console.error("Error loading store:", error);
+      console.error("Error loading store foods:", error);
+      // Nếu không load được foods, chuyển về trang chủ hoặc hiện thông báo
+      alert("Không tìm thấy cửa hàng này hoặc cửa hàng không có món ăn!");
+      navigate("/");
     } finally {
       setLoading(false);
     }
@@ -201,6 +232,16 @@ export default function Menu() {
   const handleCategoryChange = (categoryId: number) => {
     setSelectedCategory(categoryId);
     setCurrentPage(1);
+    // Update URL to reflect the selected category
+    navigate(`/menu/items?category=${categoryId}`);
+  };
+
+  const handleShowAll = () => {
+    setSelectedCategory(null);
+    setCurrentPage(1);
+    setSearchTerm("");
+    // Navigate without category parameter to show all foods
+    navigate("/menu/items");
   };
 
   const handleSortChange = (sort: string) => {
@@ -293,21 +334,44 @@ export default function Menu() {
     <div className="container mx-auto p-4">
       {/* hiển thị thông tin cửa hàng khi có */}
       {storeInfo && (
-        <div className="mb-6">
-          <h1 className="text-3xl font-bold">{storeInfo.store_name}</h1>
-          <p className="text-muted-foreground">{storeInfo.description}</p>
-          <p className="text-sm">Quản lý: {storeInfo.manager}</p>
-          <img
-            src={getImageUrl(storeInfo.image)}
-            alt={storeInfo.store_name}
-            className="my-4 w-32 h-32 object-cover rounded-lg"
-          />
+        <div className="mb-8 bg-gradient-to-r from-orange-50 to-red-50 rounded-3xl p-8 shadow-2xl">
+          <div className="flex items-stretch gap-8">
+            {/* Logo cửa hàng bên trái */}
+            <div className="flex-shrink-0">
+              <img
+                src={getImageUrl(storeInfo.image)}
+                alt={storeInfo.store_name}
+                className="w-48 h-48 object-contain rounded-2xl shadow-lg border-4 border-white bg-white p-3"
+              />
+            </div>
+
+            {/* Thông tin cửa hàng bên phải - Chiếm 2/3 không gian */}
+            <div className="flex-1 flex flex-col justify-center">
+              <h1 className="text-5xl font-bold text-gray-800 mb-4">
+                {storeInfo.store_name}
+              </h1>
+              <p className="text-xl text-gray-600 mb-4 leading-relaxed">
+                {storeInfo.description}
+              </p>
+              <p className="text-base text-gray-500 flex items-center gap-3">
+                <span className="inline-block w-3 h-3 bg-green-500 rounded-full animate-pulse"></span>
+                <span className="font-medium">
+                  Quản lý: {storeInfo.manager}
+                </span>
+              </p>
+            </div>
+          </div>
         </div>
       )}
 
       {/* khi không phải store thì hiện danh mục */}
       {!storeId && categories.length > 0 && (
         <div className="mb-6 flex flex-wrap gap-2">
+          <Button
+            variant={selectedCategory === null ? "default" : "outline"}
+            onClick={handleShowAll}>
+            Tất cả
+          </Button>
           {categories.map((cat) => (
             <Button
               key={cat.id}
@@ -400,6 +464,22 @@ export default function Menu() {
                     {food.description}
                   </p>
                 )}
+
+                {/* Đánh giá */}
+                {food.average_rating !== undefined &&
+                  food.average_rating > 0 && (
+                    <div className="flex items-center text-sm text-gray-600">
+                      <span className="text-yellow-400 text-lg">★</span>
+                      <span className="ml-1 font-semibold">
+                        {food.average_rating.toFixed(1)}
+                      </span>
+                      {food.rating_count && food.rating_count > 0 && (
+                        <span className="ml-1 text-gray-500">
+                          ({food.rating_count})
+                        </span>
+                      )}
+                    </div>
+                  )}
 
                 {/* Giá tiền - với giảm giá nếu có */}
                 <div className="space-y-2">

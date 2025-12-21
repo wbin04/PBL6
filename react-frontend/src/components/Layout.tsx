@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useCallback } from "react";
 import { Link, useNavigate, useLocation } from "react-router-dom";
-import { API} from "@/lib/api";
-import type {User} from '@/types/index-ngu';
+import { API } from "@/lib/api";
+import type { User } from "@/types/index-ngu";
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -48,15 +48,15 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       const target = event.target as Element;
-      const userDropdown = target.closest('[data-user-dropdown]');
+      const userDropdown = target.closest("[data-user-dropdown]");
       if (!userDropdown) {
         setIsUserDropdownOpen(false);
       }
     };
 
-    document.addEventListener('mousedown', handleClickOutside);
+    document.addEventListener("mousedown", handleClickOutside);
     return () => {
-      document.removeEventListener('mousedown', handleClickOutside);
+      document.removeEventListener("mousedown", handleClickOutside);
     };
   }, []);
 
@@ -120,24 +120,31 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
                     Admin
                   </Link>
                 )}
-                
+
                 {/* User Dropdown */}
-                <div 
-                  className="relative"
-                  data-user-dropdown>
+                <div className="relative" data-user-dropdown>
                   <button
                     className="font-medium transition-colors hover:text-primary flex items-center space-x-1"
                     onClick={() => setIsUserDropdownOpen(!isUserDropdownOpen)}
                     onMouseEnter={() => setIsUserDropdownOpen(true)}>
                     <span>Xin chào, {user.fullname || user.username}</span>
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                    <svg
+                      className="w-4 h-4"
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24">
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M19 9l-7 7-7-7"
+                      />
                     </svg>
                   </button>
 
                   {/* Dropdown Menu */}
                   {isUserDropdownOpen && (
-                    <div 
+                    <div
                       className="absolute right-0 top-full w-56 bg-white rounded-md shadow-lg border border-gray-200 z-50"
                       onMouseLeave={() => setIsUserDropdownOpen(false)}>
                       <div className="py-1">
@@ -150,7 +157,9 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
 
                         {/* Store Manager Section */}
                         {/* If user is already a store manager by role */}
-                        {(user.role === 'Chủ cửa hàng' || user.role === 'store_manager') && (
+                        {(user.role === "Cửa hàng" ||
+                          user.role === "Chủ cửa hàng" ||
+                          user.role === "store_manager") && (
                           <Link
                             to="/store-manager"
                             className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 transition-colors">
@@ -159,23 +168,29 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
                         )}
 
                         {/* If user is customer and has registered but not yet approved (pending) */}
-                        {(user.role === 'Khách hàng' || user.role === 'customer') && user.is_store_registered && (
-                          <div className="block px-4 py-2 text-sm text-orange-600 bg-orange-50">
-                            ⏳ Đơn đăng ký đang chờ duyệt
-                          </div>
-                        )}
+                        {(user.role === "Khách hàng" ||
+                          user.role === "customer") &&
+                          user.is_store_registered && (
+                            <div className="block px-4 py-2 text-sm text-orange-600 bg-orange-50">
+                              ⏳ Đơn đăng ký đang chờ duyệt
+                            </div>
+                          )}
 
                         {/* If user is customer and hasn't registered for store management */}
-                        {(user.role === 'Khách hàng' || user.role === 'customer') && !user.is_store_registered && (
-                          <Link
-                            to="/store-manager/register"
-                            className="block px-4 py-2 text-sm text-blue-600 hover:bg-blue-50 transition-colors">
-                            📝 Đăng ký làm chủ cửa hàng
-                          </Link>
-                        )}
+                        {(user.role === "Khách hàng" ||
+                          user.role === "customer") &&
+                          !user.is_store_registered && (
+                            <Link
+                              to="/store-manager/register"
+                              className="block px-4 py-2 text-sm text-blue-600 hover:bg-blue-50 transition-colors">
+                              📝 Đăng ký làm chủ cửa hàng
+                            </Link>
+                          )}
 
                         {/* Admin Link - if user is admin */}
-                        {(user.role === 'Admin' || user.role === 'admin' || user.role === 'Quản trị viên') && (
+                        {(user.role === "Admin" ||
+                          user.role === "admin" ||
+                          user.role === "Quản trị viên") && (
                           <Link
                             to="/admin"
                             className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 transition-colors">

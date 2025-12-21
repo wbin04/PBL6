@@ -162,7 +162,9 @@ const Chatbox: React.FC<ChatboxProps> = ({
 
       {/* Chat Window */}
       {isOpen && (
-        <Card className="w-96 shadow-2xl flex flex-col overflow-hidden">
+        <Card
+          className="w-96 shadow-2xl flex flex-col overflow-hidden"
+          style={{ maxHeight: "calc(100vh - 100px)" }}>
           {/* Header */}
           <div className="bg-orange-500 text-white p-4 flex items-center justify-between">
             <div className="flex items-center space-x-2">
@@ -195,7 +197,7 @@ const Chatbox: React.FC<ChatboxProps> = ({
             <>
               <div
                 className="flex-1 overflow-y-auto p-4 space-y-4 bg-gray-50"
-                style={{ height: "400px" }}>
+                style={{ minHeight: "300px", maxHeight: "400px" }}>
                 {messages.map((message) => (
                   <div
                     key={message.id}

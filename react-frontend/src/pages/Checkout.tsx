@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useMemo } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom";
 import { API, getImageUrl } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -75,13 +75,40 @@ const Checkout: React.FC = () => {
   });
 
   const navigate = useNavigate();
+  const location = useLocation();
+  const selectionState = (location.state || {}) as {
+    selectedItemIds?: number[];
+  };
 
   useEffect(() => {
     const loadCart = async () => {
       try {
         setLoading(true);
-        const response = await API.get("/cart/");
-        setCart(response as Cart);
+        const response = (await API.get("/cart/")) as Cart;
+
+        const selectedIds = selectionState.selectedItemIds || [];
+        let finalItems = response.items;
+
+        if (selectedIds.length > 0) {
+          finalItems = response.items.filter((item) => selectedIds.includes(item.id));
+
+          // Recalculate summary fields based on selection
+          const recalculatedTotal = finalItems.reduce((sum, item) => {
+            const itemSubtotal = parseFloat(item.subtotal || "0") || 0;
+            return sum + itemSubtotal;
+          }, 0);
+
+          const filteredCart: Cart = {
+            ...response,
+            items: finalItems,
+            items_count: finalItems.length,
+            total_money: recalculatedTotal.toString(),
+          };
+
+          setCart(filteredCart);
+        } else {
+          setCart(response);
+        }
       } catch (error) {
         console.error("Error loading cart:", error);
         alert("Lỗi khi tải giỏ hàng. Vui lòng thử lại!");
@@ -133,7 +160,7 @@ const Checkout: React.FC = () => {
     };
 
     fetchData();
-  }, [navigate]);
+  }, [navigate, selectionState.selectedItemIds]);
 
   // Helper function to get minimum order value from backend data
   const getPromoMinOrder = (promo: Promo | BackendPromo): number => {
@@ -323,11 +350,16 @@ const Checkout: React.FC = () => {
     try {
       setSubmitting(true);
 
-      const orderData = {
+      const orderData: any = {
         ...formData,
         promo_ids: selectedPromos,
         discount_amount: calculations.discount,
       };
+
+      // Only send selected_item_ids when checkout was initiated with a subset of cart items
+      if (selectionState.selectedItemIds && selectionState.selectedItemIds.length > 0) {
+        orderData.selected_item_ids = selectionState.selectedItemIds;
+      }
 
       console.log("Submitting order:", orderData);
 

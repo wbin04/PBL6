@@ -179,42 +179,16 @@ const Cart: React.FC = () => {
       alert("Vui lòng chọn ít nhất một món để đặt hàng");
       return;
     }
-
-    const unselectedItems = cart.items.filter(
-      (item) => !selectedItems.has(item.id)
+    // Only navigate with the selected items, leave the cart intact
+    const selectedItemsArray = cart.items.filter((item) =>
+      selectedItems.has(item.id)
     );
 
-    try {
-      // 1. Remove unselected items temporarily
-      const removedItems: CartItem[] = [];
-      for (const item of unselectedItems) {
-        await API.delete(`/cart/items/${item.food.id}/remove/`);
-        removedItems.push(item);
-      }
-
-      // 2. Navigate to checkout (which will use remaining items)
-      navigate("/checkout");
-
-      // 3. Add back removed items after navigation
-      // Note: This happens in background, user won't see it
-      setTimeout(async () => {
-        for (const item of removedItems) {
-          try {
-            await API.post("/cart/add/", {
-              food_id: item.food.id,
-              quantity: item.quantity,
-              item_note: item.item_note,
-              food_option_id: item.food_option?.id,
-            });
-          } catch (error) {
-            console.error("Error re-adding item:", error);
-          }
-        }
-      }, 2000);
-    } catch (error) {
-      console.error("Error processing selected items:", error);
-      alert("Có lỗi xảy ra khi xử lý đơn hàng");
-    }
+    navigate("/checkout", {
+      state: {
+        selectedItemIds: selectedItemsArray.map((item) => item.id),
+      },
+    });
   };
 
   /** Tính lại subtotal sau khi thay đổi items */

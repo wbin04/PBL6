@@ -121,31 +121,16 @@ const Home: React.FC = () => {
     try {
       setLoading(true);
 
-      // Fetch all stores (backend returns all without pagination)
-      const url = `http://127.0.0.1:8000/api/stores/`;
+      // Fetch all stores using PUBLIC endpoint (so all users see all stores)
+      const url = `http://127.0.0.1:8000/api/stores/public/`;
       console.log("🔄 Fetching stores from:", url);
 
       let storesResponse = await fetch(url, {
         method: "GET",
-        headers: getAuthHeaders(),
+        headers: { "Content-Type": "application/json" },
       });
 
       console.log("📡 Response status:", storesResponse.status);
-
-      if (storesResponse.status === 401) {
-        console.log("🔑 Token expired, refreshing...");
-        const newAccess = await refreshAccessToken();
-        if (newAccess) {
-          storesResponse = await fetch(url, {
-            method: "GET",
-            headers: {
-              Authorization: `Bearer ${newAccess}`,
-              "Content-Type": "application/json",
-            },
-          });
-          console.log("📡 Retry response status:", storesResponse.status);
-        }
-      }
 
       if (!storesResponse.ok) {
         throw new Error(`HTTP error! status: ${storesResponse.status}`);
@@ -164,30 +149,15 @@ const Home: React.FC = () => {
         storesData: storesData,
       });
 
-      // fetch foods for each store (keep only 3 foods per store)
+      // fetch foods for each store using PUBLIC menu API (keep only 3 foods per store)
       const storesWithFoods: Store[] = await Promise.all(
         storesData.map(async (store) => {
           try {
-            let foodsResponse = await fetch(
-              `http://127.0.0.1:8000/api/stores/${store.id}/foods/`,
-              { method: "GET", headers: getAuthHeaders() }
+            // Use public menu API with store filter instead of authenticated stores API
+            const foodsResponse = await fetch(
+              `http://127.0.0.1:8000/api/menu/items/?store=${store.id}&page_size=3`,
+              { method: "GET", headers: { "Content-Type": "application/json" } }
             );
-
-            if (foodsResponse.status === 401) {
-              const newAccess = await refreshAccessToken();
-              if (newAccess) {
-                foodsResponse = await fetch(
-                  `http://127.0.0.1:8000/api/stores/${store.id}/foods/`,
-                  {
-                    method: "GET",
-                    headers: {
-                      Authorization: `Bearer ${newAccess}`,
-                      "Content-Type": "application/json",
-                    },
-                  }
-                );
-              }
-            }
 
             if (!foodsResponse.ok) {
               throw new Error(
@@ -421,68 +391,92 @@ const Home: React.FC = () => {
   }
 
   return (
-    <div className="font-sans">
-      {/* Navbar */}
-      <header className="bg-orange-500 text-white px-6 py-3 flex justify-center items-center">
-        <div className="flex gap-6">
-          <Link to="/" className="font-semibold">
-            Trang chủ
-          </Link>
-          <Link to="/promo">Khuyến mãi</Link>
-          <Link to="/contact">Liên hệ</Link>
+    <div className="font-sans bg-gradient-to-b from-orange-50 via-white to-red-50 min-h-screen">
+      {/* Hero Section with Beautiful Background */}
+      <section className="relative bg-gradient-to-br from-red-600 via-orange-500 to-yellow-500 text-white text-center py-16 overflow-hidden">
+        {/* Decorative Background Pattern */}
+        <div className="absolute inset-0 opacity-10">
+          <div className="absolute top-10 left-10 w-32 h-32 bg-white rounded-full blur-3xl"></div>
+          <div className="absolute bottom-10 right-10 w-40 h-40 bg-white rounded-full blur-3xl"></div>
+          <div className="absolute top-1/2 left-1/3 w-24 h-24 bg-yellow-300 rounded-full blur-2xl"></div>
         </div>
-      </header>
 
-      {/* Hero */}
-      <section className="bg-red-600 text-white text-center py-10">
-        <h1 className="text-3xl font-bold mb-2">Chào mừng đến FastFood</h1>
-        <p className="mb-6">Đặt món ăn ngon, giao hàng nhanh chóng!</p>
-        <div className="flex justify-center gap-6 flex-wrap">
-          {categories.map((cate) => (
-            <div
-              key={cate.id}
-              className="flex flex-col items-center cursor-pointer"
-              onClick={() => viewCategory(cate.id)}>
-              <img
-                src={getImageUrl(cate.image)}
-                alt={cate.cate_name}
-                className="w-12 h-12 mb-2"
-              />
-              <span>{cate.cate_name}</span>
-            </div>
-          ))}
+        {/* Food Icons Pattern */}
+        <div className="absolute inset-0 opacity-5 text-6xl pointer-events-none">
+          <div className="absolute top-20 left-20">🍔</div>
+          <div className="absolute top-40 right-32">🍕</div>
+          <div className="absolute bottom-32 left-40">🍟</div>
+          <div className="absolute bottom-20 right-20">🌮</div>
+          <div className="absolute top-32 right-1/4">🍗</div>
+          <div className="absolute bottom-40 left-1/3">🥤</div>
         </div>
-        <div className="mt-6 flex justify-center items-center gap-2">
-          <input
-            type="text"
-            placeholder="Tìm món ăn..."
-            className="px-4 py-2 rounded-md text-black w-80"
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            onKeyPress={handleSearchInputKeyPress}
-          />
-          <button
-            onClick={handleSearch}
-            disabled={isSearching}
-            className="px-6 py-2 bg-orange-600 hover:bg-orange-700 text-white rounded-md font-medium disabled:opacity-50 disabled:cursor-not-allowed">
-            {isSearching ? "Đang tìm..." : "Tìm kiếm"}
-          </button>
-          {showSearchResults && (
+
+        <div className="relative z-10">
+          <h1 className="text-5xl font-bold mb-4 drop-shadow-lg">
+            Chào mừng đến FastFood
+          </h1>
+          <p className="text-xl mb-8 text-yellow-100 drop-shadow-md">
+            Đặt món ăn ngon, giao hàng nhanh chóng! 🚀
+          </p>
+          <div className="flex justify-center gap-8 flex-wrap mb-8">
+            {categories.map((cate) => (
+              <div
+                key={cate.id}
+                className="flex flex-col items-center cursor-pointer hover:scale-110 transition-transform duration-300 group"
+                onClick={() => viewCategory(cate.id)}>
+                <div className="bg-white/20 backdrop-blur-sm p-4 rounded-2xl group-hover:bg-white/30 transition-all shadow-lg">
+                  <img
+                    src={getImageUrl(cate.image)}
+                    alt={cate.cate_name}
+                    className="w-16 h-16"
+                  />
+                </div>
+                <span className="mt-3 font-semibold text-yellow-100 group-hover:text-white transition-colors">
+                  {cate.cate_name}
+                </span>
+              </div>
+            ))}
+          </div>
+          <div className="flex justify-center items-center gap-2">
+            <div className="relative">
+              <input
+                type="text"
+                placeholder="🔍 Tìm món ăn yêu thích của bạn..."
+                className="px-6 py-3 rounded-full text-black w-96 shadow-2xl focus:ring-4 focus:ring-yellow-300 focus:outline-none transition-all"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                onKeyPress={handleSearchInputKeyPress}
+              />
+            </div>
             <button
-              onClick={clearSearch}
-              className="px-4 py-2 bg-gray-500 hover:bg-gray-600 text-white rounded-md">
-              Xóa
+              onClick={handleSearch}
+              disabled={isSearching}
+              className="px-8 py-3 bg-white text-red-600 rounded-full font-bold shadow-2xl hover:bg-yellow-100 hover:scale-105 transform transition-all disabled:opacity-50 disabled:cursor-not-allowed">
+              {isSearching ? "⏳ Đang tìm..." : "🔍 Tìm kiếm"}
             </button>
-          )}
+            {showSearchResults && (
+              <button
+                onClick={clearSearch}
+                className="px-6 py-3 bg-gray-700 hover:bg-gray-800 text-white rounded-full font-medium shadow-xl hover:scale-105 transform transition-all">
+                ✕ Xóa
+              </button>
+            )}
+          </div>
         </div>
       </section>
 
       {/* Search Results */}
       {showSearchResults && (
-        <section className="container mx-auto px-4 py-8">
+        <section className="container mx-auto px-4 py-8 relative">
+          {/* Decorative background */}
+          <div className="absolute inset-0 bg-gradient-to-r from-orange-100/30 to-red-100/30 rounded-3xl -z-10"></div>
+
           <div className="mb-6">
-            <h2 className="text-2xl font-bold text-gray-900 mb-2">
-              Kết quả tìm kiếm cho "{searchQuery}" ({searchResults.length} món)
+            <h2 className="text-3xl font-bold text-gray-900 mb-2">
+              🎯 Kết quả tìm kiếm cho "{searchQuery}"{" "}
+              <span className="text-orange-600">
+                ({searchResults.length} món)
+              </span>
             </h2>
           </div>
 
@@ -584,16 +578,22 @@ const Home: React.FC = () => {
       {/* Stores */}
       <section
         id="stores-section"
-        className="container mx-auto px-4 py-10 grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <div className="lg:col-span-2 space-y-6">
+        className="container mx-auto px-4 py-10 relative">
+        {/* Decorative circles background */}
+        <div className="absolute inset-0 -z-10 overflow-hidden pointer-events-none">
+          <div className="absolute top-20 left-0 w-64 h-64 bg-orange-200/20 rounded-full blur-3xl"></div>
+          <div className="absolute bottom-20 right-0 w-72 h-72 bg-red-200/20 rounded-full blur-3xl"></div>
+        </div>
+
+        <div className="space-y-6">
           {/* Stores header */}
           {!loading && totalStores > 0 && (
             <div className="flex justify-between items-center mb-6">
-              <h2 className="text-2xl font-bold text-gray-900">
-                Cửa hàng ({totalStores})
+              <h2 className="text-3xl font-bold text-gray-800 flex items-center gap-2">
+                <span className="text-4xl">🏪</span> Cửa hàng ({totalStores})
               </h2>
               {totalPages > 0 && (
-                <div className="text-sm text-gray-600">
+                <div className="text-sm text-gray-600 bg-orange-100 px-4 py-2 rounded-full font-medium">
                   Trang {currentPage} / {totalPages}
                 </div>
               )}
@@ -619,61 +619,97 @@ const Home: React.FC = () => {
           {!loading &&
             stores.length > 0 &&
             stores.map((store) => (
-              <Card key={store.id} className="p-4">
-                <h3
-                  className="font-bold text-lg cursor-pointer hover:text-blue-600"
-                  onClick={() => viewStore(store.id)}>
-                  {store.store_name}
-                </h3>
-                <p>{store.description}</p>
-                <p>Quản lý: {store.manager}</p>
-                <div className="flex gap-6 mt-4 flex-wrap">
-                  {store.products.length === 0 ? (
-                    <p className="text-gray-500">Không có món ăn</p>
-                  ) : (
-                    store.products.map((p) => (
-                      <div
-                        key={p.id}
-                        className="flex items-center gap-3 cursor-pointer hover:bg-gray-100 p-2 rounded-lg transition-colors"
-                        onClick={() => openFoodModal(p)}>
-                        <img
-                          src={p.image_url}
-                          alt={p.title}
-                          className="w-16 h-16 object-cover rounded"
-                          onError={(e) => {
-                            e.currentTarget.src = "/images/placeholder.jpg";
-                          }}
-                        />
-                        <div>
-                          <p className="text-gray-900 font-bold">{p.title}</p>
-                          <div className="bg-red-50 px-2 py-1 rounded-md inline-block mt-1">
-                            <span className="text-red-600 font-bold">
-                              {Number(p.price).toLocaleString()} đ
-                            </span>
+              <Card
+                key={store.id}
+                className="p-6 hover:shadow-2xl transition-all duration-300 bg-gradient-to-r from-white to-orange-50">
+                <div className="flex gap-6">
+                  {/* Thông tin cửa hàng và món ăn bên trái */}
+                  <div className="flex-1 flex flex-col gap-4">
+                    {/* Thông tin cửa hàng */}
+                    <div>
+                      <h3
+                        className="font-bold text-2xl cursor-pointer hover:text-orange-600 transition-colors mb-1"
+                        onClick={() => viewStore(store.id)}>
+                        {store.store_name}
+                      </h3>
+                      <p className="text-gray-600 text-sm mb-1">
+                        {store.description}
+                      </p>
+                      <p className="text-xs text-gray-500 flex items-center gap-2">
+                        <span className="inline-block w-2 h-2 bg-green-500 rounded-full"></span>
+                        Quản lý: {store.manager}
+                      </p>
+                    </div>
+
+                    {/* Danh sách món ăn */}
+                    <div className="flex gap-3 flex-wrap items-start">
+                      {store.products.length === 0 ? (
+                        <p className="text-gray-500 italic text-sm">
+                          Không có món ăn
+                        </p>
+                      ) : (
+                        store.products.map((p) => (
+                          <div
+                            key={p.id}
+                            className="flex items-center gap-2 cursor-pointer hover:bg-orange-50 p-2 rounded-xl transition-all duration-300 hover:shadow-md group border border-transparent hover:border-orange-200"
+                            onClick={() => openFoodModal(p)}>
+                            <img
+                              src={p.image_url}
+                              alt={p.title}
+                              className="w-24 h-24 object-cover rounded-lg shadow-md group-hover:scale-110 transition-transform"
+                              onError={(e) => {
+                                e.currentTarget.src = "/images/placeholder.jpg";
+                              }}
+                            />
+                            <div>
+                              <p className="text-gray-900 font-bold group-hover:text-orange-600 transition-colors">
+                                {p.title}
+                              </p>
+                              <div className="bg-gradient-to-r from-red-500 to-orange-500 text-white px-3 py-1 rounded-lg inline-block mt-1 shadow-sm">
+                                <span className="font-bold text-sm">
+                                  {Number(p.price).toLocaleString()} đ
+                                </span>
+                              </div>
+                            </div>
                           </div>
-                        </div>
-                      </div>
-                    ))
-                  )}
+                        ))
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Logo cửa hàng bên phải */}
+                  <div className="flex-shrink-0 w-48 self-start">
+                    <img
+                      src={
+                        getImageUrl(store.image) || "/images/placeholder.jpg"
+                      }
+                      alt={store.store_name}
+                      className="w-48 h-48 object-contain rounded-2xl shadow-xl border-4 border-white bg-white p-3 cursor-pointer hover:scale-105 transition-transform"
+                      onClick={() => viewStore(store.id)}
+                      onError={(e) => {
+                        e.currentTarget.src = "/images/placeholder.jpg";
+                      }}
+                    />
+                  </div>
                 </div>
               </Card>
             ))}
 
           {/* Pagination Controls */}
           {totalPages > 1 && (
-            <div className="flex justify-center items-center space-x-2 mt-8">
+            <div className="flex justify-center items-center space-x-3 mt-10">
               <button
                 onClick={goToPreviousPage}
                 disabled={!hasPrevious}
-                className={`px-4 py-2 rounded-md ${
+                className={`px-6 py-3 rounded-xl font-semibold transition-all duration-300 ${
                   hasPrevious
-                    ? "bg-blue-600 text-white hover:bg-blue-700"
-                    : "bg-gray-300 text-gray-500 cursor-not-allowed"
+                    ? "bg-gradient-to-r from-orange-500 to-red-500 text-white hover:from-orange-600 hover:to-red-600 shadow-lg hover:shadow-xl transform hover:-translate-x-1"
+                    : "bg-gray-200 text-gray-400 cursor-not-allowed"
                 }`}>
                 ← Trước
               </button>
 
-              <div className="flex space-x-1">
+              <div className="flex space-x-2">
                 {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
                   let pageNum: number;
                   if (totalPages <= 5) {
@@ -690,10 +726,10 @@ const Home: React.FC = () => {
                     <button
                       key={pageNum}
                       onClick={() => goToPage(pageNum)}
-                      className={`px-3 py-2 rounded-md ${
+                      className={`w-12 h-12 rounded-xl font-bold transition-all duration-300 ${
                         currentPage === pageNum
-                          ? "bg-blue-600 text-white"
-                          : "bg-gray-200 text-gray-700 hover:bg-gray-300"
+                          ? "bg-gradient-to-r from-orange-500 to-red-500 text-white shadow-lg scale-110"
+                          : "bg-white text-gray-700 hover:bg-orange-100 hover:text-orange-600 border-2 border-gray-200 hover:border-orange-300 hover:scale-105"
                       }`}>
                       {pageNum}
                     </button>
@@ -704,10 +740,10 @@ const Home: React.FC = () => {
               <button
                 onClick={goToNextPage}
                 disabled={!hasNext}
-                className={`px-4 py-2 rounded-md ${
+                className={`px-6 py-3 rounded-xl font-semibold transition-all duration-300 ${
                   hasNext
-                    ? "bg-blue-600 text-white hover:bg-blue-700"
-                    : "bg-gray-300 text-gray-500 cursor-not-allowed"
+                    ? "bg-gradient-to-r from-orange-500 to-red-500 text-white hover:from-orange-600 hover:to-red-600 shadow-lg hover:shadow-xl transform hover:translate-x-1"
+                    : "bg-gray-200 text-gray-400 cursor-not-allowed"
                 }`}>
                 Tiếp →
               </button>
@@ -715,40 +751,6 @@ const Home: React.FC = () => {
           )}
 
           {/* Store count info */}
-        </div>
-
-        {/* Sidebar */}
-        <div>
-          <h2 className="font-bold text-lg mb-4">Món Được Yêu Thích</h2>
-          <div className="space-y-4">
-            {stores[0]?.products.length > 0 ? (
-              stores[0].products.map((p) => (
-                <div
-                  key={p.id}
-                  className="flex items-center gap-3 cursor-pointer hover:bg-gray-100 p-2 rounded-lg transition-colors"
-                  onClick={() => openFoodModal(p)}>
-                  <img
-                    src={p.image_url}
-                    alt={p.title}
-                    className="w-12 h-12 rounded object-cover"
-                    onError={(e) => {
-                      e.currentTarget.src = "/images/placeholder.jpg";
-                    }}
-                  />
-                  <div>
-                    <p className="text-gray-900 font-bold">{p.title}</p>
-                    <div className="bg-red-50 px-2 py-1 rounded-md inline-block mt-1">
-                      <span className="text-red-600 font-bold">
-                        {Number(p.price).toLocaleString()} đ
-                      </span>
-                    </div>
-                  </div>
-                </div>
-              ))
-            ) : (
-              <p className="text-gray-500">Không có món yêu thích</p>
-            )}
-          </div>
         </div>
       </section>
 
