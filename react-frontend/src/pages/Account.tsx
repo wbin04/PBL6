@@ -126,23 +126,31 @@ const Account: React.FC = () => {
           <CardHeader>
             <div className="flex justify-between items-center">
               <CardTitle>Thông tin tài khoản</CardTitle>
-              {!isEditing ? (
-                <Button variant="outline" onClick={() => setIsEditing(true)}>
-                  Chỉnh sửa
+              <div className="flex gap-2">
+                <Button
+                  variant="outline"
+                  onClick={() => navigate("/change-password")}
+                  className="bg-gradient-to-r from-orange-500 to-red-500 text-white hover:from-orange-600 hover:to-red-600 border-none">
+                  🔐 Đổi mật khẩu
                 </Button>
-              ) : (
-                <div className="space-x-2">
-                  <Button
-                    variant="outline"
-                    onClick={handleCancel}
-                    disabled={saving}>
-                    Hủy
+                {!isEditing ? (
+                  <Button variant="outline" onClick={() => setIsEditing(true)}>
+                    Chỉnh sửa
                   </Button>
-                  <Button onClick={handleSave} disabled={saving}>
-                    {saving ? "Đang lưu..." : "Lưu"}
-                  </Button>
-                </div>
-              )}
+                ) : (
+                  <div className="space-x-2">
+                    <Button
+                      variant="outline"
+                      onClick={handleCancel}
+                      disabled={saving}>
+                      Hủy
+                    </Button>
+                    <Button onClick={handleSave} disabled={saving}>
+                      {saving ? "Đang lưu..." : "Lưu"}
+                    </Button>
+                  </div>
+                )}
+              </div>
             </div>
           </CardHeader>
 

@@ -14,6 +14,8 @@ import CheckoutResult from "./pages/CheckoutResult";
 import StoreManager from "./pages/StoreManager";
 import StoreManagerRegister from "./pages/StoreManagerRegister";
 import Account from "./pages/Account";
+import ChangePassword from "./pages/ChangePassword";
+import ResetPassword from "./pages/ResetPassword";
 
 function App() {
   return (
@@ -21,6 +23,7 @@ function App() {
       <Routes>
         <Route path="/login" element={<Login />} />
         <Route path="/register" element={<Register />} />
+        <Route path="/reset-password" element={<ResetPassword />} />
         <Route path="/admin" element={<Admin />} />
         <Route path="/store-manager" element={<StoreManager />} />
         <Route path="/storemanager" element={<StoreManager />} />
@@ -41,6 +44,7 @@ function App() {
                 <Route path="/checkout-result" element={<CheckoutResult />} />
                 <Route path="/orders" element={<Orders />} />
                 <Route path="/account" element={<Account />} />
+                <Route path="/change-password" element={<ChangePassword />} />
                 {/* Add more routes as needed */}
               </Routes>
               {/* Global Chatbox - available on all pages */}
