@@ -101,7 +101,7 @@ const Login: React.FC = () => {
 
           <div className="mt-4 space-y-2 text-center text-sm">
             <p>
-              <Link to="/forgot-password" className="text-primary hover:underline">
+              <Link to="/reset-password" className="text-primary hover:underline">
                 Quên mật khẩu?
               </Link>
             </p>
