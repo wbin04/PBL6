@@ -1,2229 +1,1770 @@
-# FastFood API Documentation
+# Tài liệu API Theo Vai Trò
 
-## Tổng quan
-FastFood API cung cấp các endpoints để quản lý hệ thống đặt đồ ăn nhanh, bao gồm xác thực người dùng, quản lý menu, giỏ hàng, đơn hàng, thanh toán, khuyến mãi, đánh giá và giao hàng.
+Tài liệu này liệt kê toàn bộ endpoint backend hiện có, được nhóm theo vai trò sử dụng (Khách hàng, Chủ cửa hàng, Người vận chuyển, Quản lý). Mỗi dòng ghi rõ phương thức HTTP, đường dẫn, mô tả bằng tiếng Việt, đồng thời nêu cấu trúc response JSON dựa trên code trong `backend/apps/**/views.py`.
 
-**Base URL:** `http://localhost:8000`
+## 1. API dùng chung / Xác thực
 
----
+| Phương thức | Endpoint | Mục đích | Response (JSON) |
+|---|---|---|---|
+| POST | `/api/auth/login/` | Đăng nhập, trả về JWT. | Xem “Response mẫu – Đăng nhập”. |
+| POST | `/api/auth/register/` | Tạo tài khoản khách hàng mới. | Xem “Response mẫu – Đăng ký”. |
+| POST | `/api/auth/refresh/` | Đổi refresh token lấy access token mới. | Xem “Response mẫu – Refresh token”. |
+| GET | `/api/auth/profile/` | Lấy thông tin người dùng hiện tại. | Xem “Response mẫu – Thông tin hồ sơ”. |
+| PUT | `/api/auth/profile/update/` | Cập nhật hồ sơ (partial update). | Xem “Response mẫu – Thông tin hồ sơ”. |
+| POST | `/api/auth/reset-password/` | Đặt lại mật khẩu bằng email/tên đăng nhập/số điện thoại. | Xem “Response mẫu – Đặt lại mật khẩu”. |
+| POST | `/api/auth/registration/shipper/` | Gửi/ngừng đăng ký làm shipper. | Xem “Response mẫu – Cờ đăng ký shipper”. |
+| POST | `/api/auth/registration/store/` | Gửi/ngừng đăng ký mở cửa hàng. | Xem “Response mẫu – Cờ đăng ký cửa hàng”. |
+| GET | `/api/auth/registration/status/` | Kiểm tra trạng thái đăng ký shipper/store. | Xem “Response mẫu – Trạng thái đăng ký”. |
 
-## 1. Authentication API (`/api/auth/`)
+> **Lưu ý tọa độ:** Các endpoint đăng ký (`/register/`) và cập nhật hồ sơ (`/profile/update/`) chấp nhận `latitude` và `longitude` dạng số/thập phân và tự động làm tròn 6 chữ số thập phân. Nếu người dùng không gửi tọa độ khi tạo đơn hàng, hệ thống sẽ dùng giá trị đã lưu trong hồ sơ.
 
-### 1.1 Đăng nhập
-- **POST** `/api/auth/login/`
-- **Mô tả:** Đăng nhập bằng email, username hoặc số điện thoại
-- **Request Body:**
+#### Response mẫu – Authentication
+
+- Đăng nhập/đăng ký thành công (`POST /api/auth/login/`, `POST /api/auth/register/`):
 ```json
 {
-  "email": "user@example.com",
-  "password": "password123"
-}
-```
-- **Response:**
-```json
-{
-  "access": "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9...",
-  "refresh": "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9...",
-  "user": {
-    "id": 1,
-    "username": "john_doe",
-    "email": "user@example.com",
-    "fullname": "John Doe",
-    "phone_number": "0123456789",
-    "address": "123 Main St",
-    "role": "Khách hàng",
-    "role_id": 1,
-    "created_date": "2025-01-01T10:00:00Z"
-  }
-}
-```
-
-### 1.2 Đăng ký
-- **POST** `/api/auth/register/`
-- **Request Body:**
-```json
-{
-  "email": "newuser@example.com",
-  "username": "new_user",
-  "fullname": "New User",
-  "phone_number": "0987654321",
-  "address": "456 Oak St",
-  "password": "newpassword123",
-  "password_confirm": "newpassword123"
-}
-```
-- **Response:**
-```json
-{
-  "id": 2,
-  "username": "new_user",
-  "email": "newuser@example.com",
-  "fullname": "New User",
-  "phone_number": "0987654321",
-  "address": "456 Oak St",
-  "role": "Khách hàng",
-  "role_id": 1,
-  "created_date": "2025-01-01T11:00:00Z"
+	"refresh": "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9...",
+	"access": "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9...",
+	"user": {
+		"id": 7,
+		"username": "khachhang01",
+		"email": "customer@example.com",
+		"fullname": "Nguyễn Văn A",
+		"phone_number": "0900000000",
+		"address": "123 Lê Lợi, Quận 1, TP.HCM",
+		"latitude": 10.776523,
+		"longitude": 106.700981,
+		"created_date": "2025-09-25T14:20:00+07:00",
+		"role": "Khách hàng",
+		"role_id": 1,
+		"is_active": true,
+		"is_shipper_registered": false,
+		"is_store_registered": false
+	}
 }
 ```
 
-### 1.3 Làm mới token
-- **POST** `/api/auth/refresh/`
-- **Request Body:**
+- Sai thông tin đăng nhập (`400 Bad Request`):
 ```json
 {
-  "refresh": "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9..."
-}
-```
-- **Response:**
-```json
-{
-  "access": "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9..."
+	"error": "Invalid credentials"
 }
 ```
 
-### 1.4 Thông tin người dùng
-- **GET** `/api/auth/profile/`
-- **Headers:** `Authorization: Bearer {access_token}`
-- **Response:**
+- Refresh token: `POST /api/auth/refresh/`
 ```json
 {
-  "id": 1,
-  "username": "john_doe",
-  "email": "user@example.com",
-  "fullname": "John Doe",
-  "phone_number": "0123456789",
-  "address": "123 Main St",
-  "role": "Khách hàng",
-  "role_id": 1,
-  "created_date": "2025-01-01T10:00:00Z"
+	"access": "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9..."
 }
 ```
 
-### 1.5 Cập nhật thông tin người dùng
-- **PUT** `/api/auth/profile/update/`
-- **Headers:** `Authorization: Bearer {access_token}`
-- **Request Body:**
+- Refresh token không hợp lệ:
 ```json
 {
-  "fullname": "John Smith",
-  "phone_number": "0123456789",
-  "address": "789 Pine St"
-}
-```
-- **Response:** Tương tự response của profile
-
-### 1.6 Đặt lại mật khẩu
-- **POST** `/api/auth/reset-password/`
-- **Request Body:**
-```json
-{
-  "identifier": "user@example.com",
-  "new_password": "newpassword456"
-}
-```
-- **Response:**
-```json
-{
-  "message": "Mật khẩu đã được đặt lại thành công"
+	"error": "Invalid refresh token"
 }
 ```
 
-### 1.7 Admin - Danh sách khách hàng
-- **GET** `/api/auth/admin/customers/`
-- **Headers:** `Authorization: Bearer {admin_token}`
-- **Query Parameters:**
-  - `search`: Tìm kiếm theo tên, email hoặc số điện thoại
-  - `page`: Trang hiện tại (mặc định: 1)
-- **Response:**
+- Thông tin hồ sơ (`GET/PUT /api/auth/profile/`):
 ```json
 {
-  "customers": [
-    {
-      "id": 1,
-      "username": "john_doe",
-      "email": "user@example.com",
-      "fullname": "John Doe",
-      "phone_number": "0123456789",
-      "address": "123 Main St",
-      "role": "Khách hàng",
-      "role_id": 1,
-      "created_date": "2025-01-01T10:00:00Z"
-    }
-  ],
-  "total_pages": 5,
-  "current_page": 1,
-  "total_customers": 45
+	"id": 7,
+	"username": "khachhang01",
+	"email": "customer@example.com",
+	"fullname": "Nguyễn Văn A",
+	"phone_number": "0900000000",
+	"address": "123 Lê Lợi, Quận 1, TP.HCM",
+	"latitude": 10.776523,
+	"longitude": 106.700981,
+	"created_date": "2025-09-25T14:20:00+07:00",
+	"role": "Khách hàng",
+	"role_id": 1,
+	"is_active": true,
+	"is_shipper_registered": false,
+	"is_store_registered": true
 }
 ```
 
-### 1.8 Admin - Chi tiết khách hàng
-- **GET** `/api/auth/admin/customers/{customer_id}/`
-- **PUT** `/api/auth/admin/customers/{customer_id}/`
-- **Headers:** `Authorization: Bearer {admin_token}`
-- **Request Body (PUT):**
+- Đặt lại mật khẩu (`POST /api/auth/reset-password/`):
 ```json
 {
-  "fullname": "John Smith Updated",
-  "phone_number": "0987654321",
-  "address": "456 New Address"
-}
-```
-- **Response:** Tương tự thông tin người dùng
-
-### 1.9 Admin - Bật/tắt trạng thái khách hàng
-- **POST** `/api/auth/admin/customers/{customer_id}/toggle-status/`
-- **Headers:** `Authorization: Bearer {admin_token}`
-- **Mô tả:** Bật/tắt trạng thái hoạt động của khách hàng
-- **Response:**
-```json
-{
-  "message": "Customer activated successfully",
-  "customer": {
-    "id": 1,
-    "username": "john_doe",
-    "email": "user@example.com",
-    "fullname": "John Doe",
-    "is_active": true
-  }
+	"message": "Đặt lại mật khẩu thành công"
 }
 ```
 
-### 1.10 Cập nhật đăng ký làm Shipper
-- **POST** `/api/auth/registration/shipper/`
-- **Headers:** `Authorization: Bearer {access_token}`
-- **Mô tả:** Người dùng đăng ký làm shipper
-- **Request Body:**
+- Đặt lại mật khẩu thất bại:
 ```json
 {
-  "is_registered": true
-}
-```
-- **Response:**
-```json
-{
-  "message": "Shipper registration status updated successfully",
-  "is_shipper_registered": true
+	"error": "Không tìm thấy người dùng"
 }
 ```
 
-### 1.11 Cập nhật đăng ký làm Store Manager
-- **POST** `/api/auth/registration/store/`
-- **Headers:** `Authorization: Bearer {access_token}`
-- **Mô tả:** Người dùng đăng ký làm quản lý cửa hàng
-- **Request Body:**
+- Cập nhật cờ đăng ký shipper/cửa hàng (`POST /api/auth/registration/shipper/`, `/store/`):
 ```json
 {
-  "is_registered": true
-}
-```
-- **Response:**
-```json
-{
-  "message": "Store registration status updated successfully",
-  "is_store_registered": true
+	"message": "Shipper registration status updated successfully",
+	"is_shipper_registered": true
 }
 ```
 
-### 1.12 Kiểm tra trạng thái đăng ký
-- **GET** `/api/auth/registration/status/`
-- **Headers:** `Authorization: Bearer {access_token}`
-- **Mô tả:** Xem trạng thái đăng ký làm shipper/store manager
-- **Response:**
+- Trạng thái đăng ký (`GET /api/auth/registration/status/`):
 ```json
 {
-  "is_shipper_registered": false,
-  "is_store_registered": true
+	"is_shipper_registered": false,
+	"is_store_registered": true
 }
 ```
 
-### 1.13 Admin - Danh sách đăng ký Shipper
-- **GET** `/api/auth/shipper/applications/`
-- **Headers:** `Authorization: Bearer {admin_token}`
-- **Query Parameters:**
-  - `search`: Tìm kiếm theo tên, email hoặc số điện thoại
-  - `page`: Trang hiện tại (mặc định: 1)
-- **Response:**
+## 2. API dành cho Khách hàng
+
+### Giỏ hàng (`apps/cart/views.py`)
+| Phương thức | Endpoint | Mục đích | Response |
+|---|---|---|---|
+| GET | `/api/cart/` | Lấy giỏ hàng với chi tiết món, cửa hàng, size. | Xem “Response mẫu – GET /api/cart/”. |
+| POST | `/api/cart/add/` | Thêm/cộng dồn món ăn, hỗ trợ topping và ghi chú. | Xem “Response mẫu – POST /api/cart/add/”. |
+| PUT / DELETE | `/api/cart/items/<food_id>/` | Cập nhật số lượng/ghi chú hoặc xóa item. | Xem “Response mẫu – PUT/DELETE /api/cart/items/<food_id>/”. |
+| DELETE | `/api/cart/items/<food_id>/remove/` | Xóa item theo food_id (alias). | Xem “Response mẫu – DELETE giỏ hàng”. |
+| DELETE | `/api/cart/clear/` | Xóa toàn bộ giỏ hàng. | Xem “Response mẫu – DELETE giỏ hàng”. |
+
+#### Response mẫu – Giỏ hàng
+
+- `GET /api/cart/`
 ```json
 {
-  "applications": [
-    {
-      "id": 10,
-      "username": "shipper_candidate",
-      "email": "shipper@example.com",
-      "fullname": "Nguyễn Văn A",
-      "phone_number": "0123456789",
-      "address": "123 Main St",
-      "is_shipper_registered": true,
-      "created_date": "2025-01-01T10:00:00Z"
-    }
-  ],
-  "total_pages": 2,
-  "current_page": 1,
-  "total_applications": 15
+	"id": 8,
+	"total_money": 185000.0,
+	"items_count": 2,
+	"items": [
+		{
+			"id": 31,
+			"food": {
+				"id": 11,
+				"title": "Burger Bò Gấp Đôi",
+				"description": "Burger bò phô mai",
+				"price": 75000.0,
+				"image": "assets/foods/burger.png",
+				"availability": true,
+				"store": {
+					"id": 3,
+					"store_name": "FastFood ABC",
+					"description": "Chuỗi đồ ăn nhanh",
+					"image": "assets/store-icon.png"
+				}
+			},
+			"food_id": 11,
+			"food_option_id": null,
+			"size": null,
+			"quantity": 2,
+			"item_note": "ít sốt",
+			"subtotal": 150000.0
+		},
+		{
+			"id": 32,
+			"food": {
+				"id": 18,
+				"title": "Khoai tây lắc",
+				"description": "Khoai giòn",
+				"price": 35000.0,
+				"image": "assets/foods/fries.png",
+				"availability": true,
+				"store": {
+					"id": 3,
+					"store_name": "FastFood ABC",
+					"description": "Chuỗi đồ ăn nhanh",
+					"image": "assets/store-icon.png"
+				}
+			},
+			"food_id": 18,
+			"food_option_id": 5,
+			"size": {
+				"id": 5,
+				"size_name": "L",
+				"price": 5000.0
+			},
+			"quantity": 1,
+			"item_note": null,
+			"subtotal": 40000.0
+		}
+	]
+}
+
+> Các store trả về đầy đủ `address`, `latitude`, `longitude` để phía client hiển thị vị trí chính xác hoặc dùng cho phép đo quãng đường.
+```
+
+- `POST /api/cart/add/`
+```json
+{
+	"message": "Added Burger Bò Gấp Đôi to cart",
+	"item": {
+		"food": {
+			"id": 11,
+			"title": "Burger Bò Gấp Đôi",
+			"price": 75000.0,
+			"image": "assets/foods/burger.png"
+		},
+		"food_id": 11,
+		"food_option_id": null,
+		"quantity": 2,
+		"item_note": "ít sốt",
+		"toppings_added": [
+			{
+				"food_id": 25,
+				"title": "Phô mai",
+				"quantity": 1
+			}
+		]
+	}
 }
 ```
 
-### 1.14 Admin - Duyệt đăng ký Shipper
-- **POST** `/api/auth/shipper/applications/{user_id}/approve/`
-- **Headers:** `Authorization: Bearer {admin_token}`
-- **Mô tả:** Duyệt đăng ký làm shipper và tự động tạo Shipper record
-- **Response:**
+- `PUT /api/cart/items/<food_id>/`
 ```json
 {
-  "message": "Shipper application approved successfully",
-  "user": {
-    "id": 10,
-    "username": "shipper_candidate",
-    "email": "shipper@example.com",
-    "fullname": "Nguyễn Văn A",
-    "role": "Người vận chuyển",
-    "role_id": 4
-  },
-  "shipper_id": 1
+	"message": "Cart item updated",
+	"item": {
+		"food": {
+			"id": 11,
+			"title": "Burger Bò Gấp Đôi",
+			"price": 75000.0,
+			"image": "assets/foods/burger.png"
+		},
+		"food_id": 11,
+		"quantity": 1,
+		"item_note": "không hành",
+		"subtotal": 75000.0
+	}
 }
 ```
 
-### 1.15 Admin - Từ chối đăng ký Shipper
-- **POST** `/api/auth/shipper/applications/{user_id}/reject/`
-- **Headers:** `Authorization: Bearer {admin_token}`
-- **Response:**
+- Các thao tác xóa (`DELETE /api/cart/items/<food_id>/`, `/remove/`, `/api/cart/clear/`)
 ```json
 {
-  "message": "Shipper application rejected",
-  "user": {
-    "id": 10,
-    "username": "shipper_candidate",
-    "is_shipper_registered": false
-  }
+	"message": "Item removed from cart"
 }
 ```
 
-### 1.16 Admin - Danh sách đăng ký Store Manager
-- **GET** `/api/auth/store/applications/`
-- **Headers:** `Authorization: Bearer {admin_token}`
-- **Query Parameters:** Tương tự danh sách đăng ký Shipper
-- **Response:** Tương tự danh sách đăng ký Shipper
-
-### 1.17 Admin - Duyệt đăng ký Store Manager
-- **POST** `/api/auth/store/applications/{user_id}/approve/`
-- **Headers:** `Authorization: Bearer {admin_token}`
-- **Mô tả:** Duyệt đăng ký làm store manager và tự động tạo Store record
-- **Response:**
+- `DELETE /api/cart/clear/`
 ```json
 {
-  "message": "Store application approved successfully",
-  "user": {
-    "id": 11,
-    "username": "store_candidate",
-    "email": "store@example.com",
-    "fullname": "Trần Thị B",
-    "role": "Cửa hàng",
-    "role_id": 3
-  },
-  "store_id": 5,
-  "store_name": "Cửa hàng Trần Thị B"
+	"message": "Cart cleared"
 }
 ```
 
-### 1.18 Admin - Từ chối đăng ký Store Manager
-- **POST** `/api/auth/store/applications/{user_id}/reject/`
-- **Headers:** `Authorization: Bearer {admin_token}`
-- **Response:**
+### Menu / Thực đơn (`apps/menu/views.py`)
+| Phương thức | Endpoint | Mục đích | Response |
+|---|---|---|---|
+| GET | `/api/menu/categories/` | Danh sách danh mục. | Xem “Response mẫu – Danh mục”. |
+| GET | `/api/menu/stores/` | Danh sách cửa hàng public. | Xem “Response mẫu – Danh sách cửa hàng”. |
+| GET | `/api/menu/items/` | Danh sách món + bộ lọc (category, store, search, price, sort). | Xem “Response mẫu – Danh sách món”. |
+| GET | `/api/menu/items/<id>/` | Chi tiết món ăn. | Xem “Response mẫu – Chi tiết món”. |
+| GET | `/api/menu/categories/<category_id>/foods/` | Món theo danh mục, có phân trang. | Xem “Response mẫu – Món theo danh mục”. |
+
+#### Response mẫu – Menu
+
+- `GET /api/menu/categories/`
 ```json
 {
-  "message": "Store application rejected",
-  "user": {
-    "id": 11,
-    "username": "store_candidate",
-    "is_store_registered": false
-  }
+	"count": 4,
+	"next": null,
+	"previous": null,
+	"results": [
+		{
+			"id": 2,
+			"name": "Burger",
+			"cate_name": "Burger",
+			"image": "assets/categories/burger.png",
+			"image_url": "http://localhost:8000/media/assets/categories/burger.png",
+			"foods_count": 12
+		}
+	]
 }
 ```
 
----
+- `GET /api/menu/stores/`
+```json
+{
+	"count": 2,
+	"next": null,
+	"previous": null,
+	"results": [
+		{
+			"id": 3,
+			"store_name": "FastFood ABC",
+			"image": "assets/store-icon.png",
+			"description": "Chuỗi đồ ăn nhanh",
+			"address": "12 Nguyễn Huệ, Quận 1",
+			"latitude": 10.773281,
+			"longitude": 106.704147,
+			"manager": "storemanager01"
+		}
+	]
+}
+```
 
-## 2. Menu API (`/api/menu/`)
+- `GET /api/menu/items/`
+```json
+{
+	"count": 25,
+	"num_pages": 3,
+	"current_page": 1,
+	"has_next": true,
+	"has_previous": false,
+	"results": [
+		{
+			"id": 11,
+			"title": "Burger Bò Gấp Đôi",
+			"description": "Burger bò phô mai",
+			"price": 75000.0,
+			"image": "assets/foods/burger.png",
+			"image_url": "http://localhost:8000/media/assets/foods/burger.png",
+			"category": {
+				"id": 2,
+				"name": "Burger",
+				"cate_name": "Burger",
+				"image": "assets/categories/burger.png",
+				"image_url": "http://localhost:8000/media/assets/categories/burger.png",
+				"foods_count": 12
+			},
+			"category_name": "Burger",
+			"store": {
+				"id": 3,
+				"store_name": "FastFood ABC",
+				"image": "assets/store-icon.png",
+				"description": "Chuỗi đồ ăn nhanh",
+				"manager": "storemanager01"
+			},
+			"store_name": "FastFood ABC",
+			"availability": true,
+			"sizes": [
+				{
+					"id": 5,
+					"size_name": "L",
+					"price": 15000.0,
+					"food": 11
+				}
+			],
+			"average_rating": 4.6,
+			"rating_count": 24
+		}
+	]
+}
+```
 
-### 2.1 Danh sách danh mục
-- **GET** `/api/menu/categories/`
-- **Response:**
+- `GET /api/menu/items/<id>/`
+```json
+{
+	"id": 11,
+	"title": "Burger Bò Gấp Đôi",
+	"description": "Burger bò phô mai",
+	"price": 75000.0,
+	"image": "assets/foods/burger.png",
+	"image_url": "http://localhost:8000/media/assets/foods/burger.png",
+	"category": {
+		"id": 2,
+		"name": "Burger",
+		"cate_name": "Burger",
+		"image": "assets/categories/burger.png",
+		"image_url": "http://localhost:8000/media/assets/categories/burger.png",
+		"foods_count": 12
+	},
+	"category_id": 2,
+	"store": {
+		"id": 3,
+		"store_name": "FastFood ABC",
+		"image": "assets/store-icon.png",
+		"description": "Chuỗi đồ ăn nhanh",
+		"manager": "storemanager01"
+	},
+	"store_id": 3,
+	"availability": true,
+	"sizes": [
+		{
+			"id": 4,
+			"size_name": "M",
+			"price": 0.0,
+			"food": 11
+		},
+		{
+			"id": 5,
+			"size_name": "L",
+			"price": 15000.0,
+			"food": 11
+		}
+	],
+	"average_rating": 4.6,
+	"rating_count": 24
+}
+```
+
+- `GET /api/menu/categories/<category_id>/foods/`
+```json
+{
+	"category": {
+		"id": 2,
+		"name": "Burger",
+		"cate_name": "Burger",
+		"image": "assets/categories/burger.png",
+		"image_url": "http://localhost:8000/media/assets/categories/burger.png",
+		"foods_count": 12
+	},
+	"count": 12,
+	"num_pages": 2,
+	"current_page": 1,
+	"has_next": true,
+	"has_previous": false,
+	"results": [
+		{ "id": 11, "title": "Burger Bò Gấp Đôi", "price": 75000.0, "store_name": "FastFood ABC" }
+	]
+}
+```
+
+### Đơn hàng (`apps/orders/views.py`)
+| Phương thức | Endpoint | Mục đích | Response |
+|---|---|---|---|
+| GET | `/api/orders/` | Lịch sử đơn của khách (lọc theo `status`). | Xem “Response mẫu – GET /api/orders/”. |
+| POST | `/api/orders/` | Tạo đơn mới từ giỏ (tách theo cửa hàng, hỗ trợ nhiều voucher). | Xem “Response mẫu – POST /api/orders/”. |
+| GET | `/api/orders/<id>/` | Chi tiết đơn cụ thể (của chính khách). | Xem “Response mẫu – Order chi tiết”. |
+| PUT | `/api/orders/<id>/` | Cập nhật thông tin nhận hàng khi trạng thái còn `Chờ xác nhận`. | Xem “Response mẫu – Order chi tiết”. |
+| PUT | `/api/orders/<id>/status/` | Khách tự hủy đơn (`{"order_status":"Đã huỷ","cancel_reason":"..."}`). | Xem “Response mẫu – Hủy đơn”. |
+| POST | `/api/orders/<id>/cancel-group/` | Hủy nhóm đơn (group_id). | Xem “Response mẫu – Hủy nhóm đơn”. |
+
+> **Yêu cầu tọa độ & phí ship:** Payload `POST /api/orders/` bắt buộc truyền `ship_latitude` và `ship_longitude` (float hoặc chuỗi số). Nếu không gửi, backend sẽ dùng tọa độ đã lưu trong hồ sơ khách hàng. Mỗi cửa hàng được tạo thành một order riêng, hệ thống gọi Google Directions (fallback Haversine) để tính `distance_km`, lưu `route_polyline` và tính `shipping_fee = SHIPPING_BASE_FEE + SHIPPING_FEE_PER_KM * distance_km` (giá trị cấu hình trong `settings.py`, mặc định 15,000đ + 4,000đ/km).
+
+#### Payload mẫu – `POST /api/orders/`
+```json
+{
+	"receiver_name": "Nguyễn Văn A",
+	"phone_number": "0900000000",
+	"ship_address": "123 Lê Lợi, Quận 1",
+	"ship_latitude": 10.777102,
+	"ship_longitude": 106.698542,
+	"note": "Giao giờ trưa",
+	"payment_method": "COD",
+	"promo_ids": [3, 12],
+	"promo_details": [
+		{ "promo_id": 3, "store_id": 0, "discount": 15000 },
+		{ "promo_id": 12, "store_id": 3, "discount": 5000 }
+	],
+	"discount_amount": 20000
+}
+```
+
+#### Response mẫu – Đơn hàng
+
+- `GET /api/orders/`
+```json
+{
+	"count": 4,
+	"num_pages": 1,
+	"current_page": 1,
+	"has_next": false,
+	"has_previous": false,
+	"results": [
+		{
+			"id": 102,
+			"order_status": "Chờ xác nhận",
+			"delivery_status": "Chờ xác nhận",
+			"total_money": 150000.0,
+			"payment_method": "COD",
+			"receiver_name": "Nguyễn Văn A",
+			"shipper": null,
+			"items_count": 2,
+			"created_date": "2025-11-18T10:30:00+07:00",
+			"cancel_reason": null,
+			"cancelled_date": null,
+			"cancelled_by_role": null
+		}
+	]
+}
+```
+
+- `POST /api/orders/`
+```json
+{
+	"message": "Đã tạo 2 đơn hàng cho 2 cửa hàng",
+	"group_id": 150,
+	"orders": [
+		{
+			"id": 150,
+			"user": {
+				"id": 7,
+				"username": "khachhang01",
+				"fullname": "Nguyễn Văn A",
+				"phone_number": "0900000000",
+				"email": "customer@example.com",
+				"address": "123 Lê Lợi, Quận 1, TP.HCM",
+				"latitude": 10.776523,
+				"longitude": 106.700981,
+				"created_date": "2025-09-25T14:20:00+07:00",
+				"role": "Khách hàng",
+				"role_id": 1,
+				"is_active": true,
+				"is_shipper_registered": false,
+				"is_store_registered": false
+			},
+			"order_status": "Chờ xác nhận",
+			"delivery_status": "Chờ xác nhận",
+			"total_money": 150000.0,
+			"payment_method": "COD",
+			"receiver_name": "Nguyễn Văn A",
+			"phone_number": "0900000000",
+			"ship_address": "123 Lê Lợi, Quận 1",
+			"ship_latitude": 10.777102,
+			"ship_longitude": 106.698542,
+			"note": "Giao giờ trưa",
+			"promo": 3,
+			"shipper": null,
+			"shipper_id": null,
+			"shipping_fee": 15000.0,
+			"route_polyline": "mfp_IvnthS_@d@qA|@qDnBkF",
+			"group_id": 150,
+			"cancel_reason": null,
+			"cancelled_date": null,
+			"cancelled_by_role": null,
+			"store_id": 3,
+			"store_name": "FastFood ABC",
+			"store_info_id": 3,
+			"store_image": "assets/store-icon.png",
+			"store_address": "12 Nguyễn Huệ, Quận 1",
+			"store_latitude": 10.773281,
+			"store_longitude": 106.704147,
+			"items": [
+				{
+					"id": "150_11_0",
+					"food": {
+						"id": 11,
+						"title": "Burger Bò Gấp Đôi",
+						"price": 75000.0,
+						"store_name": "FastFood ABC"
+					},
+					"food_option": null,
+					"quantity": 2,
+					"food_price": 75000.0,
+					"food_option_price": null,
+					"food_note": "ít sốt",
+					"subtotal": 150000.0,
+					"size_display": "",
+					"price_breakdown": [
+						{
+							"type": "food",
+							"name": "Burger Bò Gấp Đôi",
+							"display": "Burger Bò Gấp Đôi 75,000đ",
+							"price": 75000.0,
+							"quantity": 2,
+							"total": 150000.0
+						}
+					]
+				}
+			],
+			"is_rated": false,
+			"created_date": "2025-11-18T10:30:00+07:00",
+			"promo_discount": 20000.0,
+			"applied_promos": [
+				{
+					"id": 12,
+					"order": 150,
+					"promo": 3,
+					"promo_name": "Giảm 20k",
+					"applied_amount": "20000.00",
+					"note": "Store 3",
+					"created_at": "2025-11-18T10:30:00+07:00"
+				}
+			],
+			"total_before_discount": 165000.0,
+			"total_discount": 20000.0,
+			"total_after_discount": 145000.0
+		}
+	]
+}
+```
+
+- `GET/PUT /api/orders/<id>/`
+```json
+{
+	"id": 150,
+	"user": {
+		"id": 7,
+		"username": "khachhang01",
+		"fullname": "Nguyễn Văn A",
+		"phone_number": "0900000000",
+		"email": "customer@example.com",
+		"address": "123 Lê Lợi, Quận 1, TP.HCM",
+		"latitude": 10.776523,
+		"longitude": 106.700981,
+		"created_date": "2025-09-25T14:20:00+07:00",
+		"role": "Khách hàng",
+		"role_id": 1,
+		"is_active": true,
+		"is_shipper_registered": false,
+		"is_store_registered": false
+	},
+	"order_status": "Chờ xác nhận",
+	"delivery_status": "Chờ xác nhận",
+	"total_money": 150000.0,
+	"payment_method": "COD",
+	"receiver_name": "Nguyễn Văn A",
+	"phone_number": "0900000000",
+	"ship_address": "123 Lê Lợi, Quận 1",
+	"ship_latitude": 10.777102,
+	"ship_longitude": 106.698542,
+	"note": "Giao giờ trưa",
+	"promo": 3,
+	"shipper": null,
+	"shipper_id": null,
+	"shipping_fee": 15000.0,
+	"route_polyline": "mfp_IvnthS_@d@qA|@qDnBkF",
+	"group_id": 150,
+	"cancel_reason": null,
+	"cancelled_date": null,
+	"cancelled_by_role": null,
+	"store_id": 3,
+	"store_name": "FastFood ABC",
+	"store_info_id": 3,
+	"store_image": "assets/store-icon.png",
+	"store_address": "12 Nguyễn Huệ, Quận 1",
+	"store_latitude": 10.773281,
+	"store_longitude": 106.704147,
+	"items": [
+		{
+			"id": "150_11_0",
+			"food": {
+				"id": 11,
+				"title": "Burger Bò Gấp Đôi",
+				"price": 75000.0,
+				"store_name": "FastFood ABC"
+			},
+			"food_option": null,
+			"quantity": 2,
+			"food_price": 75000.0,
+			"food_option_price": null,
+			"food_note": "ít sốt",
+			"subtotal": 150000.0,
+			"size_display": "",
+			"price_breakdown": [
+				{
+					"type": "food",
+					"name": "Burger Bò Gấp Đôi",
+					"display": "Burger Bò Gấp Đôi 75,000đ",
+					"price": 75000.0,
+					"quantity": 2,
+					"total": 150000.0
+				}
+			]
+		}
+	],
+	"is_rated": false,
+	"created_date": "2025-11-18T10:30:00+07:00",
+	"promo_discount": 20000.0,
+	"applied_promos": [],
+	"total_before_discount": 165000.0,
+	"total_discount": 20000.0,
+	"total_after_discount": 145000.0
+}
+```
+
+- Hủy một đơn (`PUT /api/orders/<id>/status/`)
+```json
+{
+	"id": 150,
+	"order_status": "Đã huỷ",
+	"delivery_status": "Chờ xác nhận",
+	"cancel_reason": "Đổi ý",
+	"cancelled_date": "2025-11-18T10:45:00+07:00",
+	"cancelled_by_role": "Khách hàng",
+	"total_money": 150000.0,
+	"shipping_fee": 15000.0,
+	"total_before_discount": 165000.0,
+	"total_discount": 20000.0,
+	"total_after_discount": 145000.0
+}
+```
+
+- Hủy nhóm đơn (`POST /api/orders/<id>/cancel-group/`)
+	- Bước xác nhận:
+```json
+{
+	"requires_confirmation": true,
+	"group_orders": [
+		{
+			"id": 150,
+			"store_name": "FastFood ABC",
+			"total_money": 150000.0,
+			"order_status": "Chờ xác nhận"
+		},
+		{
+			"id": 151,
+			"store_name": "Trà Sữa XYZ",
+			"total_money": 90000.0,
+			"order_status": "Chờ xác nhận"
+		}
+	],
+	"total_orders": 2,
+	"message": "Bạn sắp hủy 2 đơn hàng. Xác nhận để tiếp tục."
+}
+```
+	- Sau khi xác nhận:
+```json
+{
+	"message": "Đã hủy thành công 2 đơn hàng trong nhóm",
+	"cancelled_orders": [150, 151]
+}
+```
+
+> **Thông tin vận chuyển trong response:**
+> - `ship_latitude`/`ship_longitude`: Tọa độ giao hàng cuối cùng mà backend đã dùng để tính phí ship.
+> - `store_latitude`/`store_longitude`: Tọa độ cửa hàng lấy hàng, phục vụ hiển thị bản đồ và tính quãng đường thực tế.
+> - `route_polyline`: Chuỗi polyline Google Directions (khi có API key) để FE/ứng dụng shipper vẽ đường đi giống thực tế; tự động rỗng khi chỉ có khoảng cách Haversine.
+> - `total_before_discount`, `total_discount`, `total_after_discount`: Cho biết tổng tiền từng đơn đã cộng phí ship và mức giảm theo từng store; chi tiết từng voucher nằm trong `applied_promos`.
+
+### Đánh giá món (`apps/ratings/views.py`)
+| Phương thức | Endpoint | Mục đích | Response |
+|---|---|---|---|
+| GET | `/api/ratings/` | Lấy danh sách đánh giá theo `food` hoặc `order`. | Xem “Response mẫu – Đánh giá món”. |
+| POST | `/api/ratings/` | Khách đã mua tạo đánh giá. | Xem “Response mẫu – Đánh giá món”. |
+| GET/PUT/DELETE | `/api/ratings/<id>/` | Xem/chỉnh/sửa/xóa đánh giá của chính mình. | Xem “Response mẫu – Đánh giá món”. |
+
+#### Response mẫu – Đánh giá món
+
+- `GET /api/ratings/?food=11`
 ```json
 [
-  {
-    "id": 1,
-    "cate_name": "Burger",
-    "image": "burger.png",
-    "image_url": "http://localhost:8000/media/assets/burger.png",
-    "foods_count": 15
-  },
-  {
-    "id": 2,
-    "cate_name": "Pizza",
-    "image": "pizza.png",
-    "image_url": "http://localhost:8000/media/assets/pizza.png",
-    "foods_count": 8
-  }
+	{
+		"username": "khachhang01",
+		"rating": 5,
+		"content": "Burger ngon, giao nhanh"
+	},
+	{
+		"username": "thienan",
+		"rating": 4,
+		"content": "Ổn nhưng hơi ít sốt"
+	}
 ]
 ```
 
-### 2.2 Danh sách cửa hàng
-- **GET** `/api/menu/stores/`
-- **Response:**
+- `POST /api/ratings/`
+```json
+{
+	"id": 25,
+	"food": 11,
+	"order": 150,
+	"user": 7,
+	"rating": 5,
+	"content": "Quá ngon"
+}
+```
+
+- Lỗi xác thực khi chưa đăng nhập
+```json
+{
+	"detail": "Authentication required"
+}
+```
+
+- `GET/PUT /api/ratings/25/`
+```json
+{
+	"id": 25,
+	"food": 11,
+	"order": 150,
+	"user": 7,
+	"rating": 4,
+	"content": "Đổi ý, món hơi nguội"
+}
+```
+
+- `DELETE /api/ratings/25/`
+	- Trả về `204 No Content` không có body.
+
+### Khuyến mãi cho khách (`apps/promotions/views.py`)
+| Phương thức | Endpoint | Mục đích | Response |
+|---|---|---|---|
+| GET | `/api/promotions/` | Khách xem các mã còn hạn (Store Manager xem toàn bộ mã thuộc cửa hàng mình). | Xem “Response mẫu – Khuyến mãi khách”. |
+| POST | `/api/promotions/validate/` | Kiểm tra voucher với tổng tiền. | Xem “Response mẫu – Khuyến mãi khách”. |
+
+#### Response mẫu – Khuyến mãi khách
+
+- `GET /api/promotions/?store=3`
 ```json
 [
-  {
-    "id": 1,
-    "store_name": "KFC Trần Phú",
-    "address": "123 Trần Phú, Hà Nội",
-    "phone_number": "0123456789",
-    "image": "kfc-store.png",
-    "image_url": "http://localhost:8000/media/assets/kfc-store.png",
-    "open_time": "08:00:00",
-    "close_time": "22:00:00",
-    "is_active": true
-  }
+	{
+		"id": 3,
+		"name": "Giảm 20k",
+		"scope": "STORE",
+		"discount_type": "PERCENT",
+		"category": "PERCENT",
+		"discount_value": "20.00",
+		"minimum_pay": "150000.00",
+		"max_discount_amount": "20000.00",
+		"start_date": "2025-11-01T00:00:00+07:00",
+		"end_date": "2025-12-01T23:59:59+07:00",
+		"store": 3,
+		"store_id": 3,
+		"store_name": "FastFood ABC",
+		"is_active": true,
+		"percent": "20.00",
+		"description": "Giảm 20% tối đa 20k"
+	}
 ]
 ```
 
-### 2.3 Danh sách món ăn
-- **GET** `/api/menu/items/`
-- **Query Parameters:**
-  - `category`: ID danh mục
-  - `store`: ID cửa hàng
-  - `search`: Tìm kiếm theo tên
-- **Response:**
+- `POST /api/promotions/validate/`
+```json
+{
+	"valid": true,
+	"discount_amount": "20000.00",
+	"final_amount": "145000.00",
+	"promo": {
+		"id": 3,
+		"name": "Giảm 20k",
+		"scope": "STORE",
+		"discount_type": "PERCENT",
+		"discount_value": "20.00",
+		"minimum_pay": "150000.00",
+		"max_discount_amount": "20000.00",
+		"store_id": 3,
+		"store_name": "FastFood ABC"
+	}
+}
+```
+
+- Không đủ điều kiện tối thiểu
+```json
+{
+	"valid": false,
+	"error": "Minimum order amount is 150,000 VND"
+}
+```
+
+- Mã hết hạn/không tồn tại
+```json
+{
+	"valid": false,
+	"error": "Invalid or expired promo code"
+}
+```
+
+### Thanh toán (`apps/payments/views.py`)
+| Phương thức | Endpoint | Mục đích | Response |
+|---|---|---|---|
+| POST | `/api/payments/create/` | API mô phỏng xác nhận thanh toán COD. | Xem “Response mẫu – Thanh toán”. |
+| POST | `/api/payments/payos/create-link/` | Tạo link PayOS (yêu cầu đăng nhập). | Xem “Response mẫu – Thanh toán”. |
+| POST | `/api/payments/payos/check-status/` | Kiểm tra trạng thái link PayOS. | Xem “Response mẫu – Thanh toán”. |
+| GET | `/api/payments/payos-return` | Trang HTML thông báo khi PayOS redirect. | Xem “Response mẫu – Thanh toán”. |
+| POST | `/api/payments/webhook/` | Webhook giả lập cho PayOS. | Xem “Response mẫu – Thanh toán”. |
+
+#### Response mẫu – Thanh toán
+
+- `POST /api/payments/create/`
+```json
+{
+	"message": "Payment method COD for order 150 processed",
+	"method": "COD",
+	"status": "success"
+}
+```
+
+- `POST /api/payments/payos/create-link/`
+```json
+{
+	"checkoutUrl": "https://payos.vn/link/abcdef",
+	"status": "CREATED",
+	"orderCode": 150230789
+}
+```
+
+- Yêu cầu lại khi link cũ còn hiệu lực
+```json
+{
+	"checkoutUrl": "https://payos.vn/link/abcdef",
+	"status": "PENDING",
+	"orderCode": 150
+}
+```
+
+- `POST /api/payments/payos/check-status/`
+```json
+{
+	"orderCode": 150230789,
+	"status": "PENDING",
+	"paid": false
+}
+```
+
+- `GET /api/payments/payos-return`
+```html
+<!DOCTYPE html>
+<html>
+	<body>
+		<h1 class="success">✓ Thanh toán thành công!</h1>
+		<p>Mã đơn hàng: 150230789</p>
+	</body>
+</html>
+```
+
+- `POST /api/payments/webhook/`
+```json
+{
+	"success": true
+}
+```
+
+### Chatbot (`apps/chatbot/views.py`)
+| Phương thức | Endpoint | Mục đích | Response |
+|---|---|---|---|
+| POST | `/api/chatbot/chat/` | Nhắn tin với chatbot (FAQ, gợi ý). | Xem “Response mẫu – Chatbot”. |
+| GET | `/api/chatbot/cart/` | Chatbot đọc giỏ hàng. | Xem “Response mẫu – Chatbot”. |
+| DELETE | `/api/chatbot/cart/clear/` | Chatbot xóa giỏ hàng giúp người dùng. | Xem “Response mẫu – Chatbot”. |
+| GET | `/api/chatbot/menu/` | Trả về danh sách món gọn nhẹ. | Xem “Response mẫu – Chatbot”. |
+
+#### Response mẫu – Chatbot
+
+- `POST /api/chatbot/chat/`
+```json
+{
+	"reply": "🔥 Top món bán chạy: 1. Burger Bò Gấp Đôi ...\nBạn muốn đặt món nào?",
+	"intent": "popular_items",
+	"data": {
+		"foods": [
+			{
+				"id": 11,
+				"title": "Burger Bò Gấp Đôi",
+				"price": "75000",
+				"store_id": 3,
+				"store_name": "FastFood ABC",
+				"sizes": []
+			}
+		],
+		"query_type": "popular"
+	}
+}
+```
+
+- `GET /api/chatbot/cart/?session_id=abc123`
+```json
+{
+	"cart": [
+		{
+			"id": 41,
+			"food": 11,
+			"food_name": "Burger Bò Gấp Đôi",
+			"food_price": "75000.00",
+			"food_size": null,
+			"size_name": null,
+			"size_price": null,
+			"quantity": 2,
+			"store_name": "FastFood ABC",
+			"total_price": "150000.00"
+		}
+	],
+	"total": 150000,
+	"count": 1
+}
+```
+
+- `DELETE /api/chatbot/cart/clear/`
+```json
+{
+	"message": "Cart cleared successfully"
+}
+```
+
+- `GET /api/chatbot/menu/`
+```json
+{
+	"menu": [
+		{
+			"id": 11,
+			"name": "Burger Bò Gấp Đôi",
+			"price": 75000.0,
+			"description": "Burger bò phô mai",
+			"store_id": 3,
+			"store_name": "FastFood ABC",
+			"category": "Burger",
+			"sizes": [
+				{ "name": "M", "price": 0.0 },
+				{ "name": "L", "price": 15000.0 }
+			]
+		}
+	]
+}
+```
+
+## 3. API cho Chủ cửa hàng
+
+### Quản lý cửa hàng (`apps/stores/views.py`)
+| Phương thức | Endpoint | Mục đích | Response |
+|---|---|---|---|
+| GET | `/api/stores/` | DRF ModelViewSet: Admin xem tất cả, chủ cửa hàng chỉ thấy cửa hàng của mình. | Xem “Response mẫu – Quản lý cửa hàng”. |
+| POST | `/api/stores/` | Admin tạo cửa hàng mới (gán manager). | Xem “Response mẫu – Quản lý cửa hàng”. |
+| GET | `/api/stores/<id>/` | Lấy thông tin cửa hàng. | Xem “Response mẫu – Quản lý cửa hàng”. |
+| PUT/PATCH/DELETE | `/api/stores/<id>/` | Cập nhật hoặc xóa cửa hàng. | Xem “Response mẫu – Quản lý cửa hàng”. |
+| GET | `/api/stores/my_store/` | Chủ cửa hàng xem cửa hàng mình quản lý. | Xem “Response mẫu – Quản lý cửa hàng”. |
+| GET | `/api/stores/<id>/foods/` | Danh sách món thuộc cửa hàng, có phân trang. | Xem “Response mẫu – Menu cửa hàng”. |
+| GET | `/api/stores/<id>/orders/` | Toàn bộ đơn có món thuộc cửa hàng này. | Xem “Response mẫu – Đơn hàng”. |
+| PATCH | `/api/stores/<id>/orders/<order_id>/status/` | Cập nhật trạng thái đơn ở riêng cửa hàng đó. | Xem “Response mẫu – Đơn hàng”. |
+| GET | `/api/stores/<id>/stats/` | Thống kê: số món, số đơn, doanh thu, điểm trung bình. | Xem “Response mẫu – Quản lý cửa hàng”. |
+
+#### Response mẫu – Quản lý cửa hàng
+
+- `GET /api/stores/`
+```json
+{
+	"count": 2,
+	"next": null,
+	"previous": null,
+	"results": [
+		{
+			"id": 3,
+			"store_name": "FastFood ABC",
+			"image": "assets/store-icon.png",
+			"description": "Chuỗi đồ ăn nhanh",
+			"manager": "storemanager01"
+		}
+	]
+}
+```
+
+- `POST /api/stores/`
+```json
+{
+	"id": 5,
+	"store_name": "Trà Sữa XYZ",
+	"image": null,
+	"description": "Chi nhánh mới",
+	"manager": "storemanager02"
+}
+```
+
+- `GET /api/stores/3/`
+```json
+{
+	"id": 3,
+	"store_name": "FastFood ABC",
+	"image": "assets/store-icon.png",
+	"description": "Chuỗi đồ ăn nhanh",
+	"manager": "storemanager01"
+}
+```
+
+- `DELETE /api/stores/5/` → `204 No Content`
+
+- `GET /api/stores/3/stats/`
+```json
+{
+	"total_foods": 25,
+	"total_orders": 180,
+	"total_revenue": 125000000.0,
+	"average_rating": 4.5,
+	"total_ratings": 94
+}
+```
+
+### Quản lý món dành cho cửa hàng (`apps/menu/views.py`)
+| Phương thức | Endpoint | Mục đích | Response |
+|---|---|---|---|
+| GET | `/api/menu/store/foods/` | Chủ cửa hàng xem danh sách món (lọc search, category). | Xem “Response mẫu – Menu cửa hàng”. |
+| GET/PUT/DELETE | `/api/menu/store/foods/<food_id>/` | Lấy/cập nhật/xóa món của cửa hàng mình, hỗ trợ upload ảnh. | Xem “Response mẫu – Menu cửa hàng”. |
+| GET | `/api/menu/store/foods/<food_id>/sizes/` | Danh sách size của món (áp dụng cho topping/option). | Xem “Response mẫu – Menu cửa hàng”. |
+| GET | `/api/menu/store/foods/<food_id>/sizes/<size_id>/` | Chi tiết size cụ thể. | Xem “Response mẫu – Menu cửa hàng”. |
+
+#### Response mẫu – Menu cửa hàng
+
+- `GET /api/menu/store/foods/?page=1`
+```json
+{
+	"count": 15,
+	"num_pages": 2,
+	"current_page": 1,
+	"has_next": true,
+	"has_previous": false,
+	"next": "?page=2",
+	"previous": null,
+	"results": [
+		{
+			"id": 11,
+			"title": "Burger Bò Gấp Đôi",
+			"description": "Burger bò phô mai",
+			"price": 75000.0,
+			"image": "assets/foods/burger.png",
+			"image_url": "http://localhost:8000/media/assets/foods/burger.png",
+			"category": {
+				"id": 2,
+				"name": "Burger",
+				"cate_name": "Burger"
+			},
+			"category_name": "Burger",
+			"store": {
+				"id": 3,
+				"store_name": "FastFood ABC",
+				"image": "assets/store-icon.png",
+				"description": "Chuỗi đồ ăn nhanh",
+				"manager": "storemanager01"
+			},
+			"store_name": "FastFood ABC",
+			"availability": true,
+			"sizes": []
+		}
+	],
+	"foods": [
+		{
+			"id": 11,
+			"title": "Burger Bò Gấp Đôi",
+			"price": 75000.0,
+			"store_name": "FastFood ABC"
+		}
+	],
+	"total_pages": 2,
+	"total_foods": 15
+}
+```
+
+- `GET /api/menu/store/foods/11/`
+```json
+{
+	"id": 11,
+	"title": "Burger Bò Gấp Đôi",
+	"description": "Burger bò phô mai",
+	"price": 75000.0,
+	"image": "assets/foods/burger.png",
+	"category": {
+		"id": 2,
+		"name": "Burger",
+		"cate_name": "Burger"
+	},
+	"store": {
+		"id": 3,
+		"store_name": "FastFood ABC",
+		"image": "assets/store-icon.png",
+		"description": "Chuỗi đồ ăn nhanh",
+		"manager": "storemanager01"
+	},
+	"availability": true,
+	"sizes": [
+		{
+			"id": 4,
+			"size_name": "M",
+			"price": 0.0,
+			"food": 11
+		},
+		{
+			"id": 5,
+			"size_name": "L",
+			"price": 15000.0,
+			"food": 11
+		}
+	]
+}
+```
+
+- `PUT /api/menu/store/foods/11/`
+```json
+{
+	"id": 11,
+	"title": "Burger Bò Gấp Đôi",
+	"price": 79000.0,
+	"availability": true,
+	"store": 3
+}
+```
+
+- `GET /api/menu/store/foods/11/sizes/`
 ```json
 [
-  {
-    "id": 1,
-    "title": "Big Mac",
-    "description": "Bánh burger với 2 lớp thịt bò, rau xanh và sốt đặc biệt",
-    "price": "89000.00",
-    "image": "bigmac.jpg",
-    "image_url": "http://localhost:8000/media/assets/bigmac.jpg",
-    "category_name": "Burger",
-    "store": {
-      "id": 1,
-      "store_name": "McDonald's Nguyễn Huệ",
-      "address": "456 Nguyễn Huệ, TP.HCM"
-    },
-    "store_name": "McDonald's Nguyễn Huệ",
-    "availability": "Còn hàng",
-    "sizes": [
-      {
-        "id": 1,
-        "size_name": "Medium",
-        "price": "10000.00"
-      },
-      {
-        "id": 2,
-        "size_name": "Large",
-        "price": "20000.00"
-      }
-    ],
-    "average_rating": 4.5,
-    "rating_count": 120
-  }
+	{
+		"id": 4,
+		"size_name": "M",
+		"price": 0.0,
+		"food": 11
+	},
+	{
+		"id": 5,
+		"size_name": "L",
+		"price": 15000.0,
+		"food": 11
+	}
 ]
 ```
 
-### 2.4 Chi tiết món ăn
-- **GET** `/api/menu/items/{id}/`
-- **Response:**
+- `GET /api/menu/store/foods/11/sizes/5/`
 ```json
 {
-  "id": 1,
-  "title": "Big Mac",
-  "description": "Bánh burger với 2 lớp thịt bò, rau xanh và sốt đặc biệt",
-  "price": "89000.00",
-  "image": "bigmac.jpg",
-  "image_url": "http://localhost:8000/media/assets/bigmac.jpg",
-  "category": {
-    "id": 1,
-    "cate_name": "Burger",
-    "image": "burger.png",
-    "image_url": "http://localhost:8000/media/assets/burger.png",
-    "foods_count": 15
-  },
-  "store": {
-    "id": 1,
-    "store_name": "McDonald's Nguyễn Huệ",
-    "address": "456 Nguyễn Huệ, TP.HCM"
-  },
-  "availability": "Còn hàng",
-  "sizes": [
-    {
-      "id": 1,
-      "size_name": "Medium",
-      "price": "10000.00"
-    }
-  ],
-  "average_rating": 4.5,
-  "rating_count": 120
+	"id": 5,
+	"size_name": "L",
+	"price": 15000.0,
+	"food": 11
 }
 ```
 
-### 2.5 Món ăn theo danh mục
-- **GET** `/api/menu/categories/{category_id}/foods/`
-- **Query Parameters:**
-  - `page`: Trang hiện tại (mặc định: 1)
-  - `page_size`: Số items/trang (mặc định: 12)
-- **Response:**
+### Khuyến mãi cửa hàng (`apps/promotions/views.py`)
+| Phương thức | Endpoint | Mục đích | Response |
+|---|---|---|---|
+| POST | `/api/promotions/create/` | Chủ cửa hàng tạo mã giảm giá cho riêng cửa hàng. | Xem “Response mẫu – Khuyến mãi cửa hàng”. |
+| GET | `/api/promotions/<id>/` | Xem chi tiết mã (chỉ truy cập khi thuộc cửa hàng mình). | Xem “Response mẫu – Khuyến mãi cửa hàng”. |
+| PUT | `/api/promotions/<id>/update/` | Cập nhật thông tin mã. | Xem “Response mẫu – Khuyến mãi cửa hàng”. |
+| DELETE | `/api/promotions/<id>/delete/` | Xóa mã. | Xem “Response mẫu – Khuyến mãi cửa hàng”. |
+
+#### Response mẫu – Khuyến mãi cửa hàng
+
+- `POST /api/promotions/create/`
 ```json
 {
-  "category": {
-    "id": 1,
-    "name": "Burger",
-    "cate_name": "Burger",
-    "image": "burger.png",
-    "image_url": "http://localhost:8000/media/assets/burger.png",
-    "foods_count": 15
-  },
-  "count": 15,
-  "num_pages": 2,
-  "current_page": 1,
-  "has_next": true,
-  "has_previous": false,
-  "results": [
-    {
-      "id": 1,
-      "title": "Big Mac",
-      "description": "Bánh burger với 2 lớp thịt bò",
-      "price": "89000.00",
-      "image": "bigmac.jpg",
-      "image_url": "http://localhost:8000/media/assets/bigmac.jpg",
-      "category": {
-        "id": 1,
-        "cate_name": "Burger"
-      },
-      "store": {
-        "id": 1,
-        "store_name": "McDonald's Nguyễn Huệ"
-      },
-      "availability": "Còn hàng",
-      "sizes": [],
-      "average_rating": 4.5,
-      "rating_count": 120
-    }
-  ]
+	"id": 6,
+	"name": "Giảm 30k",
+	"scope": "STORE",
+	"discount_type": "AMOUNT",
+	"discount_value": "30000.00",
+	"minimum_pay": "200000.00",
+	"max_discount_amount": null,
+	"start_date": "2025-11-20T00:00:00+07:00",
+	"end_date": "2025-12-31T23:59:59+07:00",
+	"store": 3,
+	"store_id": 3,
+	"store_name": "FastFood ABC",
+	"is_active": true,
+	"description": "Giảm trực tiếp 30k"
 }
 ```
 
-### 2.6 Admin - Quản lý món ăn
-- **GET** `/api/menu/admin/foods/`
-- **POST** `/api/menu/admin/foods/`
-- **Headers:** `Authorization: Bearer {admin_or_store_manager_token}`
-- **Query Parameters (GET):**
-  - `search`: Tìm kiếm theo tên hoặc mô tả
-  - `category`: Lọc theo danh mục
-  - `store`: Lọc theo cửa hàng (chỉ admin)
-  - `page`: Trang hiện tại
-- **Request Body (POST):**
+- `GET /api/promotions/6/`
 ```json
 {
-  "title": "Món ăn mới",
-  "description": "Mô tả món ăn",
-  "price": "75000.00",
-  "category_id": 1,
-  "store_id": 1,
-  "availability": "Còn hàng"
-}
-```
-- **Response (GET):**
-```json
-{
-  "foods": [
-    {
-      "id": 1,
-      "title": "Big Mac",
-      "description": "Bánh burger với 2 lớp thịt bò",
-      "price": "89000.00",
-      "image": "bigmac.jpg",
-      "image_url": "http://localhost:8000/media/assets/bigmac.jpg",
-      "category": {
-        "id": 1,
-        "cate_name": "Burger"
-      },
-      "store": {
-        "id": 1,
-        "store_name": "McDonald's Nguyễn Huệ"
-      },
-      "availability": "Còn hàng",
-      "sizes": [],
-      "average_rating": 4.5,
-      "rating_count": 120
-    }
-  ],
-  "total_pages": 3,
-  "current_page": 1,
-  "total_foods": 25
+	"id": 6,
+	"name": "Giảm 30k",
+	"scope": "STORE",
+	"discount_type": "AMOUNT",
+	"discount_value": "30000.00",
+	"minimum_pay": "200000.00",
+	"store_id": 3,
+	"store_name": "FastFood ABC",
+	"is_active": true
 }
 ```
 
-### 2.7 Admin - Chi tiết món ăn
-- **GET** `/api/menu/admin/foods/{food_id}/`
-- **PUT** `/api/menu/admin/foods/{food_id}/`
-- **DELETE** `/api/menu/admin/foods/{food_id}/`
-- **Headers:** `Authorization: Bearer {admin_or_store_manager_token}`
-- **Request Body (PUT):**
+- `PUT /api/promotions/6/update/`
 ```json
 {
-  "title": "Big Mac Updated",
-  "description": "Mô tả cập nhật",
-  "price": "95000.00",
-  "category_id": 1,
-  "availability": "Hết hàng"
+	"id": 6,
+	"name": "Giảm 35k",
+	"discount_value": "35000.00",
+	"minimum_pay": "200000.00",
+	"store_id": 3,
+	"store_name": "FastFood ABC"
 }
 ```
-- **Response:** Tương tự chi tiết món ăn
 
-### 2.8 Admin - Quản lý Food Size
-#### 2.8.1 Danh sách sizes của món ăn
-- **GET** `/api/menu/admin/foods/{food_id}/sizes/`
-- **Headers:** `Authorization: Bearer {admin_or_store_manager_token}`
-- **Mô tả:** Lấy danh sách tất cả sizes của một món ăn
-- **Response:**
+- `DELETE /api/promotions/6/delete/`
+```json
+{
+	"success": true,
+	"message": "Promotion \"Giảm 35k\" deleted successfully"
+}
+```
+
+### Quyền truy cập trang quản lý đơn (`apps/orders/views.py`)
+- `GET /api/orders/admin/`: khi người dùng có vai trò Cửa hàng, hệ thống tự lọc chỉ còn các đơn chứa món thuộc cửa hàng đó. Response: Xem “Response mẫu – Đơn hàng”.
+- `PATCH /api/orders/admin/<pk>/status/`: body `{"order_status": "...", "cancel_reason": "..."}` → trả về `OrderSerializer` (Xem “Response mẫu – Đơn hàng”) với `cancelled_by_role = "Cửa hàng"` khi hủy.
+
+## 4. API cho Người vận chuyển (Shipper)
+
+### Quy trình nhận và giao đơn (`apps/orders/views.py`)
+| Phương thức | Endpoint | Mục đích | Response |
+|---|---|---|---|
+| GET | `/api/orders/?shipper__isnull=true&delivery_status=Chờ xác nhận` | Xem danh sách đơn chưa có shipper. | Xem “Response mẫu – Đơn Shipper”. |
+| POST | `/api/orders/shipper/<order_id>/accept/` | Nhận đơn; set `delivery_status = "Đã xác nhận"`. | Xem “Response mẫu – Đơn Shipper”. |
+| GET | `/api/orders/shipper/` | Danh sách đơn đã phân cho shipper hiện tại (lọc theo `delivery_status` hoặc `status`). | Xem “Response mẫu – Đơn Shipper”. |
+| PUT | `/api/orders/shipper/<order_id>/status/` | Cập nhật từng bước giao hàng (`Chờ xác nhận` → `Đã xác nhận` → `Đã lấy hàng` → `Đang giao` → `Đã giao`). | Xem “Response mẫu – Đơn Shipper”. |
+| GET | `/api/orders/shipper/<shipper_id>/orders/` | Dashboard cho 1 shipper cụ thể. | Xem “Response mẫu – Đơn Shipper”. |
+
+#### Response mẫu – Đơn Shipper
+
+- `GET /api/orders/?shipper__isnull=true&delivery_status=Chờ xác nhận`
+```json
+{
+	"count": 2,
+	"num_pages": 1,
+	"current_page": 1,
+	"results": [
+		{
+			"id": 150,
+			"order_status": "Chờ xác nhận",
+			"delivery_status": "Chờ xác nhận",
+			"total_money": 150000.0,
+			"payment_method": "COD",
+			"store_name": "FastFood ABC",
+			"shipper": null
+		}
+	]
+}
+```
+
+- `POST /api/orders/shipper/150/accept/`
+```json
+{
+	"message": "Order accepted successfully",
+	"order": {
+		"id": 150,
+		"delivery_status": "Đã xác nhận",
+		"shipper_id": 4
+	}
+}
+```
+
+- `PUT /api/orders/shipper/150/status/`
+```json
+{
+	"message": "Delivery status updated successfully",
+	"order": {
+		"id": 150,
+		"delivery_status": "Đang giao",
+		"order_status": "Đang giao",
+		"shipper_id": 4
+	}
+}
+```
+
+- `GET /api/orders/shipper/`
+```json
+{
+	"count": 3,
+	"num_pages": 1,
+	"current_page": 1,
+	"results": [
+		{
+			"id": 150,
+			"order_status": "Đang giao",
+			"delivery_status": "Đang giao",
+			"total_money": 150000.0,
+			"store_name": "FastFood ABC"
+		}
+	]
+}
+```
+
+- `GET /api/orders/shipper/4/orders/`
+```json
+{
+	"shipper": {
+		"id": 4,
+		"user_id": 9,
+		"fullname": "Nguyễn Văn B",
+		"phone": "0988000000",
+		"email": "shipper@example.com",
+		"address": "Quận 3"
+	},
+	"status_counts": {
+		"Chờ xác nhận": 1,
+		"Đang giao": 2,
+		"Đã giao": 5,
+		"Đã hủy": 0,
+		"Đã huỷ": 0
+	},
+	"total_orders": 8,
+	"orders": {
+		"count": 3,
+		"results": [
+			{
+				"id": 150,
+				"order_status": "Đang giao",
+				"delivery_status": "Đang giao",
+				"total_money": 150000.0
+			}
+		],
+		"num_pages": 1,
+		"current_page": 1,
+		"has_next": false,
+		"has_previous": false
+	}
+}
+```
+
+### Quản lý hồ sơ shipper (`apps/shipper/views.py`)
+| Phương thức | Endpoint | Mục đích | Response |
+|---|---|---|---|
+| GET | `/api/shipper/shippers/` | Danh sách shipper (có search, phân trang). | Xem “Response mẫu – Hồ sơ Shipper”. |
+| POST | `/api/shipper/shippers/` | Tạo hồ sơ shipper dựa trên user có sẵn. | Xem “Response mẫu – Hồ sơ Shipper”. |
+| GET | `/api/shipper/shippers/<id>/` | Chi tiết 1 shipper. | Xem “Response mẫu – Hồ sơ Shipper”. |
+| PUT/PATCH | `/api/shipper/shippers/<id>/` | Cập nhật thông tin shipper + thông tin User (tên, phone, email, address). | Xem “Response mẫu – Hồ sơ Shipper”. |
+| DELETE | `/api/shipper/shippers/<id>/` | Xóa shipper. | Xem “Response mẫu – Hồ sơ Shipper”. |
+| POST | `/api/shipper/shippers/create_with_user/` | Tạo mới cả User lẫn Shipper. | Xem “Response mẫu – Hồ sơ Shipper”. |
+| GET | `/api/shipper/shippers/by_user/?user_id=` | Lấy shipper theo user_id. | Xem “Response mẫu – Hồ sơ Shipper”. |
+| GET | `/api/shipper/shippers/available_users/` | Liệt kê User có role shipper nhưng chưa tạo hồ sơ. | Xem “Response mẫu – Hồ sơ Shipper”. |
+| GET | `/api/shipper/shippers/statistics/` | Thống kê số lượng shipper. | Xem “Response mẫu – Hồ sơ Shipper”. |
+
+#### Response mẫu – Hồ sơ Shipper
+
+- `GET /api/shipper/shippers/?page=1`
+```json
+{
+	"count": 12,
+	"next": "http://localhost:8000/api/shipper/shippers/?page=2",
+	"previous": null,
+	"results": [
+		{
+			"id": 4,
+			"user_id": 9,
+			"fullname": "Nguyễn Văn B",
+			"phone": "0988000000",
+			"email": "shipper@example.com",
+			"address": "Quận 3",
+			"role": "Shipper",
+			"user": {
+				"id": 9,
+				"username": "shipper01",
+				"fullname": "Nguyễn Văn B",
+				"phone_number": "0988000000",
+				"email": "shipper@example.com",
+				"address": "Quận 3"
+			}
+		}
+	]
+}
+```
+
+- `POST /api/shipper/shippers/`
+```json
+{
+	"id": 5,
+	"user_id": 12,
+	"fullname": "Lê Hữu C",
+	"phone": "0912000000",
+	"email": "shipper02@example.com",
+	"address": "Thủ Đức",
+	"role": "Shipper"
+}
+```
+
+- `GET /api/shipper/shippers/5/`
+```json
+{
+	"id": 5,
+	"user_id": 12,
+	"fullname": "Lê Hữu C",
+	"phone": "0912000000",
+	"email": "shipper02@example.com",
+	"address": "Thủ Đức",
+	"role": "Shipper"
+}
+```
+
+- `PUT /api/shipper/shippers/5/`
+```json
+{
+	"id": 5,
+	"user_id": 12,
+	"fullname": "Lê Hữu C",
+	"phone": "0912333444",
+	"email": "shipper02@example.com",
+	"address": "TP.Thủ Đức",
+	"role": "Shipper"
+}
+```
+
+- `DELETE /api/shipper/shippers/5/`
+```json
+{
+	"message": "Đã xóa shipper thành công"
+}
+```
+
+- `POST /api/shipper/shippers/create_with_user/`
+```json
+{
+	"id": 6,
+	"user_id": 15,
+	"fullname": "Đỗ Hạnh",
+	"phone": "0977000000",
+	"email": "shipper03@example.com",
+	"address": "Quận 7",
+	"role": "Shipper"
+}
+```
+
+- `GET /api/shipper/shippers/by_user/?user_id=15`
+```json
+{
+	"id": 6,
+	"user_id": 15,
+	"fullname": "Đỗ Hạnh",
+	"phone": "0977000000",
+	"email": "shipper03@example.com",
+	"address": "Quận 7",
+	"role": "Shipper"
+}
+```
+
+- `GET /api/shipper/shippers/available_users/`
+```json
+{
+	"available_users": [
+		{
+			"id": 18,
+			"fullname": "Trần Minh",
+			"email": "minh@example.com",
+			"phone_number": "0909000000",
+			"address": "Quận 1"
+		}
+	]
+}
+```
+
+- `GET /api/shipper/shippers/statistics/`
+```json
+{
+	"total_shippers": 6,
+	"total_users_with_shipper_role": 9,
+	"available_users": 3
+}
+```
+
+## 5. API cho Quản lý (Admin)
+
+### Quản lý khách hàng & hồ sơ đăng ký (`apps/authentication/views.py`)
+| Phương thức | Endpoint | Mục đích | Response |
+|---|---|---|---|
+| GET | `/api/auth/admin/customers/` | Danh sách khách hàng (role id = 1) có phân trang và search. | Xem “Response mẫu – Admin khách hàng & đăng ký”. |
+| GET/PUT | `/api/auth/admin/customers/<id>/` | Xem hoặc cập nhật thông tin cơ bản khách hàng. | Xem “Response mẫu – Admin khách hàng & đăng ký”. |
+| POST | `/api/auth/admin/customers/<id>/toggle-status/` | Khóa/mở khóa tài khoản. | Xem “Response mẫu – Admin khách hàng & đăng ký”. |
+| GET | `/api/auth/shipper/applications/` | Danh sách user đã bật `is_shipper_registered`. | Xem “Response mẫu – Admin khách hàng & đăng ký”. |
+| POST | `/api/auth/shipper/applications/<user_id>/approve/` | Duyệt shipper: set role, tạo bản ghi `Shipper`. | Xem “Response mẫu – Admin khách hàng & đăng ký”. |
+| POST | `/api/auth/shipper/applications/<user_id>/reject/` | Từ chối, reset cờ đăng ký. | Xem “Response mẫu – Admin khách hàng & đăng ký”. |
+| GET | `/api/auth/store/applications/` | Danh sách user đăng ký mở cửa hàng. | Xem “Response mẫu – Admin khách hàng & đăng ký”. |
+| POST | `/api/auth/store/applications/<user_id>/approve/` | Duyệt + chuyển role Cửa hàng + tạo `Store`. | Xem “Response mẫu – Admin khách hàng & đăng ký”. |
+| POST | `/api/auth/store/applications/<user_id>/reject/` | Từ chối đăng ký cửa hàng. | Xem “Response mẫu – Admin khách hàng & đăng ký”. |
+
+#### Response mẫu – Admin khách hàng & đăng ký
+
+- `GET /api/auth/admin/customers/?page=1`
+```json
+{
+	"customers": [
+		{
+			"id": 7,
+			"username": "khachhang01",
+			"fullname": "Nguyễn Văn A",
+			"email": "customer@example.com",
+			"phone_number": "0900000000",
+			"address": "Quận 1",
+			"role": "Khách hàng",
+			"is_active": true,
+			"created_date": "2025-09-25T14:20:00+07:00"
+		}
+	],
+	"total_pages": 3,
+	"current_page": 1,
+	"total_customers": 24
+}
+```
+
+- `GET /api/auth/admin/customers/7/`
+```json
+{
+	"id": 7,
+	"username": "khachhang01",
+	"fullname": "Nguyễn Văn A",
+	"email": "customer@example.com",
+	"phone_number": "0900000000",
+	"address": "Quận 1",
+	"role": "Khách hàng",
+	"is_active": true
+}
+```
+
+- `POST /api/auth/admin/customers/7/toggle-status/`
+```json
+{
+	"message": "Customer deactivated successfully",
+	"customer": {
+		"id": 7,
+		"username": "khachhang01",
+		"is_active": false
+	}
+}
+```
+
+- `GET /api/auth/shipper/applications/`
+```json
+{
+	"applications": [
+		{
+			"id": 12,
+			"username": "user_shipper",
+			"fullname": "Lê Hữu C",
+			"is_shipper_registered": true
+		}
+	],
+	"total_pages": 1,
+	"current_page": 1,
+	"total_applications": 1
+}
+```
+
+- `POST /api/auth/shipper/applications/12/approve/`
+```json
+{
+	"message": "Shipper application approved successfully",
+	"user": {
+		"id": 12,
+		"username": "user_shipper",
+		"role": "Người vận chuyển",
+		"is_shipper_registered": false
+	},
+	"shipper_id": 5
+}
+```
+
+- `POST /api/auth/shipper/applications/12/reject/`
+```json
+{
+	"message": "Shipper application rejected",
+	"user": {
+		"id": 12,
+		"username": "user_shipper",
+		"is_shipper_registered": false
+	}
+}
+```
+
+- `GET /api/auth/store/applications/`
+```json
+{
+	"applications": [
+		{
+			"id": 20,
+			"username": "user_store",
+			"fullname": "Cửa Hàng An",
+			"is_store_registered": true
+		}
+	],
+	"total_pages": 1,
+	"current_page": 1,
+	"total_applications": 1
+}
+```
+
+- `POST /api/auth/store/applications/20/approve/`
+```json
+{
+	"message": "Store application approved successfully",
+	"user": {
+		"id": 20,
+		"username": "user_store",
+		"role": "Cửa hàng",
+		"is_store_registered": false
+	},
+	"store_id": 6,
+	"store_name": "Cửa hàng An"
+}
+```
+
+- `POST /api/auth/store/applications/20/reject/`
+```json
+{
+	"message": "Store application rejected",
+	"user": {
+		"id": 20,
+		"username": "user_store",
+		"is_store_registered": false
+	}
+}
+```
+
+### Quản trị đơn hàng (`apps/orders/views.py`)
+| Phương thức | Endpoint | Mục đích | Response |
+|---|---|---|---|
+| GET | `/api/orders/admin/` | Quản trị xem tất cả đơn (Store Manager xem phần của mình). | Xem “Response mẫu – Đơn hàng”. |
+| GET/PUT | `/api/orders/admin/<order_id>/` | Xem hoặc cập nhật trạng thái đơn (Admin-only). | Xem “Response mẫu – Đơn hàng”. |
+| PUT | `/api/orders/admin/<order_id>/assign-shipper/` | Gán hoặc bỏ gán shipper. | Xem “Response mẫu – Đơn hàng”. |
+| PATCH | `/api/orders/admin/<pk>/status/` | Đổi trạng thái/hủy đơn, ghi nhận `cancelled_by_role`. | Xem “Response mẫu – Đơn hàng”. |
+
+### Quản lý khuyến mãi toàn hệ thống (`apps/promotions/views.py`)
+| Phương thức | Endpoint | Mục đích | Response |
+|---|---|---|---|
+| GET | `/api/promotions/admin/` | Liệt kê các mã scope toàn hệ thống (store_id = 0). | Xem “Response mẫu – Khuyến mãi Admin”. |
+| POST | `/api/promotions/admin/create/` | Tạo promo toàn hệ thống (gắn vào store ảo id=0). | Xem “Response mẫu – Khuyến mãi Admin”. |
+| GET | `/api/promotions/admin/<id>/` | Chi tiết promo global. | Xem “Response mẫu – Khuyến mãi Admin”. |
+| PUT/PATCH | `/api/promotions/admin/<id>/update/` | Cập nhật promo global. | Xem “Response mẫu – Khuyến mãi Admin”. |
+| DELETE | `/api/promotions/admin/<id>/delete/` | Xóa promo global. | Xem “Response mẫu – Khuyến mãi Admin”. |
+
+#### Response mẫu – Khuyến mãi Admin
+
+- `GET /api/promotions/admin/`
 ```json
 [
-  {
-    "id": 1,
-    "size_name": "Size L",
-    "price": "10000.00",
-    "food": 1
-  },
-  {
-    "id": 2,
-    "size_name": "Size M",
-    "price": "5000.00",
-    "food": 1
-  }
+	{
+		"id": 1,
+		"name": "Toàn hệ thống 15%",
+		"scope": "SYSTEM",
+		"discount_type": "PERCENT",
+		"discount_value": "15.00",
+		"minimum_pay": "100000.00",
+		"max_discount_amount": "30000.00",
+		"start_date": "2025-11-01T00:00:00+07:00",
+		"end_date": "2025-12-31T23:59:59+07:00",
+		"store_id": 0,
+		"store_name": "System-Wide Promotions",
+		"is_active": true,
+		"description": "Giảm 15% tối đa 30k"
+	}
 ]
 ```
 
-#### 2.8.2 Thêm size mới cho món ăn
-- **POST** `/api/menu/admin/foods/{food_id}/sizes/`
-- **Headers:** `Authorization: Bearer {admin_or_store_manager_token}`
-- **Request Body:**
+- `POST /api/promotions/admin/create/`
 ```json
 {
-  "size_name": "Size XL",
-  "price": "15000.00"
-}
-```
-- **Response:**
-```json
-{
-  "id": 3,
-  "size_name": "Size XL",
-  "price": "15000.00",
-  "food": 1
-}
-```
-- **Error Response (400):**
-```json
-{
-  "error": "Size with this name already exists for this food"
+	"id": 2,
+	"name": "Global 50k",
+	"scope": "SYSTEM",
+	"discount_type": "AMOUNT",
+	"discount_value": "50000.00",
+	"minimum_pay": "250000.00",
+	"store_id": 0,
+	"store_name": "System-Wide Promotions",
+	"is_active": true
 }
 ```
 
-#### 2.8.3 Chi tiết một size
-- **GET** `/api/menu/admin/foods/{food_id}/sizes/{size_id}/`
-- **Headers:** `Authorization: Bearer {admin_or_store_manager_token}`
-- **Response:**
+- `GET /api/promotions/admin/2/`
 ```json
 {
-  "id": 1,
-  "size_name": "Size L",
-  "price": "10000.00",
-  "food": 1
+	"id": 2,
+	"name": "Global 50k",
+	"scope": "SYSTEM",
+	"discount_type": "AMOUNT",
+	"discount_value": "50000.00",
+	"minimum_pay": "250000.00",
+	"store_id": 0,
+	"store_name": "System-Wide Promotions"
 }
 ```
 
-#### 2.8.4 Cập nhật size
-- **PUT** `/api/menu/admin/foods/{food_id}/sizes/{size_id}/`
-- **Headers:** `Authorization: Bearer {admin_or_store_manager_token}`
-- **Request Body:**
+- `PATCH /api/promotions/admin/2/update/`
 ```json
 {
-  "size_name": "Size Large",
-  "price": "12000.00"
-}
-```
-- **Response:**
-```json
-{
-  "id": 1,
-  "size_name": "Size Large",
-  "price": "12000.00",
-  "food": 1
-}
-```
-- **Error Response (400):**
-```json
-{
-  "error": "Size with this name already exists for this food"
+	"id": 2,
+	"name": "Global 60k",
+	"discount_value": "60000.00",
+	"minimum_pay": "250000.00",
+	"store_id": 0,
+	"store_name": "System-Wide Promotions"
 }
 ```
 
-#### 2.8.5 Xóa size
-- **DELETE** `/api/menu/admin/foods/{food_id}/sizes/{size_id}/`
-- **Headers:** `Authorization: Bearer {admin_or_store_manager_token}`
-- **Response:**
+- `DELETE /api/promotions/admin/2/delete/`
 ```json
 {
-  "message": "Food size deleted successfully"
+	"success": true,
+	"message": "Promotion \"Global 60k\" deleted successfully"
 }
 ```
 
-### 2.9 Store Manager - Quản lý món ăn
-**Lưu ý:** Store Manager sử dụng endpoint `/api/menu/store/foods/` thay vì `/api/menu/admin/foods/`
-
-#### 2.9.1 Danh sách món ăn của cửa hàng
-- **GET** `/api/menu/store/foods/`
-- **Headers:** `Authorization: Bearer {store_manager_token}`
-- **Query Parameters:**
-  - `search`: Tìm kiếm theo tên hoặc mô tả
-  - `category`: Lọc theo danh mục
-  - `page`: Trang hiện tại (mặc định: 1)
-  - `page_size`: Số lượng items/trang (mặc định: 12)
-- **Response:**
-```json
-{
-  "count": 25,
-  "num_pages": 3,
-  "current_page": 1,
-  "has_next": true,
-  "has_previous": false,
-  "next": "?page=2&page_size=12",
-  "previous": null,
-  "results": [
-    {
-      "id": 1,
-      "title": "Big Mac",
-      "description": "Bánh burger với 2 lớp thịt bò",
-      "price": "89000.00",
-      "image": "bigmac.jpg",
-      "image_url": "http://localhost:8000/media/assets/bigmac.jpg",
-      "category": {
-        "id": 1,
-        "cate_name": "Burger"
-      },
-      "store": {
-        "id": 1,
-        "store_name": "McDonald's Nguyễn Huệ"
-      },
-      "availability": "Còn hàng",
-      "sizes": [
-        {
-          "id": 1,
-          "size_name": "Size L",
-          "price": "10000.00"
-        }
-      ],
-      "average_rating": 4.5,
-      "rating_count": 120
-    }
-  ],
-  "store": {
-    "id": 1,
-    "name": "McDonald's Nguyễn Huệ"
-  }
-}
-```
-
-#### 2.9.2 Chi tiết món ăn (Store Manager)
-- **GET** `/api/menu/store/foods/{food_id}/`
-- **Headers:** `Authorization: Bearer {store_manager_token}`
-- **Response:** Tương tự chi tiết món ăn công khai
-
-#### 2.9.3 Cập nhật món ăn (Store Manager)
-- **PUT** `/api/menu/store/foods/{food_id}/`
-- **Headers:** `Authorization: Bearer {store_manager_token}`
-- **Content-Type:** `multipart/form-data`
-- **Request Body (FormData):**
-```
-title: "Big Mac Updated"
-description: "Mô tả cập nhật"
-price: "95000.00"
-category_id: 1
-availability: "Còn hàng"
-image_file: [File] (optional - chỉ gửi khi thay đổi ảnh)
-```
-- **Response:**
-```json
-{
-  "id": 1,
-  "title": "Big Mac Updated",
-  "description": "Mô tả cập nhật",
-  "price": "95000.00",
-  "image": "assets/new_image_123.jpg",
-  "image_url": "http://localhost:8000/media/assets/new_image_123.jpg",
-  "category": {
-    "id": 1,
-    "cate_name": "Burger"
-  },
-  "store": {
-    "id": 1,
-    "store_name": "McDonald's Nguyễn Huệ"
-  },
-  "availability": "Còn hàng",
-  "sizes": []
-}
-```
-
-#### 2.9.4 Xóa món ăn (Store Manager)
-- **DELETE** `/api/menu/store/foods/{food_id}/`
-- **Headers:** `Authorization: Bearer {store_manager_token}`
-- **Response:**
-```json
-{
-  "message": "Food deleted successfully"
-}
-```
-
-#### 2.9.5 Quản lý sizes của món ăn (Store Manager)
-**Danh sách sizes:**
-- **GET** `/api/menu/store/foods/{food_id}/sizes/`
-- **Headers:** `Authorization: Bearer {store_manager_token}`
-- **Response:** Tương tự 2.8.1
-
-**Thêm size mới:**
-- **POST** `/api/menu/store/foods/{food_id}/sizes/`
-- **Headers:** `Authorization: Bearer {store_manager_token}`
-- **Request Body:**
-```json
-{
-  "size_name": "Size XL",
-  "price": "15000.00"
-}
-```
-- **Response:** Tương tự 2.8.2
-
-**Chi tiết size:**
-- **GET** `/api/menu/store/foods/{food_id}/sizes/{size_id}/`
-- **Headers:** `Authorization: Bearer {store_manager_token}`
-- **Response:** Tương tự 2.8.3
-
-**Cập nhật size:**
-- **PUT** `/api/menu/store/foods/{food_id}/sizes/{size_id}/`
-- **Headers:** `Authorization: Bearer {store_manager_token}`
-- **Request Body:** Tương tự 2.8.4
-- **Response:** Tương tự 2.8.4
-
-**Xóa size:**
-- **DELETE** `/api/menu/store/foods/{food_id}/sizes/{size_id}/`
-- **Headers:** `Authorization: Bearer {store_manager_token}`
-- **Response:** Tương tự 2.8.5
+### Quyền CRUD cửa hàng
+Admin có toàn quyền dùng các endpoint trong mục Quản lý cửa hàng (tạo, chỉnh sửa, xóa, xem thống kê) để quản lý toàn bộ hệ thống.
 
 ---
-
-## 3. Cart API (`/api/cart/`)
-
-### 3.1 Xem giỏ hàng
-- **GET** `/api/cart/`
-- **Headers:** `Authorization: Bearer {access_token}`
-- **Response:**
-```json
-{
-  "id": 1,
-  "total_money": "156000.00",
-  "items": [
-    {
-      "id": 1,
-      "food": {
-        "id": 1,
-        "title": "Big Mac",
-        "price": "89000.00",
-        "image_url": "http://localhost:8000/media/assets/bigmac.jpg",
-        "store_name": "McDonald's Nguyễn Huệ"
-      },
-      "food_option": {
-        "id": 1,
-        "size_name": "Large",
-        "price": "20000.00"
-      },
-      "quantity": 2,
-      "item_note": "Không cà chua",
-      "subtotal": "218000.00"
-    }
-  ],
-  "items_count": 2
-}
-```
-
-### 3.2 Thêm vào giỏ hàng
-- **POST** `/api/cart/add/`
-- **Headers:** `Authorization: Bearer {access_token}`
-- **Request Body:**
-```json
-{
-  "food_id": 1,
-  "food_option_id": 1,
-  "quantity": 2,
-  "item_note": "Không cà chua",
-  "toppings": {
-    "5": 1,
-    "7": 2
-  }
-}
-```
-- **Response:**
-```json
-{
-  "message": "Added Big Mac to cart",
-  "item": {
-    "food": {
-      "id": 1,
-      "title": "Big Mac",
-      "price": "89000.00"
-    },
-    "food_option": {
-      "id": 1,
-      "size_name": "Large",
-      "price": "20000.00"
-    },
-    "quantity": 2,
-    "item_note": "Không cà chua",
-    "toppings_added": [
-      {
-        "food_id": 5,
-        "title": "Cheese Extra",
-        "quantity": 1
-      },
-      {
-        "food_id": 7,
-        "title": "Bacon",
-        "quantity": 2
-      }
-    ]
-  }
-}
-```
-
-### 3.3 Cập nhật số lượng
-- **PUT** `/api/cart/items/{food_id}/`
-- **Headers:** `Authorization: Bearer {access_token}`
-- **Request Body:**
-```json
-{
-  "quantity": 3,
-  "food_option_id": 1
-}
-```
-- **Response:** Tương tự thêm vào giỏ hàng
-
-### 3.4 Xóa khỏi giỏ hàng
-- **DELETE** `/api/cart/items/{food_id}/remove/`
-- **Headers:** `Authorization: Bearer {access_token}`
-- **Query Parameters:** `food_option_id` (optional)
-- **Response:**
-```json
-{
-  "message": "Đã xóa khỏi giỏ hàng"
-}
-```
-
-### 3.5 Xóa toàn bộ giỏ hàng
-- **DELETE** `/api/cart/clear/`
-- **Headers:** `Authorization: Bearer {access_token}`
-- **Response:**
-```json
-{
-  "message": "Đã xóa toàn bộ giỏ hàng"
-}
-```
-
----
-
-## 4. Orders API (`/api/orders/`)
-
-### 4.1 Danh sách đơn hàng
-- **GET** `/api/orders/`
-- **Headers:** `Authorization: Bearer {access_token}`
-- **Query Parameters:**
-  - `status`: Lọc theo trạng thái
-  - `page`: Trang hiện tại
-- **Response:**
-```json
-{
-  "count": 25,
-  "next": "http://localhost:8000/api/orders/?page=2",
-  "previous": null,
-  "results": [
-    {
-      "id": 1,
-      "order_status": "Đã xác nhận",
-      "delivery_status": "Đang giao",
-      "total_money": "156000.00",
-      "payment_method": "COD",
-      "receiver_name": "John Doe",
-      "shipper": {
-        "id": 1,
-        "full_name": "Nguyễn Văn A",
-        "phone_number": "0123456789"
-      },
-      "items_count": 2,
-      "created_date": "2025-01-01T10:00:00Z",
-      "created_date_display": "2025-01-01 17:00:00",
-      "cancel_reason": null,
-      "cancelled_date": null,
-      "cancelled_by_role": null
-    }
-  ]
-}
-```
-
-### 4.2 Tạo đơn hàng
-- **POST** `/api/orders/`
-- **Headers:** `Authorization: Bearer {access_token}`
-- **Request Body:**
-```json
-{
-  "receiver_name": "John Doe",
-  "ship_address": "123 Main St, Hà Nội",
-  "phone_number": "0123456789",
-  "payment_method": "COD",
-  "note": "Giao hàng nhanh",
-  "promo_ids": [1, 2],
-  "discount_amount": "25000.00",
-  "shipping_fee": "15000.00"
-}
-```
-- **Response:**
-```json
-{
-  "message": "Đã tạo 2 đơn hàng cho 2 cửa hàng",
-  "group_id": 1,
-  "orders": [
-    {
-      "id": 1,
-      "user": {
-        "id": 1,
-        "fullname": "John Doe",
-        "email": "user@example.com"
-      },
-      "order_status": "Chờ xác nhận",
-      "delivery_status": "Chờ xác nhận",
-      "total_money": "156000.00",
-      "payment_method": "COD",
-      "receiver_name": "John Doe",
-      "phone_number": "0123456789",
-      "ship_address": "123 Main St, Hà Nội",
-      "note": "Giao hàng nhanh",
-      "shipping_fee": "15000.00",
-      "group_id": 1,
-      "store_name": "McDonald's Nguyễn Huệ",
-      "store_info_id": 1,
-      "items": [
-        {
-          "id": "1_1_1",
-          "food": {
-            "id": 1,
-            "title": "Big Mac",
-            "price": "89000.00",
-            "image_url": "http://localhost:8000/media/assets/bigmac.jpg"
-          },
-          "food_option": {
-            "id": 1,
-            "size_name": "Large",
-            "price": "20000.00"
-          },
-          "quantity": 2,
-          "food_price": "89000.00",
-          "food_option_price": "20000.00",
-          "food_note": "Không cà chua",
-          "subtotal": 218000.0,
-          "size_display": "Size Large: +20,000đ",
-          "price_breakdown": [
-            {
-              "type": "food",
-              "name": "Big Mac",
-              "display": "Big Mac 89,000đ",
-              "price": 89000.0,
-              "quantity": 2,
-              "total": 178000.0
-            },
-            {
-              "type": "size",
-              "name": "Size Large",
-              "display": "Size Large: +20,000đ",
-              "price": 20000.0,
-              "quantity": 2,
-              "total": 40000.0
-            }
-          ]
-        }
-      ],
-      "is_rated": false,
-      "created_date": "2025-01-01T10:00:00Z",
-      "created_date_display": "2025-01-01 17:00:00"
-    }
-  ]
-}
-```
-
-### 4.3 Chi tiết đơn hàng
-- **GET** `/api/orders/{id}/`
-- **Headers:** `Authorization: Bearer {access_token}`
-- **Response:** Tương tự response tạo đơn hàng
-
-### 4.4 Cập nhật trạng thái đơn hàng
-- **PATCH** `/api/orders/{id}/status/`
-- **Headers:** `Authorization: Bearer {access_token}`
-- **Request Body:**
-```json
-{
-  "order_status": "Đã xác nhận"
-}
-```
-- **Response:**
-```json
-{
-  "message": "Cập nhật trạng thái thành công",
-  "order_status": "Đã xác nhận"
-}
-```
-
-### 4.5 Hủy nhóm đơn hàng
-- **POST** `/api/orders/{id}/cancel-group/`
-- **Headers:** `Authorization: Bearer {access_token}`
-- **Request Body:**
-```json
-{
-  "cancel_reason": "Khách hàng thay đổi ý định"
-}
-```
-- **Response:**
-```json
-{
-  "message": "Đã hủy 3 đơn hàng trong nhóm",
-  "cancelled_orders": [1, 2, 3]
-}
-```
-
-### 4.6 Tạo đơn hàng với nhiều khuyến mãi (Phiên bản mới)
-- **POST** `/api/orders/create-with-multiple-promos/`
-- **Headers:** `Authorization: Bearer {access_token}`
-- **Mô tả:** API mới hỗ trợ tạo đơn hàng với nhiều khuyến mãi được áp dụng tự động
-- **Request Body:**
-```json
-{
-  "receiver_name": "John Doe",
-  "ship_address": "123 Main St, Hà Nội",
-  "phone_number": "0123456789",
-  "payment_method": "COD",
-  "note": "Giao hàng nhanh",
-  "promo_ids": [1, 2, 3]
-}
-```
-- **Response:**
-```json
-{
-  "message": "Đã tạo 2 đơn hàng cho 2 cửa hàng",
-  "group_id": 1,
-  "orders": [
-    {
-      "id": 1,
-      "user": {
-        "id": 1,
-        "fullname": "John Doe"
-      },
-      "store": {
-        "id": 1,
-        "store_name": "McDonald's Nguyễn Huệ"
-      },
-      "receiver_name": "John Doe",
-      "phone_number": "0123456789",
-      "ship_address": "123 Main St, Hà Nội",
-      "order_status": "Chờ xác nhận",
-      "payment_method": "COD",
-      "total_before_discount": "171000.00",
-      "total_discount": "30000.00",
-      "total_after_discount": "141000.00",
-      "shipping_fee": "15000.00",
-      "note": "Giao hàng nhanh",
-      "group_id": 1,
-      "applied_promotions": [
-        {
-          "promo_id": 1,
-          "promo_name": "Giảm 10% cho đơn hàng từ 100k",
-          "applied_amount": "15000.00"
-        },
-        {
-          "promo_id": 2,
-          "promo_name": "Giảm 15k cho đơn hàng từ 150k",
-          "applied_amount": "15000.00"
-        }
-      ],
-      "order_details": [
-        {
-          "food": {
-            "id": 1,
-            "title": "Big Mac",
-            "price": "89000.00"
-          },
-          "quantity": 2,
-          "price": "89000.00",
-          "subtotal": "178000.00"
-        }
-      ],
-      "created_date": "2025-01-01T17:00:00Z",
-      "created_date_display": "2025-01-01 17:00:00"
-    }
-  ]
-}
-```
-
----
-
-## 5. Payments API (`/api/payments/`)
-
-### 5.1 Tạo thanh toán
-- **POST** `/api/payments/create/`
-- **Headers:** `Authorization: Bearer {access_token}`
-- **Request Body:**
-```json
-{
-  "order_id": 1,
-  "payment_method": "MOMO",
-  "return_url": "http://localhost:3000/payment-success"
-}
-```
-- **Response:**
-```json
-{
-  "payment_url": "https://payment.momo.vn/pay?token=abc123",
-  "payment_id": "MOMO_20250101_001",
-  "order_id": 1,
-  "amount": "156000.00"
-}
-```
-
-### 5.2 Webhook thanh toán
-- **POST** `/api/payments/webhook/`
-- **Request Body:**
-```json
-{
-  "payment_id": "MOMO_20250101_001",
-  "status": "SUCCESS",
-  "amount": "156000.00",
-  "transaction_id": "TXN123456789"
-}
-```
-- **Response:**
-```json
-{
-  "status": "OK"
-}
-```
-
----
-
-## 6. Promotions API (`/api/promotions/`)
-
-### 6.1 Danh sách khuyến mãi
-- **GET** `/api/promotions/`
-- **Query Parameters:**
-  - `store_id`: Lọc theo cửa hàng
-  - `active_only`: Chỉ lấy khuyến mãi đang hoạt động
-- **Response:**
-```json
-[
-  {
-    "id": 1,
-    "name": "Giảm 10% cho đơn hàng từ 100k",
-    "category": "PERCENT",
-    "discount_value": 10.0,
-    "minimum_pay": "100000.00",
-    "max_discount_amount": "50000.00",
-    "start_date": "2025-01-01",
-    "end_date": "2025-01-31",
-    "store_id": 1,
-    "store_name": "McDonald's Nguyễn Huệ",
-    "is_active": true,
-    "percent": 10.0,
-    "description": "Giảm 10% cho đơn hàng từ 100k - 10% off (max 50,000đ)"
-  },
-  {
-    "id": 2,
-    "name": "Giảm 20k cho đơn hàng từ 200k",
-    "category": "AMOUNT",
-    "discount_value": 20000.0,
-    "minimum_pay": "200000.00",
-    "max_discount_amount": null,
-    "start_date": "2025-01-01",
-    "end_date": "2025-01-31",
-    "store_id": 1,
-    "store_name": "McDonald's Nguyễn Huệ",
-    "is_active": true,
-    "percent": 0,
-    "description": "Giảm 20k cho đơn hàng từ 200k - 20,000đ off"
-  }
-]
-```
-
-### 6.2 Xác thực mã khuyến mãi
-- **POST** `/api/promotions/validate/`
-- **Headers:** `Authorization: Bearer {access_token}`
-- **Request Body:**
-```json
-{
-  "promo_code": "DISCOUNT10",
-  "total_amount": "150000.00",
-  "store_id": 1
-}
-```
-- **Response:**
-```json
-{
-  "valid": true,
-  "promo": {
-    "id": 1,
-    "name": "Giảm 10% cho đơn hàng từ 100k",
-    "category": "PERCENT",
-    "discount_value": 10.0,
-    "max_discount_amount": "50000.00",
-    "applied_amount": "15000.00"
-  },
-  "message": "Mã khuyến mãi hợp lệ"
-}
-```
-
-### 6.3 Tạo khuyến mãi (Store Manager)
-- **POST** `/api/promotions/create/`
-- **Headers:** `Authorization: Bearer {store_manager_token}`
-- **Request Body:**
-```json
-{
-  "name": "Khuyến mãi mới",
-  "category": "PERCENT",
-  "discount_value": 15.0,
-  "minimum_pay": "80000.00",
-  "max_discount_amount": "30000.00",
-  "start_date": "2025-02-01",
-  "end_date": "2025-02-28",
-  "store": 1
-}
-```
-- **Response:** Tương tự danh sách khuyến mãi
-
-### 6.4 Validate nhiều khuyến mãi
-- **POST** `/api/promotions/validate-multiple/`
-- **Headers:** `Authorization: Bearer {access_token}`
-- **Mô tả:** Validate nhiều mã khuyến mãi cùng lúc
-- **Request Body:**
-```json
-{
-  "promo_ids": [1, 2],
-  "total_amount": "200000.00",
-  "store_id": 1
-}
-```
-- **Response:**
-```json
-{
-  "valid": true,
-  "total_discount": "35000.00",
-  "final_amount": "165000.00",
-  "applied_promos": [
-    {
-      "id": 1,
-      "name": "Giảm 10% cho đơn hàng từ 100k",
-      "applied_amount": "20000.00"
-    },
-    {
-      "id": 2,
-      "name": "Giảm 15k cho đơn hàng từ 200k",
-      "applied_amount": "15000.00"
-    }
-  ]
-}
-```
-
-### 6.5 Chi tiết khuyến mãi
-- **GET** `/api/promotions/{promo_id}/`
-- **Headers:** `Authorization: Bearer {access_token}`
-- **Response:** Tương tự item trong danh sách khuyến mãi
-
-### 6.6 Cập nhật khuyến mãi (Store Manager)
-- **PUT** `/api/promotions/{promo_id}/update/`
-- **Headers:** `Authorization: Bearer {store_manager_token}`
-- **Request Body:** Tương tự tạo khuyến mãi
-- **Response:** Tương tự danh sách khuyến mãi
-
-### 6.7 Xóa khuyến mãi (Store Manager)
-- **DELETE** `/api/promotions/{promo_id}/delete/`
-- **Headers:** `Authorization: Bearer {store_manager_token}`
-- **Response:**
-```json
-{
-  "success": true,
-  "message": "Promotion \"Khuyến mãi mới\" deleted successfully"
-}
-```
-
----
-
-## 7. Ratings API (`/api/ratings/`)
-
-### 7.1 Danh sách đánh giá
-- **GET** `/api/ratings/`
-- **Query Parameters:**
-  - `food_id`: Lọc theo món ăn
-  - `order_id`: Lọc theo đơn hàng
-- **Response:**
-```json
-[
-  {
-    "id": 1,
-    "user": {
-      "id": 1,
-      "fullname": "John Doe"
-    },
-    "food": {
-      "id": 1,
-      "title": "Big Mac"
-    },
-    "order_id": 1,
-    "rating": 5,
-    "comment": "Rất ngon, giao hàng nhanh!",
-    "created_date": "2025-01-01T12:00:00Z"
-  }
-]
-```
-
-### 7.2 Tạo đánh giá
-- **POST** `/api/ratings/`
-- **Headers:** `Authorization: Bearer {access_token}`
-- **Request Body:**
-```json
-{
-  "food_id": 1,
-  "order_id": 1,
-  "rating": 5,
-  "comment": "Rất ngon, giao hàng nhanh!"
-}
-```
-- **Response:** Tương tự danh sách đánh giá
-
-### 7.3 Chi tiết đánh giá
-- **GET** `/api/ratings/{id}/`
-- **Response:** Tương tự item trong danh sách đánh giá
-
-### 7.4 Cập nhật đánh giá
-- **PUT** `/api/ratings/{id}/`
-- **Headers:** `Authorization: Bearer {access_token}`
-- **Mô tả:** Người dùng chỉ có thể cập nhật đánh giá của chính mình
-- **Request Body:**
-```json
-{
-  "rating": 4,
-  "comment": "Cập nhật đánh giá: Ngon nhưng hơi mặn"
-}
-```
-- **Response:**
-```json
-{
-  "id": 1,
-  "user": {
-    "id": 1,
-    "fullname": "John Doe"
-  },
-  "food": {
-    "id": 1,
-    "title": "Big Mac"
-  },
-  "order_id": 1,
-  "rating": 4,
-  "comment": "Cập nhật đánh giá: Ngon nhưng hơi mặn",
-  "created_date": "2025-01-01T12:00:00Z"
-}
-```
-
-### 7.5 Xóa đánh giá
-- **DELETE** `/api/ratings/{id}/`
-- **Headers:** `Authorization: Bearer {access_token}`
-- **Mô tả:** Người dùng chỉ có thể xóa đánh giá của chính mình
-- **Response:**
-```json
-{
-  "message": "Rating deleted successfully"
-}
-```
-
----
-
-## 8. Stores API (`/api/stores/`)
-
-### 8.1 Danh sách cửa hàng công khai
-- **GET** `/api/stores/public/`
-- **Response:**
-```json
-[
-  {
-    "id": 1,
-    "store_name": "McDonald's Nguyễn Huệ",
-    "image": "mcdonalds-nguyen-hue.jpg",
-    "image_url": "http://localhost:8000/media/assets/mcdonalds-nguyen-hue.jpg",
-    "description": "Cửa hàng McDonald's tại trung tâm thành phố",
-    "manager": {
-      "id": 5,
-      "fullname": "Nguyễn Quản Lý",
-      "email": "manager@mcdonalds.com"
-    }
-  }
-]
-```
-
-### 8.2 CRUD cửa hàng (Admin/Store Manager)
-- **GET** `/api/stores/` - Danh sách cửa hàng
-- **POST** `/api/stores/` - Tạo cửa hàng mới
-- **GET** `/api/stores/{id}/` - Chi tiết cửa hàng
-- **PUT** `/api/stores/{id}/` - Cập nhật cửa hàng
-- **DELETE** `/api/stores/{id}/` - Xóa cửa hàng
-
-**Request Body cho tạo/cập nhật:**
-```json
-{
-  "store_name": "KFC Trần Phú",
-  "image": "kfc-tran-phu.jpg",
-  "description": "Cửa hàng KFC tại Trần Phú",
-  "manager": 6
-}
-```
-
-### 8.3 Cửa hàng của tôi (Store Manager)
-- **GET** `/api/stores/my_store/`
-- **Headers:** `Authorization: Bearer {store_manager_token}`
-- **Response:**
-```json
-{
-  "id": 1,
-  "store_name": "McDonald's Nguyễn Huệ",
-  "image": "mcdonalds-nguyen-hue.jpg",
-  "image_url": "http://localhost:8000/media/assets/mcdonalds-nguyen-hue.jpg",
-  "description": "Cửa hàng McDonald's tại trung tâm thành phố",
-  "manager": {
-    "id": 5,
-    "fullname": "Nguyễn Quản Lý",
-    "email": "manager@mcdonalds.com"
-  }
-}
-```
-
-### 8.4 Món ăn của cửa hàng
-- **GET** `/api/stores/{id}/foods/`
-- **Headers:** `Authorization: Bearer {access_token}`
-- **Query Parameters:**
-  - `page`: Trang hiện tại
-- **Response:**
-```json
-{
-  "count": 25,
-  "next": 2,
-  "previous": null,
-  "results": [
-    {
-      "id": 1,
-      "title": "Big Mac",
-      "description": "Bánh burger với 2 lớp thịt bò",
-      "price": "89000.00",
-      "image_url": "http://localhost:8000/media/assets/bigmac.jpg",
-      "category": {
-        "id": 1,
-        "cate_name": "Burger"
-      },
-      "availability": "Còn hàng",
-      "sizes": [],
-      "average_rating": 4.5,
-      "rating_count": 120
-    }
-  ]
-}
-```
-
-### 8.5 Đơn hàng của cửa hàng
-- **GET** `/api/stores/{id}/orders/`
-- **Headers:** `Authorization: Bearer {store_manager_token}`
-- **Response:** Tương tự danh sách đơn hàng
-
-### 8.6 Thống kê cửa hàng
-- **GET** `/api/stores/{id}/stats/`
-- **Headers:** `Authorization: Bearer {store_manager_token}`
-- **Response:**
-```json
-{
-  "total_foods": 25,
-  "total_orders": 150,
-  "total_revenue": 15000000.0,
-  "average_rating": 4.3,
-  "total_ratings": 89
-}
-```
-
----
-
-## 9. Shipper API (`/api/shipper/`)
-
-### 9.1 Danh sách shipper
-- **GET** `/api/shipper/shippers/`
-- **Headers:** `Authorization: Bearer {admin_token}`
-- **Response:**
-```json
-[
-  {
-    "id": 1,
-    "user": {
-      "id": 10,
-      "username": "shipper1",
-      "email": "shipper1@example.com",
-      "fullname": "Nguyễn Văn A",
-      "phone_number": "0123456789"
-    },
-    "user_id": 10
-  }
-]
-```
-
-### 9.2 Tạo shipper mới
-- **POST** `/api/shipper/shippers/`
-- **Headers:** `Authorization: Bearer {admin_token}`
-- **Request Body:**
-```json
-{
-  "user_id": 10
-}
-```
-- **Response:**
-```json
-{
-  "id": 1,
-  "user": {
-    "id": 10,
-    "username": "shipper1",
-    "email": "shipper1@example.com",
-    "fullname": "Nguyễn Văn A",
-    "phone_number": "0123456789"
-  },
-  "user_id": 10
-}
-```
-
-### 9.3 Tìm shipper theo user ID
-- **GET** `/api/shipper/shippers/by_user/?user_id={user_id}`
-- **Headers:** `Authorization: Bearer {admin_token}`
-- **Response:** Tương tự thông tin shipper
-
-### 9.4 Xóa shipper
-- **DELETE** `/api/shipper/shippers/{id}/remove_shipper/`
-- **Headers:** `Authorization: Bearer {admin_token}`
-- **Response:**
-```json
-{
-  "message": "Đã xóa shipper thành công"
-}
-```
-
-### 9.5 Đơn hàng của shipper
-- **GET** `/api/orders/shipper/`
-- **Headers:** `Authorization: Bearer {shipper_token}`
-- **Query Parameters:**
-  - `status`: Lọc theo trạng thái
-  - `page`: Trang hiện tại
-- **Response:**
-```json
-{
-  "count": 5,
-  "num_pages": 1,
-  "current_page": 1,
-  "has_next": false,
-  "has_previous": false,
-  "results": [
-    {
-      "id": 1,
-      "order_status": "Sẵn sàng",
-      "delivery_status": "Đã lấy hàng",
-      "total_money": "156000.00",
-      "receiver_name": "John Doe",
-      "ship_address": "123 Main St, Hà Nội",
-      "phone_number": "0123456789",
-      "created_date": "2025-01-01T10:00:00Z",
-      "created_date_display": "2025-01-01 17:00:00"
-    }
-  ]
-}
-```
-
-### 9.6 Shipper nhận đơn hàng
-- **POST** `/api/orders/shipper/{order_id}/accept/`
-- **Headers:** `Authorization: Bearer {shipper_token}`
-- **Mô tả:** Shipper có thể tự nhận những đơn hàng chưa có shipper phụ trách
-- **Response:**
-```json
-{
-  "message": "Order accepted successfully",
-  "order": {
-    "id": 1,
-    "order_status": "Đã xác nhận",
-    "delivery_status": "Đã xác nhận",
-    "total_money": "156000.00",
-    "shipper": {
-      "id": 1,
-      "user": {
-        "fullname": "Nguyễn Văn A"
-      }
-    },
-    "receiver_name": "John Doe",
-    "ship_address": "123 Main St, Hà Nội"
-  }
-}
-```
-
-### 9.7 Cập nhật trạng thái giao hàng
-- **PUT** `/api/orders/shipper/{order_id}/status/`
-- **Headers:** `Authorization: Bearer {shipper_token}`
-- **Request Body:**
-```json
-{
-  "order_status": "Đã giao"
-}
-```
-- **Response:**
-```json
-{
-  "message": "Delivery status updated successfully",
-  "order": {
-    "id": 1,
-    "order_status": "Đã giao",
-    "delivery_status": "Đã giao",
-    "total_money": "156000.00",
-    "receiver_name": "John Doe"
-  }
-}
-```
-
----
-
-## 10. Admin API
-
-### 10.1 Quản lý đơn hàng
-- **GET** `/api/orders/admin/` - Danh sách tất cả đơn hàng
-- **GET** `/api/orders/admin/{order_id}/` - Chi tiết đơn hàng
-- **POST** `/api/orders/admin/{order_id}/assign-shipper/` - Phân công shipper
-- **PATCH** `/api/orders/admin/{order_id}/status/` - Cập nhật trạng thái
-
-**Danh sách đơn hàng (GET /api/orders/admin/):**
-- **Query Parameters:**
-  - `status`: Lọc theo trạng thái
-  - `search`: Tìm kiếm theo thông tin khách hàng, ID đơn hàng
-  - `page`: Trang hiện tại
-- **Response:**
-```json
-{
-  "orders": [
-    {
-      "id": 1,
-      "user": {
-        "id": 1,
-        "fullname": "John Doe",
-        "email": "user@example.com"
-      },
-      "order_status": "Đã xác nhận",
-      "delivery_status": "Đang giao",
-      "total_money": "156000.00",
-      "receiver_name": "John Doe",
-      "created_date_display": "2025-01-01 17:00:00"
-    }
-  ],
-  "total_pages": 5,
-  "current_page": 1,
-  "total_orders": 45
-}
-```
-
-**Phân công shipper (POST /api/orders/admin/{order_id}/assign-shipper/):**
-- **Request Body:**
-```json
-{
-  "shipper_id": 1
-}
-```
-- **Response:**
-```json
-{
-  "message": "Shipper assignment updated successfully",
-  "order": {
-    "id": 1,
-    "shipper": {
-      "id": 1,
-      "user": {
-        "fullname": "Nguyễn Văn A"
-      }
-    },
-    "order_status": "Đang giao"
-  }
-}
-```
-
-**Cập nhật trạng thái (PATCH /api/orders/admin/{order_id}/status/):**
-- **Request Body:**
-```json
-{
-  "order_status": "Đã giao",
-  "cancel_reason": "Lý do hủy (nếu có)"
-}
-```
-
-### 10.2 Quản lý món ăn
-- **GET** `/api/menu/admin/foods/` - Danh sách tất cả món ăn (đã có ở mục 2.6)
-- **GET** `/api/menu/admin/foods/{food_id}/` - Chi tiết món ăn (đã có ở mục 2.7)
-- **POST** `/api/menu/admin/foods/` - Tạo món ăn mới (đã có ở mục 2.6)
-- **PUT** `/api/menu/admin/foods/{food_id}/` - Cập nhật món ăn (đã có ở mục 2.7)
-- **DELETE** `/api/menu/admin/foods/{food_id}/` - Xóa món ăn (đã có ở mục 2.7)
-
----
-
-## 11. API Bổ sung
-
-### 11.1 Tạo đơn hàng với nhiều khuyến mãi
-- **POST** `/api/orders/create-with-multiple-promos/`
-- **Headers:** `Authorization: Bearer {access_token}`
-- **Mô tả:** API mới hỗ trợ áp dụng nhiều khuyến mãi cùng lúc
-- **Request Body:**
-```json
-{
-  "receiver_name": "John Doe",
-  "ship_address": "123 Main St, Hà Nội",
-  "phone_number": "0123456789",
-  "payment_method": "COD",
-  "note": "Giao hàng nhanh",
-  "promo_ids": [1, 2, 3]
-}
-```
-- **Response:** Tương tự tạo đơn hàng thông thường
-
-### 11.2 Validate nhiều khuyến mãi
-- **POST** `/api/promotions/validate-multiple/`
-- **Headers:** `Authorization: Bearer {access_token}`
-- **Request Body:**
-```json
-{
-  "promo_ids": [1, 2],
-  "total_amount": "200000.00",
-  "store_id": 1
-}
-```
-- **Response:**
-```json
-{
-  "valid": true,
-  "total_discount": "35000.00",
-  "final_amount": "165000.00",
-  "applied_promos": [
-    {
-      "id": 1,
-      "name": "Giảm 10%",
-      "applied_amount": "20000.00"
-    },
-    {
-      "id": 2,
-      "name": "Giảm 15k",
-      "applied_amount": "15000.00"
-    }
-  ]
-}
-```
-
----
-
-## 12. API Quản lý Order-Promotion (OrderPromo)
-
-### 12.1 Lấy danh sách khuyến mãi đã áp dụng cho đơn hàng
-- **GET** `/api/orders/{order_id}/promotions/`
-- **Headers:** `Authorization: Bearer {access_token}`
-- **Response:**
-```json
-[
-  {
-    "id": 1,
-    "promo": {
-      "id": 1,
-      "name": "Giảm 10% cho đơn hàng từ 100k",
-      "discount_value": 10.0,
-      "category": "PERCENT"
-    },
-    "applied_amount": "15000.00",
-    "note": "",
-    "created_at": "2025-01-01T10:00:00Z"
-  }
-]
-```
-
-### 12.2 Thêm khuyến mãi vào đơn hàng
-- **POST** `/api/orders/{order_id}/promotions/`
-- **Headers:** `Authorization: Bearer {admin_token}`
-- **Request Body:**
-```json
-{
-  "promo_id": 1,
-  "applied_amount": "15000.00",
-  "note": "Áp dụng thủ công bởi admin"
-}
-```
-- **Response:**
-```json
-{
-  "id": 1,
-  "message": "Promotion applied successfully",
-  "applied_amount": "15000.00",
-  "order_total_updated": "141000.00"
-}
-```
-
-### 12.3 Xóa khuyến mãi khỏi đơn hàng
-- **DELETE** `/api/orders/{order_id}/promotions/{promo_id}/`
-- **Headers:** `Authorization: Bearer {admin_token}`
-- **Response:**
-```json
-{
-  "message": "Promotion removed successfully",
-  "refunded_amount": "15000.00",
-  "order_total_updated": "156000.00"
-}
-```
-
----
-
-## 13. API Thống kê và Báo cáo
-
-### 13.1 Thống kê tổng quan hệ thống (Admin)
-- **GET** `/api/admin/dashboard/stats/`
-- **Headers:** `Authorization: Bearer {admin_token}`
-- **Response:**
-```json
-{
-  "total_users": 150,
-  "total_orders": 1250,
-  "total_revenue": "125000000.00",
-  "total_stores": 12,
-  "active_shippers": 8,
-  "orders_today": 45,
-  "revenue_today": "2500000.00",
-  "top_selling_foods": [
-    {
-      "id": 1,
-      "title": "Big Mac",
-      "total_sold": 250,
-      "revenue": "22250000.00"
-    }
-  ]
-}
-```
-
-### 13.2 Thống kê cửa hàng (Store Manager)  
-- **GET** `/api/stores/{store_id}/stats/` (đã có ở mục 8.2)
-
-### 13.3 Thống kê shipper
-- **GET** `/api/shipper/stats/`
-- **Headers:** `Authorization: Bearer {shipper_token}`
-- **Response:**
-```json
-{
-  "total_delivered": 85,
-  "total_earnings": "850000.00",
-  "delivery_rate": 95.5,
-  "average_delivery_time": "25 minutes",
-  "orders_this_month": 35,
-  "earnings_this_month": "350000.00"
-}
-```
-
----
-
-## 14. API Quản lý Order-Promotion (OrderPromo)
-
-### 14.1 Lấy danh sách khuyến mãi đã áp dụng cho đơn hàng
-- **GET** `/api/orders/{order_id}/promotions/`
-- **Headers:** `Authorization: Bearer {access_token}`
-- **Mô tả:** Xem tất cả khuyến mãi đã được áp dụng cho một đơn hàng cụ thể
-- **Response:**
-```json
-[
-  {
-    "id": 1,
-    "order_id": 1,
-    "promo": {
-      "id": 1,
-      "name": "Giảm 10% cho đơn hàng từ 100k",
-      "category": "PERCENT",
-      "discount_value": 10.0,
-      "minimum_pay": "100000.00",
-      "max_discount_amount": "50000.00"
-    },
-    "applied_amount": "15000.00",
-    "note": "Tự động áp dụng",
-    "created_at": "2025-01-01T10:00:00Z"
-  }
-]
-```
-
-### 14.2 Thêm khuyến mãi vào đơn hàng (Admin)
-- **POST** `/api/orders/{order_id}/promotions/`
-- **Headers:** `Authorization: Bearer {admin_token}`
-- **Mô tả:** Admin có thể thủ công thêm khuyến mãi vào đơn hàng
-- **Request Body:**
-```json
-{
-  "promo_id": 1,
-  "applied_amount": "15000.00",
-  "note": "Áp dụng thủ công bởi admin"
-}
-```
-- **Response:**
-```json
-{
-  "id": 1,
-  "message": "Promotion applied successfully",
-  "applied_amount": "15000.00",
-  "order_total_updated": "141000.00"
-}
-```
-
-### 14.3 Xóa khuyến mãi khỏi đơn hàng (Admin)
-- **DELETE** `/api/orders/{order_id}/promotions/{promo_id}/`
-- **Headers:** `Authorization: Bearer {admin_token}`
-- **Mô tả:** Admin có thể gỡ bỏ khuyến mãi khỏi đơn hàng
-- **Response:**
-```json
-{
-  "message": "Promotion removed successfully",
-  "refunded_amount": "15000.00",
-  "order_total_updated": "156000.00"
-}
-```
-
-### 14.4 Cập nhật thông tin khuyến mãi trong đơn hàng (Admin)
-- **PUT** `/api/orders/{order_id}/promotions/{promo_id}/`
-- **Headers:** `Authorization: Bearer {admin_token}`
-- **Request Body:**
-```json
-{
-  "applied_amount": "20000.00",
-  "note": "Cập nhật số tiền giảm giá"
-}
-```
-- **Response:**
-```json
-{
-  "id": 1,
-  "message": "Order promotion updated successfully",
-  "applied_amount": "20000.00",
-  "order_total_updated": "136000.00"
-}
-```
-
----
-
-## 15. API Thống kê và Báo cáo (Mở rộng)
-
-### 15.1 Thống kê tổng quan hệ thống (Admin) - Phiên bản mở rộng
-- **GET** `/api/admin/dashboard/stats/`
-- **Headers:** `Authorization: Bearer {admin_token}`
-- **Response:**
-```json
-{
-  "total_users": 150,
-  "total_orders": 1250,
-  "total_revenue": "125000000.00",
-  "total_stores": 12,
-  "active_shippers": 8,
-  "pending_shipper_applications": 5,
-  "pending_store_applications": 3,
-  "orders_today": 45,
-  "revenue_today": "2500000.00",
-  "orders_this_month": 320,
-  "revenue_this_month": "32000000.00",
-  "top_selling_foods": [
-    {
-      "food_id": 1,
-      "food_name": "Big Mac",
-      "total_quantity": 150,
-      "total_revenue": "13350000.00"
-    }
-  ],
-  "store_performance": [
-    {
-      "store_id": 1,
-      "store_name": "McDonald's Nguyễn Huệ",
-      "total_orders": 85,
-      "total_revenue": "8500000.00",
-      "average_rating": 4.2
-    }
-  ],
-  "shipper_performance": [
-    {
-      "shipper_id": 1,
-      "shipper_name": "Nguyễn Văn A",
-      "total_deliveries": 85,
-      "completion_rate": 95.5,
-      "average_rating": 4.6
-    }
-  ]
-}
-```
-
-### 15.2 Báo cáo doanh thu theo thời gian (Admin)
-- **GET** `/api/admin/reports/revenue/`
-- **Headers:** `Authorization: Bearer {admin_token}`
-- **Query Parameters:**
-  - `start_date`: Ngày bắt đầu (YYYY-MM-DD)
-  - `end_date`: Ngày kết thúc (YYYY-MM-DD)
-  - `period`: `daily`, `weekly`, `monthly`
-  - `store_id`: Lọc theo cửa hàng (optional)
-- **Response:**
-```json
-{
-  "period": "daily",
-  "start_date": "2025-01-01",
-  "end_date": "2025-01-31",
-  "total_revenue": "15000000.00",
-  "total_orders": 450,
-  "data": [
-    {
-      "date": "2025-01-01",
-      "revenue": "500000.00",
-      "orders": 15
-    },
-    {
-      "date": "2025-01-02", 
-      "revenue": "750000.00",
-      "orders": 22
-    }
-  ]
-}
-```
-
-### 15.3 Báo cáo món ăn bán chạy (Admin/Store Manager)
-- **GET** `/api/admin/reports/popular-foods/`
-- **GET** `/api/stores/{store_id}/reports/popular-foods/`
-- **Headers:** `Authorization: Bearer {admin_or_store_manager_token}`
-- **Query Parameters:**
-  - `start_date`, `end_date`: Khoảng thời gian
-  - `limit`: Số lượng kết quả (mặc định: 10)
-- **Response:**
-```json
-{
-  "period": "2025-01-01 to 2025-01-31",
-  "foods": [
-    {
-      "food_id": 1,
-      "food_name": "Big Mac",
-      "category": "Burger",
-      "store_name": "McDonald's Nguyễn Huệ",
-      "total_quantity": 150,
-      "total_revenue": "13350000.00",
-      "order_count": 85
-    }
-  ]
-}
-```
-
-### 15.4 Thống kê shipper (Mở rộng)
-- **GET** `/api/shipper/stats/`
-- **Headers:** `Authorization: Bearer {shipper_token}`
-- **Response:**
-```json
-{
-  "total_delivered": 85,
-  "total_earnings": "850000.00",
-  "delivery_rate": 95.5,
-  "average_delivery_time": "25 minutes",
-  "orders_this_month": 35,
-  "earnings_this_month": "350000.00",
-  "orders_today": 8,
-  "earnings_today": "80000.00",
-  "rating_summary": {
-    "average_rating": 4.6,
-    "total_ratings": 78
-  },
-  "delivery_zones": [
-    {
-      "zone": "Quận 1",
-      "delivery_count": 45,
-      "success_rate": 98.5
-    }
-  ]
-}
-```
-
----
-
-## Mã lỗi HTTP thường gặp
-
-- **200 OK** - Thành công
-- **201 Created** - Tạo mới thành công  
-- **400 Bad Request** - Dữ liệu đầu vào không hợp lệ
-- **401 Unauthorized** - Chưa đăng nhập hoặc token không hợp lệ
-- **403 Forbidden** - Không có quyền truy cập
-- **404 Not Found** - Không tìm thấy tài nguyên
-- **500 Internal Server Error** - Lỗi server
-
-## Response lỗi mẫu
-
-```json
-{
-  "error": "Validation failed",
-  "details": {
-    "email": ["This field is required."],
-    "password": ["This field may not be blank."]
-  }
-}
-```
-
-```json
-{
-  "detail": "Authentication credentials were not provided."
-}
-```
-
-```json
-{
-  "detail": "Not found."
-}
-```
-
----
-
-## Ghi chú
-
-1. Tất cả endpoints yêu cầu authentication đều cần header `Authorization: Bearer {access_token}`
-2. Thời gian trả về theo múi giờ UTC, frontend cần convert sang múi giờ địa phương
-3. Giá tiền được trả về dưới dạng string để tránh mất độ chính xác
-4. Hình ảnh được trả về dưới dạng URL đầy đủ để dễ dàng hiển thị
-5. Pagination được áp dụng cho các danh sách lớn với format chuẩn Django REST Framework
-6. Tất cả endpoint đều hỗ trợ CORS cho frontend development
-
-## Cập nhật mới (2025-01-01)
-
-### Authentication API
-- **Mới:** Hệ thống đăng ký làm Shipper/Store Manager với workflow duyệt/từ chối
-- **Mới:** Admin có thể quản lý danh sách đăng ký và bật/tắt trạng thái khách hàng
-- **Mới:** API kiểm tra trạng thái đăng ký cho người dùng
-
-### Orders API  
-- **Mới:** API tạo đơn hàng với nhiều khuyến mãi `/api/orders/create-with-multiple-promos/`
-- **Mới:** Hệ thống OrderPromo để quản lý khuyến mãi trong đơn hàng
-- **Cải tiến:** Tự động tính toán và áp dụng khuyến mãi khi tạo đơn hàng
-
-### Management API
-- **Mới:** Quản lý quan hệ Order-Promotion với đầy đủ CRUD operations
-- **Mới:** API thống kê mở rộng với báo cáo doanh thu theo thời gian
-- **Mới:** Báo cáo món ăn bán chạy và hiệu suất cửa hàng/shipper
-
-### Technical Improvements
-- **Database:** Bảng `order_promo` với trigger tự động tính toán discount
-- **Business Logic:** Hỗ trợ áp dụng nhiều khuyến mãi cùng lúc cho một đơn hàng
-- **User Experience:** Workflow đăng ký Shipper/Store Manager có thông báo realtime
-
----
+**Ghi chú Serializer**
+- `UserSerializer` chứa: `id`, `username`, `fullname`, `email`, `phone_number`, `address`, `is_active`, thông tin `role`, cờ `is_shipper_registered`, `is_store_registered`, `created_date`.
+- `OrderSerializer` bao gồm: `id`, `group_id`, `store`, `user`, `shipper`, `order_status`, `delivery_status`, `payment_method`, `shipping_fee`, `total_money`, `total_before_discount`, `total_discount`, `total_after_discount`, `order_details` (danh sách `OrderDetailSerializer` với `food`, `food_option`, `quantity`, `food_price`, `food_option_price`, `food_note`), `promo`, `created_date`, `is_rated`, `cancelled_by_role`, `cancelled_date`.
+- `FoodSerializer`/`FoodListSerializer`: thông tin `category`, `store`, `title`, `description`, `price`, `availability`, `image/url`, `avg_rating`, `rating_count`, danh sách `sizes`.
+- `PromoSerializer`: `id`, `name`, `code`, `discount_type`, `discount_value`, `maximum_discount`, `minimum_pay`, `start_date`, `end_date`, `scope`, `store_id`, `description`.
+
+Để biết rõ logic kiểm tra quyền hạn, trạng thái hoặc xử lý lỗi chi tiết, tham khảo trực tiếp các view tương ứng trong thư mục `backend/apps/`.
