@@ -465,6 +465,22 @@ export default function Menu() {
                   </p>
                 )}
 
+                {/* Đánh giá */}
+                {food.average_rating !== undefined &&
+                  food.average_rating > 0 && (
+                    <div className="flex items-center text-sm text-gray-600">
+                      <span className="text-yellow-400 text-lg">★</span>
+                      <span className="ml-1 font-semibold">
+                        {food.average_rating.toFixed(1)}
+                      </span>
+                      {food.rating_count && food.rating_count > 0 && (
+                        <span className="ml-1 text-gray-500">
+                          ({food.rating_count})
+                        </span>
+                      )}
+                    </div>
+                  )}
+
                 {/* Giá tiền - với giảm giá nếu có */}
                 <div className="space-y-2">
                   {food.discount_info ? (
