@@ -51,15 +51,7 @@ const refreshAccessToken = async () => {
   if (!refresh) return null;
 
   try {
-    const response = await fetch("http://127.0.0.1:8000/api/token/refresh/", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ refresh }),
-    });
-
-    if (!response.ok) throw new Error("Failed to refresh token");
-
-    const data = await response.json();
+    const data = await API.post("/token/refresh/", { refresh }, { skipAuth: true });
     localStorage.setItem("access_token", data.access);
     return data.access;
   } catch (error) {
@@ -124,21 +116,9 @@ const Home: React.FC = () => {
       setLoading(true);
 
       // Fetch all stores using PUBLIC endpoint (so all users see all stores)
-      const url = `http://127.0.0.1:8000/api/stores/public/`;
-      console.log("🔄 Fetching stores from:", url);
+      console.log("🔄 Fetching stores from API");
 
-      let storesResponse = await fetch(url, {
-        method: "GET",
-        headers: { "Content-Type": "application/json" },
-      });
-
-      console.log("📡 Response status:", storesResponse.status);
-
-      if (!storesResponse.ok) {
-        throw new Error(`HTTP error! status: ${storesResponse.status}`);
-      }
-
-      const responseData = await storesResponse.json();
+      const responseData = await API.get("/stores/public/", { skipAuth: true });
 
       // Handle both array and object response formats
       const storesData: StoreResponse[] = Array.isArray(responseData)
@@ -156,18 +136,11 @@ const Home: React.FC = () => {
         storesData.map(async (store) => {
           try {
             // Use public menu API with store filter instead of authenticated stores API
-            const foodsResponse = await fetch(
-              `http://127.0.0.1:8000/api/menu/items/?store=${store.id}&page_size=3`,
-              { method: "GET", headers: { "Content-Type": "application/json" } }
+            const foodsData = await API.get(
+              `/menu/items/?store=${store.id}&page_size=3`,
+              { skipAuth: true }
             );
 
-            if (!foodsResponse.ok) {
-              throw new Error(
-                `Failed to fetch foods for store ${store.id}, status: ${foodsResponse.status}`
-              );
-            }
-
-            const foodsData = await foodsResponse.json();
             const foodsList: Food[] = Array.isArray(foodsData)
               ? foodsData
               : foodsData.results || [];
@@ -345,7 +318,7 @@ const Home: React.FC = () => {
       const token = getAccessToken();
       if (!token) {
         alert("Vui lòng đăng nhập để thêm vào giỏ hàng");
-        navigate("/auth/login");
+        navigate("/login");
         return;
       }
 
@@ -364,31 +337,7 @@ const Home: React.FC = () => {
         requestBody.food_option_id = foodOptionId;
       }
 
-      let response = await fetch("http://127.0.0.1:8000/api/cart/add/", {
-        method: "POST",
-        headers: getAuthHeaders(),
-        body: JSON.stringify(requestBody),
-      });
-
-      if (response.status === 401) {
-        const newAccess = await refreshAccessToken();
-        if (newAccess) {
-          response = await fetch("http://127.0.0.1:8000/api/cart/add/", {
-            method: "POST",
-            headers: {
-              Authorization: `Bearer ${newAccess}`,
-              "Content-Type": "application/json",
-            },
-            body: JSON.stringify(requestBody),
-          });
-        }
-      }
-
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-
-      const result = await response.json();
+      const result = await API.post("/cart/add/", requestBody);
       alert(`Đã thêm ${result.item.food.title} vào giỏ hàng!`);
     } catch (error) {
       console.error("Error adding to cart:", error);

@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect } from "react";
 import { MessageCircle, X, Send, Minimize2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { API } from "@/lib/api";
 
 interface Message {
   id: string;
@@ -10,13 +11,7 @@ interface Message {
   timestamp: Date;
 }
 
-interface ChatboxProps {
-  apiBaseUrl?: string;
-}
-
-const Chatbox: React.FC<ChatboxProps> = ({
-  apiBaseUrl = "http://localhost:8000/api",
-}) => {
+const Chatbox: React.FC = () => {
   const [isOpen, setIsOpen] = useState(false);
   const [isMinimized, setIsMinimized] = useState(false);
   const [messages, setMessages] = useState<Message[]>([]);
@@ -72,29 +67,11 @@ const Chatbox: React.FC<ChatboxProps> = ({
     setIsLoading(true);
 
     try {
-      const token = localStorage.getItem("access_token");
-      const headers: Record<string, string> = {
-        "Content-Type": "application/json",
-      };
+      const data = await API.post("/chatbot/chat/", {
+        session_id: sessionId,
+        message: inputText.trim(),
+      }) as any;
 
-      if (token) {
-        headers["Authorization"] = `Bearer ${token}`;
-      }
-
-      const response = await fetch(`${apiBaseUrl}/chatbot/chat/`, {
-        method: "POST",
-        headers,
-        body: JSON.stringify({
-          session_id: sessionId,
-          message: inputText.trim(),
-        }),
-      });
-
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-
-      const data = await response.json();
       console.log("Chatbot response:", data);
 
       // Extract message from various possible response formats

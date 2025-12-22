@@ -65,21 +65,13 @@ const refreshAccessToken = async () => {
   if (!refresh) return null;
 
   try {
-    const response = await fetch("http://127.0.0.1:8000/api/auth/refresh/", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ refresh }),
-    });
-
-    if (response.ok) {
-      const data = await response.json();
-      localStorage.setItem("access_token", data.access);
-      return data.access;
-    }
+    const data = await API.post("/token/refresh/", { refresh }, { skipAuth: true }) as { access: string };
+    localStorage.setItem("access_token", data.access);
+    return data.access;
   } catch (error) {
     console.error("Token refresh failed:", error);
+    return null;
   }
-  return null;
 };
 
 export default function Menu() {
@@ -354,31 +346,7 @@ export default function Menu() {
         requestBody.food_option_id = foodOptionId;
       }
 
-      let response = await fetch("http://127.0.0.1:8000/api/cart/add/", {
-        method: "POST",
-        headers: getAuthHeaders(),
-        body: JSON.stringify(requestBody),
-      });
-
-      if (response.status === 401) {
-        const newAccess = await refreshAccessToken();
-        if (newAccess) {
-          response = await fetch("http://127.0.0.1:8000/api/cart/add/", {
-            method: "POST",
-            headers: {
-              Authorization: `Bearer ${newAccess}`,
-              "Content-Type": "application/json",
-            },
-            body: JSON.stringify(requestBody),
-          });
-        }
-      }
-
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-
-      const result = await response.json();
+      const result = await API.post("/cart/add/", requestBody);
       alert(`Đã thêm ${result.item.food.title} vào giỏ hàng!`);
     } catch (error) {
       console.error("Error adding to cart:", error);

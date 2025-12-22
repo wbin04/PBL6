@@ -206,8 +206,15 @@ const Checkout: React.FC = () => {
         }
       });
       const numberOfStores = storeNames.size || 1; // At least 1 store
-      // Estimated: 15k base + ~3km avg = 27k per store (actual fee calculated by backend)
-      const deliveryFee = numberOfStores * 27000;
+
+      // Backend shipping formula: 15,000đ base + 4,000đ per km for each store
+      // Estimated average distance: 3km per delivery
+      const BASE_FEE = 15000;
+      const PER_KM_FEE = 4000;
+      const ESTIMATED_AVG_DISTANCE_KM = 3;
+      const estimatedFeePerStore =
+        BASE_FEE + PER_KM_FEE * ESTIMATED_AVG_DISTANCE_KM;
+      const deliveryFee = numberOfStores * estimatedFeePerStore;
 
       // Calculate discount from selected promos
       let discount = 0;
@@ -740,10 +747,22 @@ const Checkout: React.FC = () => {
                   <span>Phí giao hàng (ước tính):</span>
                   <span>{formatCurrency(calculations.deliveryFee)}</span>
                 </div>
-                <p className="text-xs text-gray-500 italic">
-                  * Phí giao hàng thực tế: 15,000đ + 4,000đ/km (tính theo khoảng
-                  cách)
-                </p>
+                <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 space-y-1">
+                  <p className="text-xs text-blue-800 font-medium">
+                    📦 Cách tính phí giao hàng:
+                  </p>
+                  <p className="text-xs text-blue-700">
+                    • Phí cơ bản: <strong>15,000đ</strong> / cửa hàng
+                  </p>
+                  <p className="text-xs text-blue-700">
+                    • Phí theo km: <strong>4,000đ/km</strong> (tính theo khoảng
+                    cách thực tế)
+                  </p>
+                  <p className="text-xs text-blue-600 italic mt-1">
+                    * Ước tính trên dựa trên khoảng cách trung bình ~3km. Phí
+                    chính xác sẽ được tính khi đặt hàng.
+                  </p>
+                </div>
                 {calculations.discount > 0 && (
                   <div className="flex justify-between text-green-600">
                     <span>Giảm giá:</span>

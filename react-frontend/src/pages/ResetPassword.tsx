@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { API } from "@/lib/api";
 
 const ResetPassword: React.FC = () => {
   const navigate = useNavigate();
@@ -51,20 +52,7 @@ const ResetPassword: React.FC = () => {
     setLoading(true);
 
     try {
-      const response = await fetch("http://localhost:8000/api/auth/reset-password/", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(formData),
-      });
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.error || "Có lỗi xảy ra");
-      }
-
+      const data = await API.post("/auth/reset-password/", formData, { skipAuth: true }) as { message?: string };
       setSuccess(data.message || "Đặt lại mật khẩu thành công!");
       setFormData({
         identifier: "",
