@@ -1,18 +1,18 @@
-import React, { useState, useEffect } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
-import { API, isAuthenticated } from '@/lib/api';
-import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import React, { useState, useEffect } from "react";
+import { Link, useNavigate } from "react-router-dom";
+import { API, isAuthenticated } from "@/lib/api";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
 const Register: React.FC = () => {
   const [formData, setFormData] = useState({
-    fullname: 'Bin',
-    email: 'bin@gmail.com',
-    username: 'bin',
-    phone_number: '123123123',
-    address: 'Đà Nẵng',
-    password: '123',
-    password_confirm: '123'
+    fullname: "Bin",
+    email: "bin@gmail.com",
+    username: "bin",
+    phone_number: "123123123",
+    address: "Đà Nẵng",
+    password: "123",
+    password_confirm: "123",
   });
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
@@ -20,14 +20,16 @@ const Register: React.FC = () => {
   useEffect(() => {
     // Redirect if already logged in
     if (isAuthenticated()) {
-      navigate('/');
+      navigate("/");
     }
   }, [navigate]);
 
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+  const handleChange = (
+    e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>
+  ) => {
     setFormData({
       ...formData,
-      [e.target.name]: e.target.value
+      [e.target.name]: e.target.value,
     });
   };
 
@@ -36,23 +38,26 @@ const Register: React.FC = () => {
     setLoading(true);
 
     if (formData.password !== formData.password_confirm) {
-      alert('Mật khẩu xác nhận không khớp!');
+      alert("Mật khẩu xác nhận không khớp!");
       setLoading(false);
       return;
     }
 
     try {
-      const response = await API.post('/auth/register/', formData, { skipAuth: true });
-      
+      const response = await API.post("/auth/register/", formData, {
+        skipAuth: true,
+      });
+
       // Store tokens and user info
-      localStorage.setItem('access_token', response.access);
-      localStorage.setItem('refresh_token', response.refresh);
-      localStorage.setItem('user', JSON.stringify(response.user));
-      
-      alert('Đăng ký thành công!');
-      navigate('/');
+      localStorage.setItem("access_token", response.access);
+      localStorage.setItem("refresh_token", response.refresh);
+      localStorage.setItem("user", JSON.stringify(response.user));
+
+      alert("Đăng ký thành công!");
+      navigate("/");
     } catch (error) {
-      alert('Lỗi đăng ký: ' + (error instanceof Error ? error.message : String(error)));
+      const errorMsg = error instanceof Error ? error.message : "Đã xảy ra lỗi";
+      alert("Lỗi đăng ký: " + errorMsg);
     } finally {
       setLoading(false);
     }
@@ -80,7 +85,7 @@ const Register: React.FC = () => {
                 required
               />
             </div>
-            
+
             <div className="space-y-2">
               <label htmlFor="email" className="text-sm font-medium">
                 Email
@@ -95,7 +100,7 @@ const Register: React.FC = () => {
                 required
               />
             </div>
-            
+
             <div className="space-y-2">
               <label htmlFor="username" className="text-sm font-medium">
                 Tên đăng nhập
@@ -110,7 +115,7 @@ const Register: React.FC = () => {
                 required
               />
             </div>
-            
+
             <div className="space-y-2">
               <label htmlFor="phone_number" className="text-sm font-medium">
                 Số điện thoại
@@ -125,7 +130,7 @@ const Register: React.FC = () => {
                 required
               />
             </div>
-            
+
             <div className="space-y-2">
               <label htmlFor="address" className="text-sm font-medium">
                 Địa chỉ
@@ -141,7 +146,7 @@ const Register: React.FC = () => {
                 required
               />
             </div>
-            
+
             <div className="space-y-2">
               <label htmlFor="password" className="text-sm font-medium">
                 Mật khẩu
@@ -156,7 +161,7 @@ const Register: React.FC = () => {
                 required
               />
             </div>
-            
+
             <div className="space-y-2">
               <label htmlFor="password_confirm" className="text-sm font-medium">
                 Xác nhận mật khẩu
@@ -171,15 +176,18 @@ const Register: React.FC = () => {
                 required
               />
             </div>
-            
+
             <Button type="submit" className="w-full" disabled={loading}>
-              {loading ? 'Đang đăng ký...' : 'Đăng ký'}
+              {loading ? "Đang đăng ký..." : "Đăng ký"}
             </Button>
           </form>
-          
+
           <div className="mt-4 space-y-2 text-center text-sm">
             <p>
-              Đã có tài khoản? <Link to="/login" className="text-primary hover:underline">Đăng nhập ngay</Link>
+              Đã có tài khoản?{" "}
+              <Link to="/login" className="text-primary hover:underline">
+                Đăng nhập ngay
+              </Link>
             </p>
             <p>
               <Link to="/" className="text-muted-foreground hover:text-primary">
