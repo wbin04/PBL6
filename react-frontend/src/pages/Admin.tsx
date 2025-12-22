@@ -47,7 +47,8 @@ import {
   Filter,
   ChevronLeft,
   ChevronRight,
-  ArrowRight
+    ArrowRight,
+    Star,
 } from 'lucide-react';
 
 // --- INTERFACES ---
@@ -136,6 +137,24 @@ interface OrderStatusItem { status: string; count: number; percent: number; }
 interface FunnelStep { step: string; value: number; conversion: number; }
 interface HeatmapPoint { hour: number; count: number; }
 interface StoreRow { store_id: number; store_name: string; address: string; image: string; total_orders: number; revenue: number; }
+interface ShipperListItem {
+    id: number;
+    user_id?: number;
+    username?: string;
+    fullname?: string;
+    email?: string;
+    phone_number?: string;
+    address?: string;
+    created_date?: string;
+    is_active?: boolean;
+}
+type ShipperApplicationView = ShipperApplication & { address?: string; created_date?: string };
+interface StoreDetailStats {
+    average_rating?: number;
+    total_ratings?: number;
+    food_count?: number;
+    total_orders?: number;
+}
 
 // --- HELPER COMPONENT: PAGINATION ---
 // Cho phép nhập số trang để nhảy nhanh
@@ -240,6 +259,10 @@ const Admin: React.FC = () => {
   
   // Stores
   const [stores, setStores] = useState<Store[]>([]);
+    const [storePage, setStorePage] = useState(1);
+    const [totalStorePages, setTotalStorePages] = useState(1);
+    const [totalStoresCount, setTotalStoresCount] = useState(0);
+    const [storeSearch, setStoreSearch] = useState('');
   const [newStore, setNewStore] = useState({ store_name: '', image: '', description: '', manager: '', });
   const [showAddStoreModal, setShowAddStoreModal] = useState(false);
   const [selectedStore, setSelectedStore] = useState<Store | null>(null);
@@ -253,11 +276,32 @@ const Admin: React.FC = () => {
   const [applicationsSearch, setApplicationsSearch] = useState('');
 
   // Shippers
-  const [shipperApps, setShipperApps] = useState<ShipperApplication[]>([]);
-  const [shipperLoading, setShipperLoading] = useState(false);
-  const [shipperPage, setShipperPage] = useState(1);
-  const [totalShipperPages, setTotalShipperPages] = useState(1);
-  const [totalShipperApps, setTotalShipperApps] = useState(0);
+    const [shipperApps, setShipperApps] = useState<ShipperApplicationView[]>([]);
+    const [shipperLoading, setShipperLoading] = useState(false);
+    const [shipperPage, setShipperPage] = useState(1);
+    const [totalShipperPages, setTotalShipperPages] = useState(1);
+    const [totalShipperApps, setTotalShipperApps] = useState(0);
+    const [shipperViewMode, setShipperViewMode] = useState<'list' | 'applications'>('list');
+    const [shipperSearch, setShipperSearch] = useState('');
+    const [shipperAppSearch, setShipperAppSearch] = useState('');
+    const [shippers, setShippers] = useState<ShipperListItem[]>([]);
+    const [shipperListLoading, setShipperListLoading] = useState(false);
+    const [shipperListPage, setShipperListPage] = useState(1);
+    const [totalShipperListPages, setTotalShipperListPages] = useState(1);
+    const [totalShippers, setTotalShippers] = useState(0);
+    const [shipperStatusUpdating, setShipperStatusUpdating] = useState<number | null>(null);
+    const [customerStatusUpdating, setCustomerStatusUpdating] = useState<number | null>(null);
+    const [storeStatusUpdating, setStoreStatusUpdating] = useState<number | null>(null);
+    const [storeDetailModalOpen, setStoreDetailModalOpen] = useState(false);
+    const [storeDetailLoading, setStoreDetailLoading] = useState(false);
+    const [storeDetailInfo, setStoreDetailInfo] = useState<Store | null>(null);
+    const [storeDetailStats, setStoreDetailStats] = useState<StoreDetailStats>({});
+    const [storeDetailFoods, setStoreDetailFoods] = useState<Food[]>([]);
+    const [storeDetailCategories, setStoreDetailCategories] = useState<string[]>([]);
+    const [foodDetailModalOpen, setFoodDetailModalOpen] = useState(false);
+    const [foodDetail, setFoodDetail] = useState<Food | null>(null);
+    const [foodDetailRatings, setFoodDetailRatings] = useState<FoodRating[]>([]);
+    const [foodDetailLoading, setFoodDetailLoading] = useState(false);
 
   // Foods
   const [foods, setFoods] = useState<Food[]>([]);
@@ -318,7 +362,12 @@ const Admin: React.FC = () => {
     switch (activeSection) {
       case 'dashboard': loadDashboard(); break;
       case 'customers': loadCustomers(1, ''); break;
-      case 'shippers': loadShipperApplications(1); break;
+            case 'shippers':
+                setShipperViewMode('list');
+                setShipperSearch('');
+                setShipperAppSearch('');
+                loadShippers(1, '');
+                break;
       case 'foods': loadCategories(); loadFoods(1); if (stores.length === 0) loadStores(); break;
       case 'orders': loadOrders(1); break;
       case 'stores': setStoreViewMode('list'); loadStores(); break;
@@ -397,11 +446,144 @@ const Admin: React.FC = () => {
       } catch(e) { console.error(e); } finally { setLoading(false); }
   };
 
-  const loadStores = async () => { try { const res = await API.get('/stores/'); setStores(res.results || []); } catch (e) { console.error(e); } };
+  const loadStores = async (page = 1, s = '') => {
+      setLoading(true);
+      try {
+          const res = await API.get(`/stores/?page=${page}&search=${encodeURIComponent(s)}`);
+          const results = res.results || res.stores || res.data?.results || (Array.isArray(res) ? res : []);
+          const sorted = [...results].sort((a: any, b: any) => a.id - b.id);
+          const count = res.count || res.total_stores || res.data?.count || results.length || 0;
+          const pageSize = res.page_size || (Array.isArray(results) ? results.length : (res.results?.length || 10));
+          const totalPages = res.total_pages || res.data?.total_pages || (pageSize ? Math.max(1, Math.ceil(count / pageSize)) : 1);
+          setStores(sorted);
+          setStorePage(page);
+          setTotalStorePages(totalPages);
+          setTotalStoresCount(count);
+          setStoreSearch(s);
+      } catch (e) {
+          console.error(e);
+          setStores([]);
+      } finally {
+          setLoading(false);
+      }
+  };
   const handleAddStore = async () => { try { await API.post('/stores/', newStore); alert('Thành công'); setShowAddStoreModal(false); loadStores(); } catch (e) { alert('Lỗi'); } };
+  const toggleStoreManagerStatus = async (store: Store) => {
+      const managerId = (store as any).manager_id || (store as any).manager_user_id || store.manager;
+      if(!managerId) { alert('Không tìm thấy ID quản lý để khoá/mở'); return; }
+      try {
+          setStoreStatusUpdating(store.id);
+          const res:any = await API.post(`/auth/admin/customers/${managerId}/toggle-status/`);
+          const updated = res?.customer || res?.data?.customer || res;
+          const nextActive = updated?.is_active !== undefined ? updated.is_active : undefined;
+          setStores(prev => prev.map(s => s.id === store.id ? { ...s, is_active: nextActive !== undefined ? nextActive : !(s as any).is_active } : s));
+          alert(res?.message || res?.data?.message || 'Đã thay đổi trạng thái tài khoản quản lý');
+      } catch(e) { alert('Không thể cập nhật trạng thái tài khoản'); }
+      finally { setStoreStatusUpdating(null); }
+  };
   const viewStoreDetail = async (id: number) => { try { const res = await API.get(`/stores/${id}/`); setSelectedStore(res); setShowEditStoreModal(true); } catch(e){} };
   const updateStore = async () => { if(!selectedStore) return; try { await API.put(`/stores/${selectedStore.id}/`, selectedStore); alert('Xong'); setShowEditStoreModal(false); loadStores(); } catch(e){} };
   const deleteStore = async (id: number) => { if(!confirm('Xóa?')) return; try { await API.delete(`/stores/${id}/`); loadStores(); } catch(e){} };
+  const openStoreDetail = async (storeId: number) => {
+      setStoreDetailModalOpen(true);
+      setStoreDetailLoading(true);
+      setStoreDetailInfo(null);
+      setStoreDetailStats({});
+      setStoreDetailFoods([]);
+      setStoreDetailCategories([]);
+      try {
+          const [infoRes, statsRes] = await Promise.allSettled([
+              API.get(`/stores/${storeId}/`),
+              API.get(`/dashboard/store/${storeId}/`),
+          ]);
+
+          if (infoRes.status === 'fulfilled') {
+              setStoreDetailInfo(infoRes.value as Store);
+          }
+
+          if (statsRes.status === 'fulfilled') {
+              setStoreDetailStats((statsRes.value as any)?.stats || (statsRes.value as any) || {});
+          }
+
+          // Fetch total orders for this store (admin orders endpoint should return count)
+          try {
+              const ordersRes = await API.get(`/orders/admin/?store=${storeId}&page=1&page_size=1`);
+              const totalOrders = ordersRes.total_orders || ordersRes.count || ordersRes.data?.total_orders || ordersRes.data?.count || 0;
+              setStoreDetailStats(prev => ({ ...prev, total_orders: totalOrders }));
+          } catch (orderErr) {
+              console.error('Load orders count for store failed', orderErr);
+          }
+
+          // Fetch all foods across pages (backend default page size ~10)
+          const fetchAllFoods = async () => {
+              let page = 1;
+              let totalPages = 1;
+              const all: Food[] = [];
+              do {
+                  const res = await API.get(`/menu/admin/foods/?store=${storeId}&page=${page}&page_size=100`);
+                  const foodsList = res.foods || res.results || res.data?.foods || res.data?.results || [];
+                  const count = res.total_foods || res.count || res.data?.total_foods || res.data?.count || 0;
+                  const pageSize = res.page_size || res.data?.page_size || (Array.isArray(foodsList) && foodsList.length ? foodsList.length : 10);
+                  totalPages = res.total_pages || res.data?.total_pages || res.num_pages || (pageSize ? Math.max(1, Math.ceil(count / pageSize)) : 1);
+                  all.push(...foodsList);
+                  page += 1;
+              } while (page <= totalPages);
+              return all;
+          };
+
+          try {
+              const foodsList = await fetchAllFoods();
+              const categories = Array.from(new Set(
+                  foodsList
+                      .map((f: any) => f?.category?.cate_name || f?.category?.name || f?.category || '')
+                      .filter((c: string) => c)
+              )) as string[];
+              setStoreDetailFoods(foodsList as Food[]);
+              setStoreDetailCategories(categories);
+          } catch (foodErr) {
+              console.error('Load foods for store failed', foodErr);
+          }
+
+          if (infoRes.status === 'rejected' && statsRes.status === 'rejected') {
+              alert('Không thể tải chi tiết cửa hàng');
+              setStoreDetailModalOpen(false);
+          }
+      } catch(e) {
+          console.error('Store detail load error', e);
+          alert('Không thể tải chi tiết cửa hàng');
+          setStoreDetailModalOpen(false);
+      } finally {
+          setStoreDetailLoading(false);
+      }
+  };
+  const closeStoreDetail = () => {
+      setStoreDetailModalOpen(false);
+      setStoreDetailInfo(null);
+      setStoreDetailStats({});
+      setStoreDetailFoods([]);
+      setStoreDetailCategories([]);
+  };
+  const openFoodDetailModal = async (food: Food) => {
+      setFoodDetailModalOpen(true);
+      setFoodDetail(food);
+      setFoodDetailRatings([]);
+      setFoodDetailLoading(true);
+      try {
+          const detail = await API.get(`/menu/admin/foods/${food.id}/`);
+          setFoodDetail((detail as Food) || food);
+          const ratingsRes = await API.get(`/ratings/?food=${food.id}`);
+          setFoodDetailRatings(ratingsRes?.results || ratingsRes || []);
+      } catch (e) {
+          alert('Không thể tải chi tiết món ăn');
+      } finally {
+          setFoodDetailLoading(false);
+      }
+  };
+  const closeFoodDetailModal = () => {
+      setFoodDetailModalOpen(false);
+      setFoodDetail(null);
+      setFoodDetailRatings([]);
+  };
   
   // Applications
   const loadStoreApplications = async (page=1, s='') => { setApplicationsLoading(true); try { const res = await API.get(`/auth/store/applications/?page=${page}&search=${s}`); setApplications(res.applications||[]); setTotalApplicationsPages(res.total_pages||1); setApplicationsPage(page); setTotalApplications(res.total_applications||0); } catch(e){} finally { setApplicationsLoading(false); } };
@@ -409,18 +591,78 @@ const Admin: React.FC = () => {
   const handleRejectApplication = async (id:number) => { if(!confirm('Từ chối?')) return; await API.post(`/auth/store/applications/${id}/reject/`); loadStoreApplications(applicationsPage, applicationsSearch); };
 
   // Shippers
-  const loadShipperApplications = async (page=1) => { setShipperLoading(true); try { const res = await API.get(`/auth/shipper/applications/?page=${page}`); setShipperApps(res.applications||[]); setTotalShipperPages(res.total_pages||1); setShipperPage(page); setTotalShipperApps(res.total_applications||0); } catch(e){} finally { setShipperLoading(false); } };
-  const handleApproveShipper = async (id:number) => { if(!confirm('Duyệt?')) return; await API.post(`/auth/shipper/applications/${id}/approve/`); loadShipperApplications(shipperPage); };
-  const handleRejectShipper = async (id:number) => { if(!confirm('Từ chối?')) return; await API.post(`/auth/shipper/applications/${id}/reject/`); loadShipperApplications(shipperPage); };
+    const normalizeShippers = (items: any[]): ShipperListItem[] => {
+        return (items || []).map((item: any) => {
+                const user = item.user || {};
+                const active = item.is_active ?? user.is_active ?? true;
+                return {
+                        id: item.id || user.id,
+                        user_id: item.user_id || user.id || item.id,
+                        username: user.username || item.username,
+                        fullname: user.fullname || item.fullname || user.name,
+                        email: user.email || item.email,
+                        phone_number: user.phone_number || user.phone || item.phone_number || item.phone,
+                        address: user.address || item.address,
+                        created_date: item.created_date || user.created_date || item.created_at,
+                        is_active: typeof active === 'boolean' ? active : true,
+                } as ShipperListItem;
+        });
+    };
+
+    const loadShippers = async (page=1, s='') => {
+        setShipperListLoading(true);
+        try {
+                const res = await API.get(`/shipper/shippers/?page=${page}&search=${encodeURIComponent(s)}`);
+                const results = res.results || res.shippers || res.data?.results || (Array.isArray(res) ? res : []);
+                const normalized = normalizeShippers(results || []).sort((a:any,b:any)=>a.id-b.id);
+                const total = res.count || res.total_shippers || normalized.length || 0;
+                const pageSize = (results && results.length) ? results.length : (res.per_page || 10);
+                const totalPages = res.total_pages || (pageSize ? Math.max(1, Math.ceil(total / pageSize)) : 1);
+                setShippers(normalized);
+                setTotalShippers(total);
+                setTotalShipperListPages(totalPages);
+                setShipperListPage(page);
+                setShipperSearch(s);
+        } catch(e) { console.error(e); setShippers([]); }
+        finally { setShipperListLoading(false); }
+    };
+
+    const loadShipperApplications = async (page=1, s='') => { setShipperLoading(true); try { const res = await API.get(`/auth/shipper/applications/?page=${page}&search=${s}`); setShipperApps((res.applications as ShipperApplicationView[])||[]); setTotalShipperPages(res.total_pages||1); setShipperPage(page); setTotalShipperApps(res.total_applications||0); setShipperAppSearch(s); } catch(e){} finally { setShipperLoading(false); } };
+    const handleApproveShipper = async (id:number) => { if(!confirm('Duyệt?')) return; await API.post(`/auth/shipper/applications/${id}/approve/`); loadShipperApplications(shipperPage, shipperAppSearch); loadShippers(shipperListPage, shipperSearch); };
+    const handleRejectShipper = async (id:number) => { if(!confirm('Từ chối?')) return; await API.post(`/auth/shipper/applications/${id}/reject/`); loadShipperApplications(shipperPage, shipperAppSearch); };
+    const handleToggleShipperStatus = async (userId:number) => {
+        if(!userId) return;
+        try {
+                setShipperStatusUpdating(userId);
+                const res = await API.post(`/auth/admin/customers/${userId}/toggle-status/`);
+                const updated = (res as any).customer || (res as any).data?.customer || res;
+                const isActive = updated?.is_active ?? updated?.user?.is_active;
+                setShippers(prev => prev.map(s => (s.user_id === userId || s.id === userId) ? {...s, is_active: typeof isActive === 'boolean' ? isActive : !s.is_active} : s));
+                alert('Đã cập nhật trạng thái tài khoản');
+        } catch(e) { alert('Không thể cập nhật trạng thái'); }
+        finally { setShipperStatusUpdating(null); }
+    };
 
   // Customers
-  const loadCustomers = async (page=1, s='') => { setLoading(true); try { const res = await API.get(`/auth/admin/customers/?page=${page}&search=${s}`); setCustomers(res.customers||[]); setTotalPages(res.total_pages||1); setCurrentPage(page); setTotalCustomers(res.total_customers||0); } catch(e){} finally { setLoading(false); } };
+    const loadCustomers = async (page=1, s='') => { setLoading(true); try { const res = await API.get(`/auth/admin/customers/?page=${page}&search=${s}`); const list = res.customers||[]; setCustomers([...list].sort((a:any,b:any)=>a.id-b.id)); setTotalPages(res.total_pages||1); setCurrentPage(page); setTotalCustomers(res.total_customers||0); } catch(e){} finally { setLoading(false); } };
   const viewCustomerDetail = async (id:number) => { const res = await API.get(`/auth/admin/customers/${id}/`); setSelectedCustomer(res); setShowCustomerModal(true); };
   const updateCustomer = async () => { if(!selectedCustomer) return; await API.put(`/auth/admin/customers/${selectedCustomer.id}/`, selectedCustomer); alert('Xong'); setShowCustomerModal(false); loadCustomers(currentPage, search); };
+  const toggleCustomerStatus = async (id:number) => {
+      if(!id) return;
+      try {
+          setCustomerStatusUpdating(id);
+          const res:any = await API.post(`/auth/admin/customers/${id}/toggle-status/`);
+          const updated = res?.customer || res?.data?.customer || res;
+          const nextActive = updated?.is_active !== undefined ? updated.is_active : undefined;
+          setCustomers(prev => prev.map(c => c.id === id ? { ...c, is_active: nextActive !== undefined ? nextActive : !(c as any).is_active } : c));
+          alert(res?.message || res?.data?.message || 'Đã thay đổi trạng thái khách hàng');
+      } catch(e) { alert('Không thể cập nhật trạng thái'); }
+      finally { setCustomerStatusUpdating(null); }
+  };
 
   // Foods
   const loadCategories = async () => { const res = await API.get('/menu/categories/'); setCategories(res.results||[]); };
-  const loadFoods = async (page=1) => { setLoading(true); try { const res = await API.get(`/menu/admin/foods/?page=${page}&search=${foodSearch}&category=${categoryFilter}&store=${storeFilter}`); setFoods(res.foods||[]); setFoodPage(page); setTotalFoodPages(res.total_pages||1); setTotalFoods(res.total_foods||0); } catch(e){} finally { setLoading(false); } };
+    const loadFoods = async (page=1) => { setLoading(true); try { const res = await API.get(`/menu/admin/foods/?page=${page}&search=${foodSearch}&category=${categoryFilter}&store=${storeFilter}`); const list = res.foods||[]; setFoods([...list].sort((a:any,b:any)=>a.id-b.id)); setFoodPage(page); setTotalFoodPages(res.total_pages||1); setTotalFoods(res.total_foods||0); } catch(e){} finally { setLoading(false); } };
   const handleAddFood = async () => { await API.post('/menu/admin/foods/', newFood); alert('Xong'); setShowAddFoodModal(false); loadFoods(); };
   const viewFoodDetail = async (id:number) => { const res = await API.get(`/menu/admin/foods/${id}/`); setSelectedFood(res); const ratings = await API.get(`/ratings/?food=${id}`); setFoodRatings(ratings||[]); setShowEditFoodModal(true); };
   const updateFood = async () => { if(!selectedFood) return; await API.put(`/menu/admin/foods/${selectedFood.id}/`, selectedFood); alert('Xong'); setShowEditFoodModal(false); loadFoods(foodPage); };
@@ -433,7 +675,7 @@ const Admin: React.FC = () => {
   const deleteSize = async (id:number) => { if(!confirm('Xóa?')) return; await API.delete(`/menu/admin/foods/${selectedFood?.id}/sizes/${id}/`); openManageSizesModal(selectedFood!); };
 
   // Orders
-  const loadOrders = async (page=1) => { setLoading(true); try { const res = await API.get(`/orders/admin/?page=${page}&search=${orderSearch}&status=${orderStatus}`); setOrders(res.orders||[]); setOrderPage(page); setTotalOrderPages(res.total_pages||1); setTotalOrders(res.total_orders||0); } catch(e){} finally { setLoading(false); } };
+    const loadOrders = async (page=1) => { setLoading(true); try { const res = await API.get(`/orders/admin/?page=${page}&search=${orderSearch}&status=${orderStatus}`); const list = res.orders||[]; setOrders([...list].sort((a:any,b:any)=>b.id-a.id)); setOrderPage(page); setTotalOrderPages(res.total_pages||1); setTotalOrders(res.total_orders||0); } catch(e){} finally { setLoading(false); } };
   const viewOrderDetail = async (id:number) => { const res = await API.get(`/orders/admin/${id}/`); setSelectedOrder(res); setShowOrderModal(true); };
   const updateOrderStatus = async (id:number, st:string) => { await API.patch(`/orders/admin/${id}/status/`, {order_status: st}); alert('Xong'); setShowOrderModal(false); loadOrders(orderPage); };
 
@@ -503,10 +745,10 @@ const Admin: React.FC = () => {
               <SidebarItem id="dashboard" label="Dashboard" icon={LayoutDashboard} />
               
               <p className="text-xs font-bold text-gray-400 uppercase px-4 mt-6 mb-2">Quản lý</p>
+              <SidebarItem id="customers" label="Khách hàng" icon={Users} />
               <SidebarItem id="stores" label="Cửa hàng" icon={StoreIcon} />
               <SidebarItem id="shippers" label="Shipper" icon={Truck} />
-              <SidebarItem id="customers" label="Khách hàng" icon={Users} />
-              <SidebarItem id="foods" label="Món ăn" icon={Utensils} />
+              {/* <SidebarItem id="foods" label="Món ăn" icon={Utensils} /> */}
               <SidebarItem id="orders" label="Đơn hàng" icon={ShoppingBag} />
               <SidebarItem id="promotions" label="Khuyến mãi" icon={TicketPercent} />
               
@@ -704,26 +946,59 @@ const Admin: React.FC = () => {
                         </div>
                         
                         {storeViewMode === 'list' ? (
-                            <Card className="border-0 shadow-sm overflow-hidden"><CardContent className="p-0">
-                                <table className="w-full text-sm text-left">
-                                    <thead className="bg-gray-50 border-b uppercase text-xs text-gray-500"><tr><th className="p-4">ID</th><th className="p-4">Ảnh</th><th className="p-4">Tên cửa hàng</th><th className="p-4">Mô tả</th><th className="p-4">Quản lý (ID)</th><th className="p-4 text-right">Thao tác</th></tr></thead>
-                                    <tbody className="divide-y">
-                                        {stores.map(s => (
-                                            <tr key={s.id} className="hover:bg-gray-50">
-                                                <td className="p-4 font-mono">{s.id}</td>
-                                                <td className="p-4"><img src={getImageUrl(s.image)} className="w-10 h-10 rounded border object-cover"/></td>
-                                                <td className="p-4 font-medium">{s.store_name}</td>
-                                                <td className="p-4 max-w-xs truncate">{s.description}</td>
-                                                <td className="p-4">{s.manager}</td>
-                                                <td className="p-4 flex justify-end gap-2">
-                                                    <Button size="sm" variant="outline" onClick={() => viewStoreDetail(s.id)}><Edit2 size={14}/></Button>
-                                                    <Button size="sm" variant="destructive" onClick={() => deleteStore(s.id)}><Trash2 size={14}/></Button>
-                                                </td>
-                                            </tr>
-                                        ))}
-                                    </tbody>
-                                </table>
-                            </CardContent></Card>
+                            <>
+                            <div className="flex justify-between items-center gap-3">
+                                <div className="flex items-center gap-2 w-full max-w-md">
+                                    <div className="relative flex-1">
+                                        <Search className="absolute left-2 top-2.5 text-gray-400" size={16}/>
+                                        <input
+                                            className="pl-8 border p-2 rounded-lg w-full text-sm"
+                                            placeholder="Tìm kiếm cửa hàng..."
+                                            value={storeSearch}
+                                            onChange={e=>setStoreSearch(e.target.value)}
+                                        />
+                                    </div>
+                                    <Button onClick={()=>loadStores(1, storeSearch)}>Tìm</Button>
+                                </div>
+                                <div className="text-sm text-gray-500">Tổng: {totalStoresCount} cửa hàng</div>
+                            </div>
+
+                            <Card className="border-0 shadow-sm overflow-hidden mt-3">
+                                <CardContent className="p-0">
+                                    <table className="w-full text-sm text-left">
+                                        <thead className="bg-gray-50 border-b uppercase text-xs text-gray-500"><tr><th className="p-4">ID</th><th className="p-4">Ảnh</th><th className="p-4">Tên cửa hàng</th><th className="p-4">Mô tả</th><th className="p-4">Quản lý (ID)</th><th className="p-4">Trạng thái</th><th className="p-4 text-right">Thao tác</th></tr></thead>
+                                        <tbody className="divide-y">
+                                            {stores.map(s => {
+                                                const active = s.is_active !== false;
+                                                return (
+                                                    <tr key={s.id} className="hover:bg-gray-50">
+                                                        <td className="p-4 font-mono">{s.id}</td>
+                                                        <td className="p-4"><img src={getImageUrl(s.image)} className="w-10 h-10 rounded border object-cover"/></td>
+                                                        <td className="p-4 font-medium">{s.store_name}</td>
+                                                        <td className="p-4 max-w-xs truncate">{s.description}</td>
+                                                        <td className="p-4">{s.manager}</td>
+                                                        <td className="p-4">
+                                                            <span className={`text-xs px-2 py-1 rounded ${active ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
+                                                                {active ? 'Hoạt động' : 'Đã khóa'}
+                                                            </span>
+                                                        </td>
+                                                        <td className="p-4 flex justify-end gap-2">
+                                                            <Button size="sm" variant="ghost" className="h-8 w-8 p-0" onClick={() => openStoreDetail(s.id)}><Eye size={14}/></Button>
+                                                            <Button size="sm" variant="outline" onClick={() => viewStoreDetail(s.id)}><Edit2 size={14}/></Button>
+                                                            <Button size="sm" variant="destructive" onClick={() => deleteStore(s.id)}><Trash2 size={14}/></Button>
+                                                            <Button size="sm" variant="secondary" disabled={storeStatusUpdating === s.id} onClick={()=>toggleStoreManagerStatus(s)}>
+                                                                {storeStatusUpdating === s.id ? 'Đang xử lý...' : (active ? 'Khóa' : 'Mở')}
+                                                            </Button>
+                                                        </td>
+                                                    </tr>
+                                                );
+                                            })}
+                                        </tbody>
+                                    </table>
+                                </CardContent>
+                            </Card>
+                            <PaginationControl page={storePage} totalPages={totalStorePages} onPageChange={(p)=>loadStores(p, storeSearch)} />
+                            </>
                         ) : (
                              <div className="space-y-4">
                                 <div className="flex gap-2"><div className="relative flex-1"><Search className="absolute left-2 top-2.5 text-gray-400" size={16}/><input className="pl-8 border p-2 rounded-lg w-full text-sm" placeholder="Tìm kiếm đơn..." value={applicationsSearch} onChange={e=>setApplicationsSearch(e.target.value)}/></div><Button onClick={()=>loadStoreApplications(1, applicationsSearch)}>Tìm</Button></div>
@@ -757,29 +1032,96 @@ const Admin: React.FC = () => {
                 {/* 3. SHIPPERS */}
                 {activeSection === 'shippers' && (
                      <div className="animate-in fade-in space-y-4">
-                        <h2 className="text-xl font-bold mb-4">Duyệt đăng ký Shipper</h2>
-                        <Card className="border-0 shadow-sm overflow-hidden"><CardContent className="p-0">
-                            <table className="w-full text-sm text-left">
-                                <thead className="bg-gray-50 border-b uppercase text-xs text-gray-500"><tr><th className="p-4">ID</th><th className="p-4">Username</th><th className="p-4">Họ tên</th><th className="p-4">Trạng thái</th><th className="p-4 text-right">Hành động</th></tr></thead>
-                                <tbody className="divide-y">
-                                    {shipperApps.map(app => (
-                                        <tr key={app.id} className="hover:bg-gray-50">
-                                            <td className="p-4">{app.id}</td>
-                                            <td className="p-4 font-medium">{app.username}</td>
-                                            <td className="p-4">{app.fullname}</td>
-                                            <td className="p-4"><span className="bg-yellow-100 text-yellow-800 text-xs px-2 py-1 rounded-full">Chờ duyệt</span></td>
-                                            <td className="p-4 flex justify-end gap-2">
-                                                <Button size="sm" className="bg-green-600 hover:bg-green-700" onClick={()=>handleApproveShipper(app.id)}>Duyệt</Button>
-                                                <Button size="sm" variant="destructive" onClick={()=>handleRejectShipper(app.id)}>Từ chối</Button>
-                                            </td>
-                                        </tr>
-                                    ))}
-                                    {shipperApps.length === 0 && <tr><td colSpan={5} className="p-8 text-center text-gray-500">Không có đơn nào.</td></tr>}
-                                </tbody>
-                            </table>
-                        </CardContent></Card>
-                        {/* PAGINATION FOR SHIPPERS */}
-                        <PaginationControl page={shipperPage} totalPages={totalShipperPages} onPageChange={loadShipperApplications} />
+                        <div className="flex justify-between items-center">
+                            <div className="flex bg-gray-100 p-1 rounded-lg">
+                                <button onClick={() => {setShipperViewMode('list'); loadShippers(1, shipperSearch);} } className={cn("px-4 py-1.5 rounded-md text-sm font-medium transition-all", shipperViewMode === 'list' ? "bg-white shadow text-gray-900" : "text-gray-500")}>Danh sách</button>
+                                <button onClick={() => {setShipperViewMode('applications'); loadShipperApplications(1, shipperAppSearch);} } className={cn("px-4 py-1.5 rounded-md text-sm font-medium transition-all", shipperViewMode === 'applications' ? "bg-white shadow text-gray-900" : "text-gray-500")}>Đơn đăng ký</button>
+                            </div>
+                            {shipperViewMode === 'list' ? (
+                                <div className="flex gap-2 items-center">
+                                    <div className="relative">
+                                        <Search className="absolute left-2 top-2.5 text-gray-400" size={16}/>
+                                        <input className="pl-8 border p-2 rounded-lg w-64 text-sm" placeholder="Tìm shipper..." value={shipperSearch} onChange={e=>setShipperSearch(e.target.value)} />
+                                    </div>
+                                    <Button onClick={()=>loadShippers(1, shipperSearch)}>Tìm</Button>
+                                </div>
+                            ) : (
+                                <div className="flex gap-2 items-center w-full max-w-md">
+                                    <div className="relative flex-1">
+                                        <Search className="absolute left-2 top-2.5 text-gray-400" size={16}/>
+                                        <input className="pl-8 border p-2 rounded-lg w-full text-sm" placeholder="Tìm đơn đăng ký..." value={shipperAppSearch} onChange={e=>setShipperAppSearch(e.target.value)} />
+                                    </div>
+                                    <Button onClick={()=>loadShipperApplications(1, shipperAppSearch)}>Tìm</Button>
+                                </div>
+                            )}
+                        </div>
+
+                        {shipperViewMode === 'list' ? (
+                            <>
+                                <Card className="border-0 shadow-sm overflow-hidden"><CardContent className="p-0">
+                                    <table className="w-full text-sm text-left">
+                                        <thead className="bg-gray-50 border-b uppercase text-xs text-gray-500"><tr><th className="p-4">ID</th><th className="p-4">Username</th><th className="p-4">Họ tên</th><th className="p-4">Email</th><th className="p-4">SĐT</th><th className="p-4">Trạng thái</th><th className="p-4">Ngày tạo</th><th className="p-4 text-right">Hành động</th></tr></thead>
+                                        <tbody className="divide-y">
+                                            {shippers.map(shipper => (
+                                                <tr key={`${shipper.user_id || shipper.id}`} className="hover:bg-gray-50">
+                                                    <td className="p-4 font-mono">{shipper.id}</td>
+                                                    <td className="p-4 font-medium">{shipper.username || shipper.email || '-'}</td>
+                                                    <td className="p-4">{shipper.fullname || '-'}</td>
+                                                    <td className="p-4">{shipper.email || '-'}</td>
+                                                    <td className="p-4">{shipper.phone_number || '-'}</td>
+                                                    <td className="p-4">
+                                                        <span className={`text-xs px-2 py-1 rounded ${shipper.is_active ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
+                                                            {shipper.is_active ? 'Hoạt động' : 'Đã khóa'}
+                                                        </span>
+                                                    </td>
+                                                    <td className="p-4 text-xs text-gray-500">{shipper.created_date ? new Date(shipper.created_date).toLocaleDateString() : '-'}</td>
+                                                    <td className="p-4 text-right">
+                                                        <Button size="sm" variant="outline" disabled={shipperStatusUpdating === (shipper.user_id || shipper.id)} onClick={()=>handleToggleShipperStatus(shipper.user_id || shipper.id)}>
+                                                            {shipperStatusUpdating === (shipper.user_id || shipper.id) ? 'Đang xử lý...' : shipper.is_active ? 'Khóa' : 'Mở khóa'}
+                                                        </Button>
+                                                    </td>
+                                                </tr>
+                                            ))}
+                                            {shippers.length === 0 && (
+                                                <tr><td colSpan={8} className="p-8 text-center text-gray-500">{shipperListLoading ? 'Đang tải...' : 'Chưa có shipper nào.'}</td></tr>
+                                            )}
+                                        </tbody>
+                                    </table>
+                                </CardContent></Card>
+                                <div className="flex justify-between items-center">
+                                    <div className="text-sm text-gray-500">Tổng: {totalShippers} shipper</div>
+                                    <PaginationControl page={shipperListPage} totalPages={totalShipperListPages} onPageChange={(p) => loadShippers(p, shipperSearch)} />
+                                </div>
+                            </>
+                        ) : (
+                            <div className="space-y-3">
+                                <Card className="border-0 shadow-sm overflow-hidden"><CardContent className="p-0">
+                                    <table className="w-full text-sm text-left">
+                                        <thead className="bg-gray-50 border-b uppercase text-xs text-gray-500"><tr><th className="p-4">ID</th><th className="p-4">Username</th><th className="p-4">Họ tên</th><th className="p-4">Email</th><th className="p-4">SĐT</th><th className="p-4">Địa chỉ</th><th className="p-4">Ngày đăng ký</th><th className="p-4 text-right">Hành động</th></tr></thead>
+                                        <tbody className="divide-y">
+                                            {shipperApps.map(app => (
+                                                <tr key={app.id} className="hover:bg-gray-50">
+                                                    <td className="p-4 font-mono">{app.id}</td>
+                                                    <td className="p-4 font-medium">{app.username}</td>
+                                                    <td className="p-4">{app.fullname}</td>
+                                                    <td className="p-4">{app.email || '-'}</td>
+                                                    <td className="p-4">{app.phone_number || '-'}</td>
+                                                    <td className="p-4 max-w-xs truncate">{(app as any).address || '-'}</td>
+                                                    <td className="p-4 text-xs text-gray-500">{(app as any).created_date ? new Date((app as any).created_date).toLocaleDateString() : '-'}</td>
+                                                    <td className="p-4 flex justify-end gap-2">
+                                                        <Button size="sm" className="bg-green-600 hover:bg-green-700" onClick={()=>handleApproveShipper(app.id)}>Duyệt</Button>
+                                                        <Button size="sm" variant="destructive" onClick={()=>handleRejectShipper(app.id)}>Từ chối</Button>
+                                                    </td>
+                                                </tr>
+                                            ))}
+                                            {shipperApps.length === 0 && <tr><td colSpan={8} className="p-8 text-center text-gray-500">{shipperLoading ? 'Đang tải...' : 'Không có đơn nào.'}</td></tr>}
+                                        </tbody>
+                                    </table>
+                                </CardContent></Card>
+                                {/* PAGINATION FOR SHIPPER APPLICATIONS */}
+                                <PaginationControl page={shipperPage} totalPages={totalShipperPages} onPageChange={(p)=>loadShipperApplications(p, shipperAppSearch)} />
+                            </div>
+                        )}
                      </div>
                 )}
 
@@ -789,18 +1131,31 @@ const Admin: React.FC = () => {
                         <div className="flex justify-between items-center"><h2 className="text-xl font-bold">Danh sách Khách hàng</h2><div className="flex gap-2"><input className="border p-2 rounded-lg text-sm" placeholder="Tìm khách..." value={search} onChange={e=>setSearch(e.target.value)}/><Button onClick={()=>loadCustomers(1, search)}>Tìm</Button></div></div>
                         <Card className="border-0 shadow-sm overflow-hidden"><CardContent className="p-0">
                             <table className="w-full text-sm text-left">
-                                <thead className="bg-gray-50 border-b uppercase text-xs text-gray-500"><tr><th className="p-4">ID</th><th className="p-4">Họ tên</th><th className="p-4">Email</th><th className="p-4">SĐT</th><th className="p-4">Vai trò</th><th className="p-4 text-right">Chi tiết</th></tr></thead>
+                                <thead className="bg-gray-50 border-b uppercase text-xs text-gray-500"><tr><th className="p-4">ID</th><th className="p-4">Họ tên</th><th className="p-4">Email</th><th className="p-4">SĐT</th><th className="p-4">Vai trò</th><th className="p-4">Trạng thái</th><th className="p-4 text-right">Hành động</th></tr></thead>
                                 <tbody className="divide-y">
-                                    {customers.map(c => (
-                                        <tr key={c.id} className="hover:bg-gray-50">
-                                            <td className="p-4 text-gray-500">{c.id}</td>
-                                            <td className="p-4 font-medium">{c.fullname}</td>
-                                            <td className="p-4">{c.email}</td>
-                                            <td className="p-4">{c.phone_number}</td>
-                                            <td className="p-4"><span className="bg-gray-100 text-xs px-2 py-1 rounded">{c.role}</span></td>
-                                            <td className="p-4 text-right"><Button size="sm" variant="ghost" onClick={()=>viewCustomerDetail(c.id)}><Eye size={16}/></Button></td>
-                                        </tr>
-                                    ))}
+                                    {customers.map(c => {
+                                        const active = c.is_active !== false;
+                                        return (
+                                            <tr key={c.id} className="hover:bg-gray-50">
+                                                <td className="p-4 text-gray-500">{c.id}</td>
+                                                <td className="p-4 font-medium">{c.fullname}</td>
+                                                <td className="p-4">{c.email}</td>
+                                                <td className="p-4">{c.phone_number}</td>
+                                                <td className="p-4"><span className="bg-gray-100 text-xs px-2 py-1 rounded">{c.role}</span></td>
+                                                <td className="p-4">
+                                                    <span className={`text-xs px-2 py-1 rounded ${active ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
+                                                        {active ? 'Hoạt động' : 'Đã khóa'}
+                                                    </span>
+                                                </td>
+                                                <td className="p-4 text-right flex justify-end gap-2">
+                                                    <Button size="sm" variant="ghost" onClick={()=>viewCustomerDetail(c.id)}><Eye size={16}/></Button>
+                                                    <Button size="sm" variant="outline" disabled={customerStatusUpdating === c.id} onClick={()=>toggleCustomerStatus(c.id)}>
+                                                        {customerStatusUpdating === c.id ? 'Đang xử lý...' : (active ? 'Khóa' : 'Mở')}
+                                                    </Button>
+                                                </td>
+                                            </tr>
+                                        );
+                                    })}
                                 </tbody>
                             </table>
                         </CardContent></Card>
@@ -964,7 +1319,169 @@ const Admin: React.FC = () => {
        </div>
 
        {/* --- MODALS --- */}
-       
+
+       {/* STORE DETAIL MODAL */}
+       {storeDetailModalOpen && (
+           <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+               <div className="bg-white rounded-xl shadow-lg w-full max-w-5xl max-h-[90vh] overflow-hidden flex flex-col">
+                   <div className="flex items-start justify-between p-4 border-b">
+                       <div className="flex items-center gap-3">
+                           {((storeDetailInfo as any)?.image || (storeDetailInfo as any)?.image_url) && (
+                               <img
+                                   src={getImageUrl((storeDetailInfo as any).image || (storeDetailInfo as any).image_url)}
+                                   alt="logo"
+                                   className="w-14 h-14 rounded-lg object-cover border"
+                               />
+                           )}
+                           <div>
+                               <p className="text-xs text-gray-500">Cửa hàng #{storeDetailInfo?.id}</p>
+                               <h3 className="text-xl font-bold">{storeDetailInfo?.store_name || 'Đang tải...'}</h3>
+                               <p className="text-sm text-gray-600 line-clamp-2">{storeDetailInfo?.description}</p>
+                           </div>
+                       </div>
+                       <button onClick={closeStoreDetail} className="p-2 hover:bg-gray-100 rounded-full"><X size={20}/></button>
+                   </div>
+
+                   <div className="p-4 overflow-y-auto space-y-4">
+                       {storeDetailLoading ? (
+                           <div className="text-center text-sm text-gray-500">Đang tải chi tiết cửa hàng...</div>
+                       ) : storeDetailInfo ? (
+                           <>
+                               <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                                   {[{
+                                       label: 'Đánh giá trung bình',
+                                       value: Number(storeDetailStats.average_rating || (storeDetailInfo as any).average_rating || 0).toFixed(1),
+                                       suffix: '/5',
+                                       icon: <Star size={16} className="text-amber-500" />,
+                                   }, {
+                                       label: 'Tổng số đánh giá',
+                                       value: storeDetailStats.total_ratings || (storeDetailInfo as any).total_ratings || 0,
+                                       icon: <Users size={16} className="text-blue-500" />,
+                                   }, {
+                                       label: 'Số món',
+                                       value: storeDetailStats.food_count || storeDetailFoods.length,
+                                       icon: <Utensils size={16} className="text-emerald-500" />,
+                                   }, {
+                                       label: 'Tổng đơn',
+                                       value: storeDetailStats.total_orders || 0,
+                                       icon: <ShoppingBag size={16} className="text-purple-500" />,
+                                   }].map((item, idx) => (
+                                       <div key={idx} className="p-3 border rounded-lg bg-gray-50 flex items-center gap-3">
+                                           <div className="p-2 bg-white rounded-full border">{item.icon}</div>
+                                           <div>
+                                               <p className="text-xs text-gray-500 uppercase">{item.label}</p>
+                                               <p className="text-lg font-bold text-gray-800">{item.value}{item.suffix || ''}</p>
+                                           </div>
+                                       </div>
+                                   ))}
+                               </div>
+
+                               {storeDetailCategories.length > 0 && (
+                                   <div className="space-y-2">
+                                       <p className="text-sm font-semibold text-gray-700">Danh mục đang bán</p>
+                                       <div className="flex flex-wrap gap-2">
+                                           {storeDetailCategories.map((cate) => (
+                                               <span key={cate} className="px-3 py-1 bg-blue-50 text-blue-700 text-xs rounded-full border border-blue-100">{cate}</span>
+                                           ))}
+                                       </div>
+                                   </div>
+                               )}
+
+                               <div className="space-y-2">
+                                   <div className="flex items-center justify-between">
+                                       <p className="text-sm font-semibold text-gray-700">Danh sách món ({storeDetailFoods.length})</p>
+                                       <span className="text-xs text-gray-500">Nhấp để xem chi tiết món</span>
+                                   </div>
+                                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                                       {storeDetailFoods.map((food) => (
+                                           <button
+                                               key={food.id}
+                                               onClick={() => openFoodDetailModal(food)}
+                                               className="text-left border rounded-lg p-3 bg-white hover:shadow-md transition flex gap-3"
+                                           >
+                                               <img src={getImageUrl((food as any).image || (food as any).image_url)} alt={food.title} className="w-16 h-16 rounded object-cover border" />
+                                               <div className="flex-1 min-w-0">
+                                                   <p className="font-semibold text-gray-800 truncate">{food.title}</p>
+                                                   <p className="text-sm text-blue-600 font-bold">{formatCurrency(food.price)}</p>
+                                                   <p className="text-xs text-gray-500 truncate">{(food as any).category?.cate_name || (food as any).category}</p>
+                                               </div>
+                                           </button>
+                                       ))}
+                                       {storeDetailFoods.length === 0 && (
+                                           <div className="col-span-full text-center text-sm text-gray-500 py-6 border rounded-lg">Chưa có món nào.</div>
+                                       )}
+                                   </div>
+                               </div>
+                           </>
+                       ) : (
+                           <div className="text-center text-sm text-gray-500">Không tìm thấy dữ liệu cửa hàng.</div>
+                       )}
+                   </div>
+               </div>
+           </div>
+       )}
+
+       {/* FOOD DETAIL MODAL */}
+       {foodDetailModalOpen && foodDetail && (
+           <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+               <div className="bg-white rounded-xl shadow-lg w-full max-w-3xl max-h-[90vh] overflow-hidden flex flex-col">
+                   <div className="flex items-start justify-between p-4 border-b">
+                       <div>
+                           <p className="text-xs text-gray-500">Món ăn #{foodDetail.id}</p>
+                           <h3 className="text-xl font-bold text-gray-800">{foodDetail.title}</h3>
+                           <p className="text-sm text-gray-600 line-clamp-2">{foodDetail.description}</p>
+                       </div>
+                       <button onClick={closeFoodDetailModal} className="p-2 hover:bg-gray-100 rounded-full"><X size={20}/></button>
+                   </div>
+                   <div className="p-4 overflow-y-auto space-y-4">
+                       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                           <div className="md:col-span-1">
+                               <img src={getImageUrl((foodDetail as any).image || (foodDetail as any).image_url)} alt={foodDetail.title} className="w-full aspect-square object-cover rounded-lg border" />
+                           </div>
+                           <div className="md:col-span-2 space-y-3">
+                               <div className="flex items-center gap-3">
+                                   <span className="text-2xl font-bold text-blue-700">{formatCurrency(foodDetail.price)}</span>
+                                   <span className="text-xs px-2 py-1 rounded-full bg-gray-100 text-gray-700">{foodDetail.availability}</span>
+                               </div>
+                               <div className="flex items-center gap-2 text-amber-500">
+                                   <Star size={16}/>
+                                   <span className="font-semibold text-gray-800">
+                                       {foodDetailRatings.length > 0
+                                           ? (foodDetailRatings.reduce((sum, r) => sum + (Number(r.rating) || 0), 0) / foodDetailRatings.length).toFixed(1)
+                                           : ((foodDetail as any).average_rating || 'Chưa có đánh giá')}
+                                   </span>
+                                   {foodDetailRatings.length > 0 && <span className="text-xs text-gray-500">({foodDetailRatings.length} đánh giá)</span>}
+                               </div>
+                               <p className="text-sm text-gray-600 whitespace-pre-line">{foodDetail.description}</p>
+                           </div>
+                       </div>
+
+                       <div className="space-y-2">
+                           <p className="text-sm font-semibold text-gray-700">Đánh giá</p>
+                           {foodDetailLoading ? (
+                               <div className="text-sm text-gray-500">Đang tải đánh giá...</div>
+                           ) : foodDetailRatings.length === 0 ? (
+                               <div className="text-sm text-gray-500 border rounded-lg p-3">Chưa có đánh giá cho món này.</div>
+                           ) : (
+                               <div className="space-y-2 max-h-60 overflow-y-auto">
+                                   {foodDetailRatings.map((rating, idx) => (
+                                       <div key={idx} className="border rounded-lg p-3 bg-gray-50">
+                                           <div className="flex justify-between text-sm font-semibold text-gray-800">
+                                               <span>{rating.username || 'Ẩn danh'}</span>
+                                               <span className="flex items-center gap-1 text-amber-500"><Star size={14}/> {rating.rating}</span>
+                                           </div>
+                                           <p className="text-sm text-gray-700 mt-1 whitespace-pre-line">{rating.content}</p>
+                                           {rating.created_date && <p className="text-xs text-gray-500 mt-1">{formatDate(rating.created_date)}</p>}
+                                       </div>
+                                   ))}
+                               </div>
+                           )}
+                       </div>
+                   </div>
+               </div>
+           </div>
+       )}
+
        {/* EDIT STORE MODAL */}
        {showEditStoreModal && selectedStore && (
            <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-in fade-in">

@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, TextInput, ScrollView, Alert, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, TextInput, ScrollView, Alert, ActivityIndicator, Image } from 'react-native';
+import * as ImagePicker from 'expo-image-picker';
 import { ArrowLeft, MapPin } from 'lucide-react-native';
 import { useDispatch, useSelector } from 'react-redux';
 import { AddressPickerModal } from '@/components';
@@ -9,6 +10,7 @@ import { Store, User } from '@/types';
 import { updateProfile } from '@/store/slices/authSlice';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Fonts } from '@/constants/Fonts';
+import { API_CONFIG } from '@/constants';
 
 type SellerProfileEditScreenProps = {
   navigation: any;
@@ -31,6 +33,7 @@ type StoreFormState = {
   address: string;
   latitude: number | null;
   longitude: number | null;
+  image: string | null;
 };
 
 const normalizeCoordinate = (value?: number | string | null): number | null => {
@@ -68,11 +71,20 @@ const SellerProfileEditScreen: React.FC<SellerProfileEditScreenProps> = ({ navig
     address: initialStore?.address || '',
     latitude: normalizeCoordinate(initialStore?.latitude) ?? null,
     longitude: normalizeCoordinate(initialStore?.longitude) ?? null,
+    image: initialStore?.image || null,
   });
 
   const [loadingStore, setLoadingStore] = useState(!initialStore);
   const [saving, setSaving] = useState(false);
   const [activePicker, setActivePicker] = useState<'user' | 'store' | null>(null);
+  const [storeImageChanged, setStoreImageChanged] = useState(false);
+
+  const getStoreImageUrl = (imagePath?: string | null) => {
+    if (!imagePath) return null;
+    if (imagePath.startsWith('http')) return imagePath;
+    // API base ends with /api
+    return `${API_CONFIG.BASE_URL.replace(/\/?api$/, '')}/media/${imagePath}`;
+  };
 
   useEffect(() => {
     if (user) {
@@ -96,6 +108,7 @@ const SellerProfileEditScreen: React.FC<SellerProfileEditScreenProps> = ({ navig
         address: initialStore.address || '',
         latitude: normalizeCoordinate(initialStore.latitude) ?? null,
         longitude: normalizeCoordinate(initialStore.longitude) ?? null,
+          image: initialStore.image || null,
       });
       setLoadingStore(false);
     }
@@ -115,6 +128,7 @@ const SellerProfileEditScreen: React.FC<SellerProfileEditScreenProps> = ({ navig
           address: myStore.address || '',
           latitude: normalizeCoordinate(myStore.latitude) ?? null,
           longitude: normalizeCoordinate(myStore.longitude) ?? null,
+          image: myStore.image || null,
         });
       } catch (error: any) {
         Alert.alert('Lỗi', error?.message || 'Không thể tải thông tin cửa hàng.');
@@ -137,6 +151,26 @@ const SellerProfileEditScreen: React.FC<SellerProfileEditScreenProps> = ({ navig
       ...prev,
       [field]: value,
     }));
+  };
+
+  const handlePickStoreImage = async () => {
+    try {
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: true,
+        aspect: [1, 1],
+        quality: 0.8,
+      });
+
+      if (!result.canceled && result.assets && result.assets.length > 0) {
+        const uri = result.assets[0].uri;
+        setStoreForm(prev => ({ ...prev, image: uri }));
+        setStoreImageChanged(true);
+      }
+    } catch (error) {
+      console.error('pick store image error', error);
+      Alert.alert('Lỗi', 'Không thể chọn ảnh cửa hàng.');
+    }
   };
 
   const handleAddressSelected = (payload: { address: string; latitude: number; longitude: number }) => {
@@ -228,10 +262,35 @@ const SellerProfileEditScreen: React.FC<SellerProfileEditScreenProps> = ({ navig
         longitude: storeForm.longitude,
       };
 
+      const storePromise = async () => {
+        if (storeImageChanged && storeForm.image) {
+          const uri = storeForm.image;
+          const filename = uri.split('/').pop() || `store-${Date.now()}.jpg`;
+          const extension = filename.split('.').pop() || 'jpg';
+          const formData = new FormData();
+
+          formData.append('store_name', storePayload.store_name || '');
+          formData.append('description', storePayload.description || '');
+          formData.append('address', storePayload.address || '');
+          if (storePayload.latitude !== undefined) formData.append('latitude', storePayload.latitude as any);
+          if (storePayload.longitude !== undefined) formData.append('longitude', storePayload.longitude as any);
+          formData.append('image_file', {
+            uri,
+            name: filename,
+            type: `image/${extension}`,
+          } as any);
+
+          return storesService.updateStoreWithImage(storeForm.id as number, formData);
+        }
+        return storesService.updateStore(storeForm.id as number, storePayload);
+      };
+
       await Promise.all([
         dispatch(updateProfile(userPayload)).unwrap(),
-        storesService.updateStore(storeForm.id as number, storePayload),
+        storePromise(),
       ]);
+
+      setStoreImageChanged(false);
 
       Alert.alert('Thành công', 'Đã cập nhật hồ sơ người bán.', [
         {
@@ -244,7 +303,7 @@ const SellerProfileEditScreen: React.FC<SellerProfileEditScreenProps> = ({ navig
     } finally {
       setSaving(false);
     }
-  }, [dispatch, navigation, profileForm, storeForm]);
+  }, [dispatch, navigation, profileForm, storeForm, storeImageChanged]);
 
   const renderCoordinateMeta = (latitude: number | null, longitude: number | null) => {
     if (latitude === null || longitude === null) {
@@ -310,7 +369,7 @@ const SellerProfileEditScreen: React.FC<SellerProfileEditScreenProps> = ({ navig
             />
           </View>
 
-          <View style={{ marginBottom: 4 }}>
+              <View style={{ marginBottom: 12 }}>
             <View style={styles.labelRow}>
               <Text style={styles.label}>Địa chỉ</Text>
               <TouchableOpacity
@@ -365,6 +424,22 @@ const SellerProfileEditScreen: React.FC<SellerProfileEditScreenProps> = ({ navig
                   placeholderTextColor="#9ca3af"
                   multiline
                 />
+              </View>
+
+              <View style={{ marginBottom: 12 }}>
+                <Text style={styles.label}>Ảnh cửa hàng</Text>
+                <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 6, gap: 12 }}>
+                  <View style={{ width: 90, height: 90, borderRadius: 12, borderWidth: 1, borderColor: BORDER, overflow: 'hidden', backgroundColor: '#f9fafb', alignItems: 'center', justifyContent: 'center' }}>
+                    {storeForm.image ? (
+                      <Image source={{ uri: storeForm.image.startsWith('http') ? storeForm.image : (getStoreImageUrl(storeForm.image) as string) }} style={{ width: '100%', height: '100%' }} resizeMode="cover" />
+                    ) : (
+                      <Text style={{ color: '#9ca3af', fontSize: 12 }}>Chưa có ảnh</Text>
+                    )}
+                  </View>
+                  <TouchableOpacity onPress={handlePickStoreImage} style={{ paddingVertical: 10, paddingHorizontal: 14, backgroundColor: ORANGE, borderRadius: 10 }}>
+                    <Text style={{ color: '#fff', fontFamily: Fonts.LeagueSpartanSemiBold }}>Chọn ảnh</Text>
+                  </TouchableOpacity>
+                </View>
               </View>
 
               <View style={{ marginBottom: 4 }}>

@@ -1,5 +1,5 @@
 import React, { useCallback, useMemo, useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator, ScrollView } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator, ScrollView, Image } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { useSelector } from 'react-redux';
 import { X, RefreshCcw } from 'lucide-react-native';
@@ -9,6 +9,7 @@ import { storesService } from '@/services';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { ArrowLeft } from 'lucide-react-native';
 import { Fonts } from '@/constants/Fonts';
+import { API_CONFIG } from '@/constants';
 
 type SellerProfileScreenProps = {
   navigation: any;
@@ -88,6 +89,15 @@ const SellerProfileScreen: React.FC<SellerProfileScreenProps> = ({ navigation })
   const statusLabel = store ? 'Đang hoạt động' : 'Chưa đăng ký';
   const statusColor = store ? '#10b981' : '#f97316';
 
+  const getStoreImageUrl = (imagePath?: string | null) => {
+    if (!imagePath) return null;
+    if (imagePath.startsWith('http')) return imagePath;
+    const base = API_CONFIG.BASE_URL.replace(/\/?api$/, '');
+    return `${base}/media/${imagePath}`;
+  };
+
+  const storeImageUri = getStoreImageUrl(store?.image);
+
   return (
     <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
       {/* Header mới, đồng bộ EditFood / Dashboard */}
@@ -109,7 +119,11 @@ const SellerProfileScreen: React.FC<SellerProfileScreenProps> = ({ navigation })
         {/* Avatar + tên */}
         <View style={styles.avatarBox}>
           <View style={styles.avatarCircle}>
-            <Text style={styles.avatarText}>{avatarLetter}</Text>
+            {storeImageUri ? (
+              <Image source={{ uri: storeImageUri }} style={styles.avatarImage} resizeMode="cover" />
+            ) : (
+              <Text style={styles.avatarText}>{avatarLetter}</Text>
+            )}
             <View style={styles.avatarCamera} />
           </View>
           <Text style={styles.sellerName}>
@@ -303,6 +317,14 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.15,
     shadowRadius: 8,
     elevation: 4,
+  },
+  avatarImage: {
+    width: '100%',
+    height: '100%',
+    borderRadius: 44,
+    position: 'absolute',
+    top: 0,
+    left: 0,
   },
   avatarText: {
     fontSize: 34,

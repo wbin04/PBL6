@@ -2,6 +2,7 @@ from rest_framework import viewsets, status
 from rest_framework.decorators import action, api_view, permission_classes
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated, AllowAny
+from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
 from django.shortcuts import get_object_or_404
 from django.db.models import F
 from decimal import Decimal
@@ -25,6 +26,7 @@ def store_list_public(request):
 class StoreViewSet(viewsets.ModelViewSet):
     serializer_class = StoreSerializer
     permission_classes = [IsAuthenticated]
+    parser_classes = [MultiPartParser, FormParser, JSONParser]
     
     def get_queryset(self):
         # Store managers can only access their own store
@@ -32,6 +34,46 @@ class StoreViewSet(viewsets.ModelViewSet):
             return Store.objects.filter(manager=self.request.user)
         # Admins can see all stores
         return Store.objects.all()
+
+    def _handle_update(self, request, partial=False, *args, **kwargs):
+        instance = self.get_object()
+        data = request.data.copy()
+        old_image_path = instance.image if instance.image else None
+
+        if 'image_file' in request.FILES:
+            from django.core.files.storage import default_storage
+            import os
+            import uuid
+
+            file = request.FILES['image_file']
+            ext = os.path.splitext(file.name)[1]
+            filename = f"assets/{uuid.uuid4().hex}{ext}"
+            saved_path = default_storage.save(filename, file)
+            data['image'] = saved_path
+
+        data.pop('image_file', None)
+
+        serializer = self.get_serializer(instance, data=data, partial=partial)
+        if serializer.is_valid():
+            serializer.save()
+
+            # Delete old file if new one uploaded
+            if old_image_path and 'image' in data and old_image_path != data.get('image'):
+                try:
+                    from django.core.files.storage import default_storage
+                    if default_storage.exists(old_image_path):
+                        default_storage.delete(old_image_path)
+                except Exception as e:
+                    print(f"Warning: could not delete old store image {old_image_path}: {e}")
+
+            return Response(serializer.data)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+    def update(self, request, *args, **kwargs):
+        return self._handle_update(request, partial=False, *args, **kwargs)
+
+    def partial_update(self, request, *args, **kwargs):
+        return self._handle_update(request, partial=True, *args, **kwargs)
     
     @action(detail=False, methods=['get'])
     def my_store(self, request):

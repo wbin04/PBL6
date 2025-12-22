@@ -191,6 +191,12 @@ export const storesService = {
   async updateStore(storeId: number, data: StoreUpdatePayload): Promise<Store> {
     return apiClient.patch(ENDPOINTS.STORE_DETAIL(storeId), data);
   },
+
+  async updateStoreWithImage(storeId: number, formData: FormData): Promise<Store> {
+    return apiClient.patch(ENDPOINTS.STORE_DETAIL(storeId), formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+  },
 };
 
 // Cart Service

@@ -49,6 +49,7 @@ import {
   User,
   Filter
 } from 'lucide-react';
+import { Copy } from 'lucide-react';
 
 // --- DEFINITIONS BASED ON YOUR JSON ---
 
@@ -86,6 +87,10 @@ interface StoreOrder {
   note: string;
   shipping_fee: string;
   items: OrderItem[];
+    refund_requested?: boolean;
+    refund_status?: 'Không' | 'Chờ xử lý' | 'Đã hoàn thành';
+    bank_name?: string | null;
+    bank_account?: string | null;
 }
 
 interface StorePromotion {
@@ -127,6 +132,9 @@ const StoreManager: React.FC = () => {
   const [orders, setOrders] = useState<StoreOrder[]>([]);
   const [selectedOrder, setSelectedOrder] = useState<StoreOrder | null>(null);
   const [showOrderModal, setShowOrderModal] = useState(false);
+    const [showRefundModal, setShowRefundModal] = useState(false);
+    const [refundOrder, setRefundOrder] = useState<StoreOrder | null>(null);
+    const [processingRefund, setProcessingRefund] = useState(false);
   
   // State lọc trạng thái đơn hàng
   const [filterStatus, setFilterStatus] = useState<string>('Tất cả');
@@ -145,6 +153,8 @@ const StoreManager: React.FC = () => {
   const [newFood, setNewFood] = useState({ title: '', description: '', price: '', category_id: '', availability: 'Còn hàng' });
   const [newFoodImage, setNewFoodImage] = useState<File | null>(null);
   const [editFoodImage, setEditFoodImage] = useState<File | null>(null);
+    const [addFoodPreview, setAddFoodPreview] = useState<string | null>(null);
+    const [editFoodPreview, setEditFoodPreview] = useState<string | null>(null);
   const addImageRef = useRef<HTMLInputElement>(null);
   const editImageRef = useRef<HTMLInputElement>(null);
 
@@ -170,6 +180,9 @@ const StoreManager: React.FC = () => {
   // --- STORE INFO EDIT STATE ---
   const [showEditStoreModal, setShowEditStoreModal] = useState(false);
   const [editableStoreInfo, setEditableStoreInfo] = useState<MyStore | null>(null);
+    const [storeImageFile, setStoreImageFile] = useState<File | null>(null);
+    const [storeImagePreview, setStoreImagePreview] = useState<string | null>(null);
+    const storeImageRef = useRef<HTMLInputElement>(null);
 
 
   // --- INITIAL LOAD ---
@@ -311,6 +324,33 @@ const StoreManager: React.FC = () => {
   };
 
   // --- CRUD FOOD HANDLERS (Giữ nguyên logic cũ nhưng rút gọn) ---
+    const handleAddImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+        setNewFoodImage(file);
+        setAddFoodPreview(URL.createObjectURL(file));
+    };
+
+    const handleEditImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+        setEditFoodImage(file);
+        setEditFoodPreview(URL.createObjectURL(file));
+    };
+
+    const closeFoodModals = () => {
+        setShowAddFoodModal(false);
+        setShowEditFoodModal(false);
+        setSelectedFood(null);
+        setNewFood({ title: '', description: '', price: '', category_id: '', availability: 'Còn hàng' });
+        setNewFoodImage(null);
+        setEditFoodImage(null);
+        setAddFoodPreview(null);
+        setEditFoodPreview(null);
+        if (addImageRef.current) addImageRef.current.value = '';
+        if (editImageRef.current) editImageRef.current.value = '';
+    };
+
   const handleAddFood = async (e: React.FormEvent) => {
     e.preventDefault();
     const formData = new FormData();
@@ -319,11 +359,22 @@ const StoreManager: React.FC = () => {
     formData.append('price', newFood.price);
     formData.append('category_id', newFood.category_id);
     formData.append('availability', newFood.availability);
+        if (storeInfo?.id) formData.append('store_id', String(storeInfo.id));
     if (newFoodImage) formData.append('image_file', newFoodImage);
     try {
-        await API.post('/menu/admin/foods/', formData, { headers: { 'Content-Type': 'multipart/form-data' } });
-        alert('Thêm thành công!'); setShowAddFoodModal(false); loadFoods();
-    } catch (e) { alert(`Lỗi: ${e}`); }
+        // Backend only allows POST on admin endpoint; let fetch set multipart boundary automatically.
+        await API.post('/menu/admin/foods/', formData);
+        alert('Thêm thành công!');
+        setNewFood({ title: '', description: '', price: '', category_id: '', availability: 'Còn hàng' });
+        setNewFoodImage(null);
+        setAddFoodPreview(null);
+        if (addImageRef.current) addImageRef.current.value = '';
+        setShowAddFoodModal(false);
+        loadFoods();
+    } catch (e: any) {
+        const message = e?.message || 'Lỗi không xác định';
+        alert(`Lỗi: ${message}`);
+    }
   };
 
   const updateFood = async (e: React.FormEvent) => {
@@ -338,13 +389,20 @@ const StoreManager: React.FC = () => {
     if (editFoodImage) formData.append('image_file', editFoodImage);
     try {
         await API.put(`/menu/store/foods/${selectedFood.id}/`, formData);
-        alert('Cập nhật thành công!'); setShowEditFoodModal(false); loadFoods(foodPage);
+        alert('Cập nhật thành công!');
+        setEditFoodImage(null);
+        setEditFoodPreview(null);
+        if (editImageRef.current) editImageRef.current.value = '';
+        setShowEditFoodModal(false);
+        loadFoods(foodPage);
     } catch (e) { alert(`Lỗi: ${e}`); }
   };
 
   // --- HÀM XỬ LÝ CLICK NÚT SỬA MÓN (CÓ LOAD RATINGS) ---
   const handleEditFoodClick = async (food: Food) => {
     setSelectedFood(food);
+        setEditFoodImage(null);
+        setEditFoodPreview(food.image_url ? getImageUrl(food.image_url) : null);
     setShowEditFoodModal(true);
     setRatingsLoading(true);
     try {
@@ -385,33 +443,106 @@ const StoreManager: React.FC = () => {
   };
 
   // --- ORDER HANDLERS ---
-  const updateOrderStatus = async (orderId: number, status: string) => {
+  const updateOrderStatus = async (
+      orderId: number,
+      status: string,
+      extraData?: {
+          refund_requested?: boolean;
+          refund_status?: 'Không' | 'Chờ xử lý' | 'Đã hoàn thành';
+          bank_name?: string | null;
+          bank_account?: string | null;
+      }
+  ) => {
       if(!storeInfo) return;
       try {
-          await API.patch(`/stores/${storeInfo.id}/orders/${orderId}/status/`, { order_status: status });
+          const payload: any = { order_status: status };
+          if (extraData) {
+              Object.entries(extraData).forEach(([key, val]) => {
+                  if (val !== undefined) payload[key] = val;
+              });
+          }
+          await API.patch(`/stores/${storeInfo.id}/orders/${orderId}/status/`, payload);
           alert('Cập nhật trạng thái thành công!');
           // Cập nhật state local
-          setOrders(prev => prev.map(o => o.id === orderId ? { ...o, order_status: status } : o));
-          if(selectedOrder) setSelectedOrder({...selectedOrder, order_status: status});
+          setOrders(prev => prev.map(o => o.id === orderId ? { ...o, order_status: status, ...extraData } : o));
+          if(selectedOrder) setSelectedOrder({...selectedOrder, order_status: status, ...extraData});
           setShowOrderModal(false);
       } catch (e) { alert(`Lỗi: ${e}`); }
+  };
+
+  const isCancelledStatus = (status: string) => {
+      const s = (status || '').toLowerCase();
+      return s.includes('huỷ') || s.includes('hủy');
+  };
+
+  const isRefundPending = (order: StoreOrder) => (
+      isCancelledStatus(order.order_status) && order.payment_method && order.payment_method !== 'cash' && !!order.refund_requested
+  );
+
+  const openRefundModal = (order: StoreOrder) => {
+      setRefundOrder(order);
+      setShowRefundModal(true);
+  };
+
+  const copyBankAccount = async () => {
+      if (!refundOrder?.bank_account) return;
+      try {
+          await navigator.clipboard.writeText(refundOrder.bank_account);
+          alert('Đã sao chép số tài khoản');
+      } catch (e) {
+          alert('Không thể sao chép, vui lòng thử lại');
+      }
+  };
+
+  const handleCompleteRefund = async () => {
+      if (!refundOrder) return;
+      try {
+          setProcessingRefund(true);
+          await updateOrderStatus(refundOrder.id, refundOrder.order_status, {
+              refund_requested: false,
+              refund_status: 'Đã hoàn thành',
+          });
+          setShowRefundModal(false);
+          setRefundOrder(null);
+      } catch (e: any) {
+          alert(e?.message || 'Không thể cập nhật hoàn tiền');
+      } finally {
+          setProcessingRefund(false);
+      }
   };
 
   // --- PROMOTIONS HANDLERS ---
   const loadPromotions = async () => {
     try { const res = await API.get<StorePromotion[]>('/promotions/'); setPromotions(res || []); } catch (e) { console.error(e); }
   };
+  const formatDateInput = (d?: string | null) => {
+      if (!d) return '';
+      const dt = new Date(d);
+      return Number.isNaN(dt.getTime()) ? '' : dt.toISOString().slice(0, 10);
+  };
+  const closePromoModals = () => {
+      setShowAddPromoModal(false);
+      setShowEditPromoModal(false);
+      setSelectedPromo(null);
+      setNewPromo({
+        name: '', discount_type: 'PERCENT', discount_value: '', start_date: '', end_date: '', minimum_pay: '', max_discount_amount: '', is_active: true,
+      });
+  };
   const handlePromoSubmit = async (e: React.FormEvent, isEdit: boolean) => {
       e.preventDefault();
-      const payload = isEdit && selectedPromo ? { 
-          ...selectedPromo, minimum_pay: selectedPromo.minimum_pay || null, max_discount_amount: selectedPromo.max_discount_amount || null 
-      } : { ...newPromo, minimum_pay: newPromo.minimum_pay || null, max_discount_amount: newPromo.max_discount_amount || null };
-      
+      const src = isEdit && selectedPromo ? selectedPromo : newPromo;
+      const payload = {
+          ...src,
+          start_date: src.start_date ? formatDateInput(src.start_date) : '',
+          end_date: src.end_date ? formatDateInput(src.end_date) : '',
+          minimum_pay: src.minimum_pay || null,
+          max_discount_amount: src.max_discount_amount || null,
+      } as any;
       try {
           if (isEdit && selectedPromo) await API.put(`/promotions/${selectedPromo.id}/update/`, payload);
           else await API.post('/promotions/create/', payload);
-          alert('Thành công!'); setShowAddPromoModal(false); setShowEditPromoModal(false); loadPromotions();
-      } catch(e) { alert(`Lỗi: ${e}`); }
+          alert('Thành công!'); closePromoModals(); loadPromotions();
+      } catch(e: any) { alert(`Lỗi: ${e?.message || e}`); }
   };
   const deletePromo = async (id: number) => {
       if(!confirm('Xóa KM này?')) return;
@@ -434,6 +565,60 @@ const StoreManager: React.FC = () => {
   };
 
   const logout = () => { localStorage.clear(); navigate('/login'); };
+
+  // --- STORE INFO HANDLERS ---
+  const handleStoreFieldChange = (field: keyof MyStore, value: any) => {
+      setEditableStoreInfo(prev => prev ? { ...prev, [field]: value } : prev);
+  };
+  const handleStoreImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+      const file = e.target.files?.[0];
+      if (!file) return;
+      setStoreImageFile(file);
+      setStoreImagePreview(URL.createObjectURL(file));
+  };
+  const parseNullableNumber = (value: string) => {
+      if (value === '' || value === null || value === undefined) return null;
+      const n = parseFloat(value);
+      return Number.isNaN(n) ? null : n;
+  };
+  const saveStoreInfo = async () => {
+      if (!editableStoreInfo?.id) return;
+      try {
+          const commonFields = {
+              store_name: editableStoreInfo.store_name,
+              description: editableStoreInfo.description,
+              address: (editableStoreInfo as any).address || '',
+              latitude: parseNullableNumber((editableStoreInfo as any).latitude as any),
+              longitude: parseNullableNumber((editableStoreInfo as any).longitude as any),
+          };
+
+          if (storeImageFile) {
+              const formData = new FormData();
+              Object.entries(commonFields).forEach(([k, v]) => {
+                  if (v !== undefined && v !== null) formData.append(k, String(v));
+              });
+              formData.append('image_file', storeImageFile);
+              await API.put(`/stores/${editableStoreInfo.id}/`, formData);
+          } else {
+              await API.put(`/stores/${editableStoreInfo.id}/`, commonFields);
+          }
+
+          // Refresh store info
+          const updated = { ...storeInfo!, ...commonFields };
+          if (storeImageFile && storeImagePreview) {
+              updated.image = storeImagePreview;
+          }
+          setStoreInfo(updated as any);
+          setEditableStoreInfo(prev => prev ? { ...prev, ...updated } : prev);
+          setShowEditStoreModal(false);
+          setStoreImageFile(null);
+          setStoreImagePreview(null);
+          if (storeImageRef.current) storeImageRef.current.value = '';
+          alert('Cập nhật cửa hàng thành công');
+      } catch (e: any) {
+          alert(`Lỗi cập nhật cửa hàng: ${e?.message || e}`);
+      }
+  };
 
   // --- RENDER HELPERS ---
   const SidebarItem = ({ id, label, icon: Icon }: any) => (
@@ -689,6 +874,7 @@ const StoreManager: React.FC = () => {
                                             <th className="p-4">Khách hàng</th>
                                             <th className="p-4">Tổng tiền</th>
                                             <th className="p-4">Trạng thái</th>
+                                            <th className="p-4">Hoàn tiền</th>
                                             <th className="p-4">Thời gian</th>
                                             <th className="p-4 text-right">Thao tác</th>
                                         </tr>
@@ -706,6 +892,28 @@ const StoreManager: React.FC = () => {
                                                     <span className={cn("px-3 py-1 text-xs rounded-full font-bold border", getStatusColor(order.order_status))}>
                                                         {order.order_status}
                                                     </span>
+                                                </td>
+                                                <td className="p-4">
+                                                    {order.refund_status === 'Đã hoàn thành' ? (
+                                                        <span className="text-xs px-2 py-1 rounded-full border border-green-200 bg-green-50 text-green-700">
+                                                            Đã hoàn thành
+                                                        </span>
+                                                    ) : isRefundPending(order) ? (
+                                                        <div className="flex items-center gap-2">
+                                                            <span className="text-xs px-2 py-1 rounded-full border border-amber-200 bg-amber-50 text-amber-700">
+                                                                {order.refund_status || 'Chờ xử lý'}
+                                                            </span>
+                                                            <Button
+                                                                size="sm"
+                                                                className="h-8 px-3 bg-amber-500 hover:bg-amber-600 text-white"
+                                                                onClick={() => openRefundModal(order)}
+                                                            >
+                                                                Hoàn tiền
+                                                            </Button>
+                                                        </div>
+                                                    ) : (
+                                                        <span className="text-xs text-gray-400">—</span>
+                                                    )}
                                                 </td>
                                                 <td className="p-4 text-gray-500 text-xs">{formatDate(order.created_date)}</td>
                                                 <td className="p-4 text-right">
@@ -779,7 +987,7 @@ const StoreManager: React.FC = () => {
                     <div className="animate-in fade-in">
                          <div className="flex justify-between mb-4">
                             <h2 className="text-2xl font-bold">Khuyến mãi</h2>
-                            <Button onClick={() => setShowAddPromoModal(true)} className="bg-blue-600"><Plus size={18} className="mr-2"/> Tạo KM</Button>
+                            <Button onClick={() => setShowAddPromoModal(true)} className="bg-blue-600"><Plus size={18} className="mr-2"/>Thêm khuyến mãi</Button>
                         </div>
                         <div className="bg-white rounded-lg border shadow-sm overflow-hidden">
                              <table className="w-full text-sm text-left">
@@ -808,7 +1016,7 @@ const StoreManager: React.FC = () => {
                      <div className="animate-in fade-in">
                         <div className="flex justify-between mb-6">
                             <h2 className="text-2xl font-bold">Thông tin cửa hàng</h2>
-                            <Button onClick={() => setShowEditStoreModal(true)} variant="outline"><Edit2 size={16} className="mr-2"/> Chỉnh sửa</Button>
+                            <Button onClick={() => { setEditableStoreInfo(storeInfo); setShowEditStoreModal(true); }} variant="outline"><Edit2 size={16} className="mr-2"/> Chỉnh sửa</Button>
                         </div>
                         <Card className="overflow-hidden border-0 shadow-md">
                             <div className="h-32 bg-blue-600 relative"></div>
@@ -866,6 +1074,32 @@ const StoreManager: React.FC = () => {
                                <div className="flex justify-between text-sm"><span className="text-gray-500">Phí ship</span><span>{formatCurrency(selectedOrder.shipping_fee)}</span></div>
                                <div className="flex justify-between text-lg font-bold pt-2 border-t"><span className="text-gray-800">Tổng cộng</span><span className="text-blue-600">{formatCurrency(selectedOrder.total_money)}</span></div>
                                <div className="text-xs text-gray-400 text-right mt-1">{formatDate(selectedOrder.created_date)}</div>
+                               {isRefundPending(selectedOrder) && (
+                                   <div className="mt-3 space-y-2 bg-amber-50 border border-amber-200 rounded-lg p-3">
+                                       <div className="flex items-center gap-2">
+                                           <span className="text-sm font-semibold text-amber-800">Hoàn tiền</span>
+                                           <span className="text-xs px-2 py-1 rounded-full border border-amber-300 bg-white text-amber-700">
+                                               {selectedOrder.refund_status || 'Chờ xử lý'}
+                                           </span>
+                                       </div>
+                                       <div className="text-sm text-gray-700 space-y-1">
+                                           <p>Ngân hàng: <span className="font-semibold">{selectedOrder.bank_name || '—'}</span></p>
+                                           <p>Số tài khoản: <span className="font-semibold">{selectedOrder.bank_account || '—'}</span></p>
+                                       </div>
+                                       {selectedOrder.refund_status !== 'Đã hoàn thành' && (
+                                           <div className="flex gap-2">
+                                               <Button
+                                                   size="sm"
+                                                   variant="outline"
+                                                   className="border-amber-400 text-amber-700 hover:bg-amber-100"
+                                                   onClick={() => openRefundModal(selectedOrder)}
+                                               >
+                                                   Hoàn tiền
+                                               </Button>
+                                           </div>
+                                       )}
+                                   </div>
+                               )}
                           </div>
                       </div>
 
@@ -905,6 +1139,53 @@ const StoreManager: React.FC = () => {
           </div>
       )}
 
+      {/* REFUND MODAL */}
+      {showRefundModal && refundOrder && (
+          <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-in fade-in">
+              <div className="bg-white rounded-xl shadow-2xl w-full max-w-md p-6 space-y-4">
+                  <div className="flex items-center justify-between">
+                      <h3 className="text-lg font-bold text-gray-800">Thông tin tài khoản</h3>
+                      <button onClick={() => { setShowRefundModal(false); setRefundOrder(null); }} className="text-gray-500 hover:text-gray-700"><X size={20}/></button>
+                  </div>
+                  <div className="space-y-3">
+                      <div>
+                          <p className="text-sm text-gray-500 mb-1">Tên ngân hàng</p>
+                          <div className="w-full border rounded-lg px-3 py-2 bg-gray-50 text-sm text-gray-800">
+                              {refundOrder.bank_name || '—'}
+                          </div>
+                      </div>
+                      <div>
+                          <p className="text-sm text-gray-500 mb-1">Số tài khoản</p>
+                          <div className="flex items-center gap-2">
+                              <div className="flex-1 border rounded-lg px-3 py-2 bg-gray-50 text-sm text-gray-800">
+                                  {refundOrder.bank_account || '—'}
+                              </div>
+                              <Button variant="outline" size="sm" className="gap-2" onClick={copyBankAccount}>
+                                  <Copy size={16}/> Sao chép
+                              </Button>
+                          </div>
+                      </div>
+                      <div className="flex items-center gap-2 text-sm">
+                          <span className="text-gray-500">Trạng thái hoàn tiền:</span>
+                          <span className="px-2 py-1 rounded-full border border-amber-200 bg-amber-50 text-amber-700 text-xs">{refundOrder.refund_status || 'Chờ xử lý'}</span>
+                      </div>
+                  </div>
+                  <div className="flex gap-3 justify-end pt-2">
+                      <Button variant="ghost" onClick={() => { setShowRefundModal(false); setRefundOrder(null); }}>
+                          Huỷ
+                      </Button>
+                      <Button
+                          className="bg-amber-600 hover:bg-amber-700"
+                          disabled={processingRefund}
+                          onClick={handleCompleteRefund}
+                      >
+                          {processingRefund ? 'Đang xử lý...' : 'Hoàn tiền'}
+                      </Button>
+                  </div>
+              </div>
+          </div>
+      )}
+
       {/* ADD/EDIT FOOD MODALS (Simplified for brevity, similar structure to previous) */}
       {(showAddFoodModal || (showEditFoodModal && selectedFood)) && (
           <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
@@ -918,7 +1199,47 @@ const StoreManager: React.FC = () => {
                                <option value="">Chọn danh mục</option>{categories.map(c=><option key={c.id} value={c.id}>{c.cate_name}</option>)}
                            </select>
                        </div>
+                       <div>
+                           <label className="block text-sm font-medium mb-1">Hình ảnh</label>
+                           <div className="flex items-center gap-3">
+                               <div className="w-24 h-24 rounded border bg-gray-50 flex items-center justify-center overflow-hidden">
+                                   { (showAddFoodModal ? addFoodPreview : editFoodPreview) ? (
+                                       <img src={(showAddFoodModal ? addFoodPreview : editFoodPreview) as string} alt="food" className="w-full h-full object-cover" />
+                                   ) : (
+                                       <span className="text-xs text-gray-400 text-center px-2">Chưa có ảnh</span>
+                                   )}
+                               </div>
+                               <div className="flex flex-col gap-2">
+                                   <input ref={showAddFoodModal ? addImageRef : editImageRef} type="file" accept="image/*" className="hidden" onChange={showAddFoodModal ? handleAddImageChange : handleEditImageChange} />
+                                   <Button type="button" variant="outline" onClick={() => (showAddFoodModal ? addImageRef : editImageRef).current?.click()} className="w-fit">
+                                       <Upload size={16} className="mr-2"/> Chọn ảnh
+                                   </Button>
+                                   {(showAddFoodModal ? addFoodPreview : editFoodPreview) && (
+                                       <Button type="button" variant="ghost" className="w-fit text-red-500" onClick={() => {
+                                           if (showAddFoodModal) {
+                                               setNewFoodImage(null);
+                                               setAddFoodPreview(null);
+                                               if (addImageRef.current) addImageRef.current.value = '';
+                                           } else {
+                                               setEditFoodImage(null);
+                                               setEditFoodPreview(selectedFood?.image_url ? getImageUrl(selectedFood.image_url) : null);
+                                               if (editImageRef.current) editImageRef.current.value = '';
+                                           }
+                                       }}>
+                                           Xóa ảnh
+                                       </Button>
+                                   )}
+                               </div>
+                           </div>
+                       </div>
                        <div><label className="block text-sm font-medium">Mô tả</label><textarea className="w-full border p-2 rounded" rows={2} value={showAddFoodModal ? newFood.description : selectedFood!.description} onChange={e => showAddFoodModal ? setNewFood({...newFood, description: e.target.value}) : setSelectedFood({...selectedFood!, description: e.target.value})}/></div>
+                       <div>
+                           <label className="block text-sm font-medium">Tình trạng</label>
+                           <select className="w-full border p-2 rounded" value={showAddFoodModal ? newFood.availability : selectedFood!.availability} onChange={e => showAddFoodModal ? setNewFood({...newFood, availability: e.target.value}) : setSelectedFood({...selectedFood!, availability: e.target.value})}>
+                               <option value="Còn hàng">Còn hàng</option>
+                               <option value="Hết hàng">Hết hàng</option>
+                           </select>
+                       </div>
                        
                        {/* --- HIỂN THỊ ĐÁNH GIÁ (Chỉ hiện khi sửa món) --- */}
                        {!showAddFoodModal && (
@@ -944,9 +1265,161 @@ const StoreManager: React.FC = () => {
                            </div>
                        )}
 
-                       <div className="flex justify-end gap-2 mt-4"><Button type="button" variant="ghost" onClick={()=>{setShowAddFoodModal(false); setShowEditFoodModal(false);}}>Hủy</Button><Button type="submit" className="bg-blue-600">Lưu</Button></div>
+                       <div className="flex justify-end gap-2 mt-4"><Button type="button" variant="ghost" onClick={closeFoodModals}>Hủy</Button><Button type="submit" className="bg-blue-600">Lưu</Button></div>
                    </form>
                </div>
+          </div>
+      )}
+
+      {/* ADD/EDIT PROMO MODAL */}
+      {(showAddPromoModal || (showEditPromoModal && selectedPromo)) && (
+          <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+              <div className="bg-white rounded-xl shadow-lg w-full max-w-lg p-6 max-h-[90vh] overflow-y-auto">
+                  <h2 className="text-xl font-bold mb-4">{showAddPromoModal ? 'Thêm khuyến mãi' : 'Sửa khuyến mãi'}</h2>
+                  <form className="space-y-4" onSubmit={(e)=>handlePromoSubmit(e, !!selectedPromo)}>
+                      <div>
+                          <label className="block text-sm font-medium">Tên khuyến mãi</label>
+                          <input className="w-full border p-2 rounded" required
+                              value={showAddPromoModal ? newPromo.name : selectedPromo?.name || ''}
+                              onChange={e => showAddPromoModal ? setNewPromo({...newPromo, name: e.target.value}) : setSelectedPromo({...selectedPromo!, name: e.target.value})}
+                          />
+                      </div>
+                      <div className="grid grid-cols-2 gap-3">
+                          <div>
+                              <label className="block text-sm font-medium">Loại giảm</label>
+                              <select className="w-full border p-2 rounded"
+                                  value={showAddPromoModal ? newPromo.discount_type : selectedPromo?.discount_type || 'PERCENT'}
+                                  onChange={e => showAddPromoModal ? setNewPromo({...newPromo, discount_type: e.target.value as any}) : setSelectedPromo({...selectedPromo!, discount_type: e.target.value as any})}
+                              >
+                                  <option value="PERCENT">Phần trăm</option>
+                                  <option value="AMOUNT">Số tiền</option>
+                              </select>
+                          </div>
+                          <div>
+                              <label className="block text-sm font-medium">Giá trị</label>
+                              <input type="number" className="w-full border p-2 rounded" min="0" step="0.01" required
+                                  value={showAddPromoModal ? newPromo.discount_value : selectedPromo?.discount_value || ''}
+                                  onChange={e => showAddPromoModal ? setNewPromo({...newPromo, discount_value: e.target.value}) : setSelectedPromo({...selectedPromo!, discount_value: e.target.value})}
+                              />
+                          </div>
+                      </div>
+                      <div className="grid grid-cols-2 gap-3">
+                          <div>
+                              <label className="block text-sm font-medium">Bắt đầu</label>
+                              <input type="date" className="w-full border p-2 rounded" required
+                                  value={showAddPromoModal ? formatDateInput(newPromo.start_date) : formatDateInput(selectedPromo?.start_date)}
+                                  onChange={e => showAddPromoModal ? setNewPromo({...newPromo, start_date: e.target.value}) : setSelectedPromo({...selectedPromo!, start_date: e.target.value})}
+                              />
+                          </div>
+                          <div>
+                              <label className="block text-sm font-medium">Kết thúc</label>
+                              <input type="date" className="w-full border p-2 rounded" required
+                                  value={showAddPromoModal ? formatDateInput(newPromo.end_date) : formatDateInput(selectedPromo?.end_date)}
+                                  onChange={e => showAddPromoModal ? setNewPromo({...newPromo, end_date: e.target.value}) : setSelectedPromo({...selectedPromo!, end_date: e.target.value})}
+                              />
+                          </div>
+                      </div>
+                      <div className="grid grid-cols-2 gap-3">
+                          <div>
+                              <label className="block text-sm font-medium">Đơn tối thiểu</label>
+                              <input type="number" className="w-full border p-2 rounded" min="0" required
+                                  value={showAddPromoModal ? newPromo.minimum_pay : selectedPromo?.minimum_pay || ''}
+                                  onChange={e => showAddPromoModal ? setNewPromo({...newPromo, minimum_pay: e.target.value}) : setSelectedPromo({...selectedPromo!, minimum_pay: e.target.value})}
+                              />
+                          </div>
+                          {(showAddPromoModal ? newPromo.discount_type : selectedPromo?.discount_type) === 'PERCENT' && (
+                              <div>
+                                  <label className="block text-sm font-medium">Giảm tối đa</label>
+                                  <input type="number" className="w-full border p-2 rounded" min="0"
+                                      value={showAddPromoModal ? newPromo.max_discount_amount : selectedPromo?.max_discount_amount || ''}
+                                      onChange={e => showAddPromoModal ? setNewPromo({...newPromo, max_discount_amount: e.target.value}) : setSelectedPromo({...selectedPromo!, max_discount_amount: e.target.value})}
+                                  />
+                              </div>
+                          )}
+                      </div>
+                      <div>
+                          <label className="block text-sm font-medium">Trạng thái</label>
+                          <select className="w-full border p-2 rounded"
+                              value={showAddPromoModal ? (newPromo.is_active ? 'true' : 'false') : (selectedPromo?.is_active ? 'true' : 'false')}
+                              onChange={e => {
+                                  const val = e.target.value === 'true';
+                                  showAddPromoModal ? setNewPromo({...newPromo, is_active: val}) : setSelectedPromo({...selectedPromo!, is_active: val});
+                              }}
+                          >
+                              <option value="true">Hoạt động</option>
+                              <option value="false">Tắt</option>
+                          </select>
+                      </div>
+                      <div className="flex justify-end gap-2 mt-4">
+                          <Button type="button" variant="ghost" onClick={closePromoModals}>Hủy</Button>
+                          <Button type="submit" className="bg-blue-600">Lưu</Button>
+                      </div>
+                  </form>
+              </div>
+          </div>
+      )}
+
+      {/* EDIT STORE INFO MODAL */}
+      {showEditStoreModal && editableStoreInfo && (
+          <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+              <div className="bg-white rounded-xl shadow-lg w-full max-w-lg p-6 max-h-[90vh] overflow-y-auto">
+                  <h2 className="text-xl font-bold mb-4">Chỉnh sửa thông tin cửa hàng</h2>
+                  <div className="space-y-4">
+                      <div>
+                          <label className="block text-sm font-medium">Tên cửa hàng</label>
+                          <input className="w-full border p-2 rounded" value={editableStoreInfo.store_name || ''} onChange={e=>handleStoreFieldChange('store_name', e.target.value)} />
+                      </div>
+                      <div>
+                          <label className="block text-sm font-medium">Mô tả</label>
+                          <textarea className="w-full border p-2 rounded" rows={3} value={editableStoreInfo.description || ''} onChange={e=>handleStoreFieldChange('description', e.target.value)} />
+                      </div>
+                      <div>
+                          <label className="block text-sm font-medium">Ảnh cửa hàng</label>
+                          <div className="flex items-center gap-3">
+                              <div className="w-24 h-24 rounded border bg-gray-50 flex items-center justify-center overflow-hidden">
+                                  {storeImagePreview || editableStoreInfo.image ? (
+                                      <img src={storeImagePreview || getImageUrl(editableStoreInfo.image)} className="w-full h-full object-cover" />
+                                  ) : (
+                                      <span className="text-xs text-gray-400 text-center px-2">Chưa có ảnh</span>
+                                  )}
+                              </div>
+                              <div className="flex flex-col gap-2">
+                                  <input ref={storeImageRef} type="file" accept="image/*" className="hidden" onChange={handleStoreImageChange} />
+                                  <Button type="button" variant="outline" onClick={() => storeImageRef.current?.click()} className="w-fit">
+                                      <Upload size={16} className="mr-2"/> Chọn ảnh
+                                  </Button>
+                                  {(storeImagePreview || editableStoreInfo.image) && (
+                                      <Button type="button" variant="ghost" className="w-fit text-red-500" onClick={() => {
+                                          setStoreImageFile(null);
+                                          setStoreImagePreview(null);
+                                          if (storeImageRef.current) storeImageRef.current.value = '';
+                                      }}>
+                                          Xóa ảnh tạm
+                                      </Button>
+                                  )}
+                              </div>
+                          </div>
+                      </div>
+                      <div>
+                          <label className="block text-sm font-medium">Địa chỉ</label>
+                          <input className="w-full border p-2 rounded" value={(editableStoreInfo as any).address || ''} onChange={e=>handleStoreFieldChange('address' as any, e.target.value)} />
+                      </div>
+                      <div className="grid grid-cols-2 gap-3">
+                          <div>
+                              <label className="block text-sm font-medium">Vĩ độ</label>
+                              <input type="number" className="w-full border p-2 rounded" value={(editableStoreInfo as any).latitude ?? ''} onChange={e=>handleStoreFieldChange('latitude' as any, e.target.value)} />
+                          </div>
+                          <div>
+                              <label className="block text-sm font-medium">Kinh độ</label>
+                              <input type="number" className="w-full border p-2 rounded" value={(editableStoreInfo as any).longitude ?? ''} onChange={e=>handleStoreFieldChange('longitude' as any, e.target.value)} />
+                          </div>
+                      </div>
+                      <div className="flex justify-end gap-2 mt-2">
+                          <Button variant="ghost" onClick={() => { setShowEditStoreModal(false); setEditableStoreInfo(storeInfo); setStoreImageFile(null); setStoreImagePreview(null); if (storeImageRef.current) storeImageRef.current.value = ''; }}>Hủy</Button>
+                          <Button className="bg-blue-600" onClick={saveStoreInfo}>Lưu</Button>
+                      </div>
+                  </div>
+              </div>
           </div>
       )}
       
