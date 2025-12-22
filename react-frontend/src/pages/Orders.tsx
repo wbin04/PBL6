@@ -227,10 +227,8 @@ const Orders: React.FC = () => {
       setSelectedOrder(order as BackendOrder);
       setShowDetailModal(true);
     } catch (error) {
-      alert(
-        "Không thể tải chi tiết: " +
-          (error instanceof Error ? error.message : String(error))
-      );
+      const errorMsg = error instanceof Error ? error.message : "Đã xảy ra lỗi";
+      alert("Không thể tải chi tiết: " + errorMsg);
     }
   };
 
@@ -246,10 +244,8 @@ const Orders: React.FC = () => {
       alert("Đã huỷ đơn hàng thành công!");
       loadOrders();
     } catch (error) {
-      alert(
-        "Không thể hủy đơn hàng: " +
-          (error instanceof Error ? error.message : String(error))
-      );
+      const errorMsg = error instanceof Error ? error.message : "Đã xảy ra lỗi";
+      alert("Không thể hủy đơn hàng: " + errorMsg);
     }
   };
 
@@ -308,11 +304,8 @@ const Orders: React.FC = () => {
       }
     } catch (error) {
       console.error("Payment error:", error);
-      alert(
-        `Không thể tạo link thanh toán: ${
-          error instanceof Error ? error.message : error
-        }`
-      );
+      const errorMsg = error instanceof Error ? error.message : "Đã xảy ra lỗi";
+      alert(`Không thể tạo link thanh toán: ${errorMsg}`);
     }
   };
 
@@ -377,10 +370,8 @@ const Orders: React.FC = () => {
       loadOrders();
     } catch (error) {
       console.error("Rating error:", error);
-      alert(
-        "Không thể gửi đánh giá: " +
-          (error instanceof Error ? error.message : String(error))
-      );
+      const errorMsg = error instanceof Error ? error.message : "Đã xảy ra lỗi";
+      alert("Không thể gửi đánh giá: " + errorMsg);
     }
   };
 
@@ -412,10 +403,8 @@ const Orders: React.FC = () => {
       setShowDetailModal(false);
       loadOrders();
     } catch (error) {
-      alert(
-        "Lỗi cập nhật: " +
-          (error instanceof Error ? error.message : String(error))
-      );
+      const errorMsg = error instanceof Error ? error.message : "Đã xảy ra lỗi";
+      alert("Lỗi cập nhật: " + errorMsg);
     }
   };
 

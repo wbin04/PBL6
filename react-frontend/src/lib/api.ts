@@ -1,9 +1,115 @@
-const API_BASE_URL = 'http://localhost:8000/api';
+const API_BASE_URL = "http://localhost:8000/api";
 
 interface ApiRequestOptions extends Omit<RequestInit, "body"> {
   skipAuth?: boolean;
   body?: unknown;
 }
+
+// Utility function để parse error message đẹp hơn
+export const parseErrorMessage = (error: unknown): string => {
+  if (!error) return "Đã xảy ra lỗi. Vui lòng thử lại!";
+
+  // Nếu error là string
+  if (typeof error === "string") {
+    try {
+      const parsed = JSON.parse(error);
+      return parseErrorMessage(parsed);
+    } catch {
+      return error;
+    }
+  }
+
+  // Nếu error có message property
+  if (error instanceof Error) {
+    // Thử parse message nếu nó là JSON
+    try {
+      const parsed = JSON.parse(error.message);
+      return parseErrorMessage(parsed);
+    } catch {
+      return error.message;
+    }
+  }
+
+  // Nếu error là object với các field lỗi từ backend
+  if (typeof error === "object") {
+    const err = error as Record<string, any>;
+
+    // Ưu tiên xử lý các trường thông dụng
+    if (err.detail) {
+      return typeof err.detail === "string"
+        ? err.detail
+        : parseErrorMessage(err.detail);
+    }
+
+    if (err.message) {
+      return typeof err.message === "string"
+        ? err.message
+        : parseErrorMessage(err.message);
+    }
+
+    if (err.error) {
+      return typeof err.error === "string"
+        ? err.error
+        : parseErrorMessage(err.error);
+    }
+
+    if (
+      err.non_field_errors &&
+      Array.isArray(err.non_field_errors) &&
+      err.non_field_errors.length > 0
+    ) {
+      return err.non_field_errors[0];
+    }
+
+    // Xử lý format Django Rest Framework: {"field": ["error message"]}
+    const keys = Object.keys(err);
+    if (keys.length > 0) {
+      const firstKey = keys[0];
+      const firstValue = err[firstKey];
+
+      // Nếu value là array
+      if (Array.isArray(firstValue) && firstValue.length > 0) {
+        const errorMsg = firstValue[0];
+        // Format: "field: message" (trừ một số field đặc biệt)
+        const skipFieldName = ["non_field_errors", "detail", "_error"];
+        if (!skipFieldName.includes(firstKey)) {
+          // Dịch một số field name thông dụng sang tiếng Việt
+          const fieldNames: Record<string, string> = {
+            email: "Email",
+            username: "Tên đăng nhập",
+            password: "Mật khẩu",
+            phone_number: "Số điện thoại",
+            fullname: "Họ tên",
+            address: "Địa chỉ",
+          };
+          const fieldDisplay = fieldNames[firstKey] || firstKey;
+          return `${fieldDisplay}: ${errorMsg}`;
+        }
+        return errorMsg;
+      }
+
+      // Nếu value là string
+      if (typeof firstValue === "string") {
+        const skipFieldName = ["non_field_errors", "detail", "_error"];
+        if (!skipFieldName.includes(firstKey)) {
+          const fieldNames: Record<string, string> = {
+            email: "Email",
+            username: "Tên đăng nhập",
+            password: "Mật khẩu",
+            phone_number: "Số điện thoại",
+            fullname: "Họ tên",
+            address: "Địa chỉ",
+          };
+          const fieldDisplay = fieldNames[firstKey] || firstKey;
+          return `${fieldDisplay}: ${firstValue}`;
+        }
+        return firstValue;
+      }
+    }
+  }
+
+  return "Đã xảy ra lỗi. Vui lòng thử lại!";
+};
 
 class APIClient {
   private baseURL: string;
@@ -46,30 +152,40 @@ class APIClient {
 
     // Gắn Authorization
     if (token && !skipAuth) {
-      (config.headers as Record<string, string>)["Authorization"] = `Bearer ${token}`;
+      (config.headers as Record<string, string>)[
+        "Authorization"
+      ] = `Bearer ${token}`;
     }
+
+    let response: Response;
 
     try {
-      const response = await fetch(url, config);
-
-      // Nếu token hết hạn
-      if (response.status === 401 && !skipAuth) {
-        await this.refreshToken();
-        (config.headers as Record<string, string>)["Authorization"] = `Bearer ${localStorage.getItem(
-          "access_token"
-        )}`;
-        const retryResponse = await fetch(url, config);
-        return await this.handleResponse<T>(retryResponse);
-      }
-
-      return await this.handleResponse<T>(response);
+      response = await fetch(url, config);
     } catch (error) {
-      console.error("API Request failed:", error);
+      // Lỗi network thực sự (server không chạy, không có mạng)
+      console.error("Network error:", error);
       throw new Error(
-        "Network error: " +
-          (error instanceof Error ? error.message : String(error))
+        "Lỗi kết nối: Không thể kết nối đến máy chủ. Vui lòng kiểm tra kết nối mạng!"
       );
     }
+
+    // Nếu token hết hạn
+    if (response.status === 401 && !skipAuth) {
+      try {
+        await this.refreshToken();
+        (config.headers as Record<string, string>)[
+          "Authorization"
+        ] = `Bearer ${localStorage.getItem("access_token")}`;
+        const retryResponse = await fetch(url, config);
+        return await this.handleResponse<T>(retryResponse);
+      } catch (error) {
+        // Nếu refresh token thất bại, throw lỗi từ handleResponse
+        throw error;
+      }
+    }
+
+    // handleResponse sẽ throw lỗi từ backend nếu response.ok = false
+    return await this.handleResponse<T>(response);
   }
 
   private async handleResponse<T>(response: Response): Promise<T> {
@@ -88,14 +204,9 @@ class APIClient {
     }
 
     if (!response.ok) {
-      const errorData = data as {
-        error?: { message: string };
-        message?: string;
-      };
-      const errPayload =
-        errorData.error?.message || errorData.message || JSON.stringify(data);
       console.error("API Error response data:", data);
-      throw new Error(errPayload);
+      const errorMessage = parseErrorMessage(data);
+      throw new Error(errorMessage);
     }
 
     return data as T;
@@ -109,11 +220,14 @@ class APIClient {
     }
 
     try {
-      const response = await this.request<{ access: string }>("/auth/refresh/", {
-        method: "POST",
-        body: { refresh: refreshToken },
-        skipAuth: true,
-      });
+      const response = await this.request<{ access: string }>(
+        "/auth/refresh/",
+        {
+          method: "POST",
+          body: { refresh: refreshToken },
+          skipAuth: true,
+        }
+      );
 
       localStorage.setItem("access_token", response.access);
     } catch (error) {

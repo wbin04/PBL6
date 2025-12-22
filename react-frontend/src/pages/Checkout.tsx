@@ -90,7 +90,9 @@ const Checkout: React.FC = () => {
         let finalItems = response.items;
 
         if (selectedIds.length > 0) {
-          finalItems = response.items.filter((item) => selectedIds.includes(item.id));
+          finalItems = response.items.filter((item) =>
+            selectedIds.includes(item.id)
+          );
 
           // Recalculate summary fields based on selection
           const recalculatedTotal = finalItems.reduce((sum, item) => {
@@ -357,7 +359,10 @@ const Checkout: React.FC = () => {
       };
 
       // Only send selected_item_ids when checkout was initiated with a subset of cart items
-      if (selectionState.selectedItemIds && selectionState.selectedItemIds.length > 0) {
+      if (
+        selectionState.selectedItemIds &&
+        selectionState.selectedItemIds.length > 0
+      ) {
         orderData.selected_item_ids = selectionState.selectedItemIds;
       }
 
@@ -432,12 +437,12 @@ const Checkout: React.FC = () => {
           }
         } catch (paymentError) {
           console.error("Payment error:", paymentError);
+          const errorMsg =
+            paymentError instanceof Error
+              ? paymentError.message
+              : "Đã xảy ra lỗi";
           alert(
-            `Đặt hàng thành công nhưng lỗi thanh toán: ${
-              paymentError instanceof Error
-                ? paymentError.message
-                : paymentError
-            }. Bạn có thể thanh toán sau.`
+            `Đặt hàng thành công nhưng lỗi thanh toán: ${errorMsg}. Bạn có thể thanh toán sau.`
           );
           navigate("/orders");
           return;

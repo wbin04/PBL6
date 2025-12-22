@@ -27,6 +27,7 @@ function App() {
         <Route path="/admin" element={<Admin />} />
         <Route path="/store-manager" element={<StoreManager />} />
         <Route path="/storemanager" element={<StoreManager />} />
+        <Route path="/store/:id" element={<StoreManager />} />
         <Route
           path="/store-manager/register"
           element={<StoreManagerRegister />}

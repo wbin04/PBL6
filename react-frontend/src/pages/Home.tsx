@@ -624,7 +624,7 @@ const Home: React.FC = () => {
                 className="p-6 hover:shadow-2xl transition-all duration-300 bg-gradient-to-r from-white to-orange-50">
                 <div className="flex gap-6">
                   {/* Thông tin cửa hàng và món ăn bên trái */}
-                  <div className="flex-1 flex flex-col justify-between h-48">
+                  <div className="flex-1 flex flex-col gap-4">
                     {/* Thông tin cửa hàng */}
                     <div>
                       <h3
@@ -642,7 +642,7 @@ const Home: React.FC = () => {
                     </div>
 
                     {/* Danh sách món ăn */}
-                    <div className="flex gap-3 flex-wrap">
+                    <div className="flex gap-3 flex-wrap items-start">
                       {store.products.length === 0 ? (
                         <p className="text-gray-500 italic text-sm">
                           Không có món ăn
@@ -678,13 +678,13 @@ const Home: React.FC = () => {
                   </div>
 
                   {/* Logo cửa hàng bên phải */}
-                  <div className="flex-shrink-0 w-48">
+                  <div className="flex-shrink-0 w-48 self-start">
                     <img
                       src={
                         getImageUrl(store.image) || "/images/placeholder.jpg"
                       }
                       alt={store.store_name}
-                      className="w-full h-48 object-contain rounded-2xl shadow-xl border-4 border-white bg-white p-3 cursor-pointer hover:scale-105 transition-transform"
+                      className="w-48 h-48 object-contain rounded-2xl shadow-xl border-4 border-white bg-white p-3 cursor-pointer hover:scale-105 transition-transform"
                       onClick={() => viewStore(store.id)}
                       onError={(e) => {
                         e.currentTarget.src = "/images/placeholder.jpg";
