@@ -7,7 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 const Login: React.FC = () => {
   const [formData, setFormData] = useState({
     email: "",
-    password: "",
+    password: "123456",
   });
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
