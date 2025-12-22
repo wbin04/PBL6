@@ -36,6 +36,7 @@ export interface ApiResponse<T = any> {
     role: string;
     role_id: number;
     created_date: string;
+    is_active?: boolean;
   }
   
   export interface AdminOrder {
@@ -61,6 +62,7 @@ export interface ApiResponse<T = any> {
     image: string;
     description: string;
     manager: number;
+    is_active?: boolean;
   }
   
   export interface User {

@@ -147,8 +147,6 @@ const PaginationControl = ({
 };
 
 // --- HELPER FUNCTION: FORMAT DATE FIX TIMEZONE VN ---
-// Sử dụng 'en-CA' để lấy định dạng YYYY-MM-DD
-// Ép buộc múi giờ 'Asia/Ho_Chi_Minh' để đảm bảo 00:00 UTC (07:00 VN) hoặc 17:00 UTC hôm trước (00:00 VN) đều ra đúng ngày VN.
 const formatDateForInput = (isoString: string) => {
     if (!isoString) return '';
     try {
@@ -174,7 +172,8 @@ const Admin: React.FC = () => {
   // Customers
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [totalPages, setTotalPages] = useState(1);
-  const [currentPage, setCurrentPage] = useState(1);
+  // [MODIFIED] Khởi tạo page từ localStorage
+  const [currentPage, setCurrentPage] = useState(() => Number(localStorage.getItem('admin_customer_page')) || 1);
   const [totalCustomers, setTotalCustomers] = useState(0);
   const [search, setSearch] = useState('');
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
@@ -189,7 +188,8 @@ const Admin: React.FC = () => {
   const [storeViewMode, setStoreViewMode] = useState<'list' | 'applications'>('list');
   const [applications, setApplications] = useState<StoreApplication[]>([]);
   const [applicationsLoading, setApplicationsLoading] = useState(false);
-  const [applicationsPage, setApplicationsPage] = useState(1);
+  // [MODIFIED] Khởi tạo page từ localStorage
+  const [applicationsPage, setApplicationsPage] = useState(() => Number(localStorage.getItem('admin_store_app_page')) || 1);
   const [totalApplicationsPages, setTotalApplicationsPages] = useState(1);
   const [totalApplications, setTotalApplications] = useState(0);
   const [applicationsSearch, setApplicationsSearch] = useState('');
@@ -197,7 +197,8 @@ const Admin: React.FC = () => {
   // Shippers
   const [shipperApps, setShipperApps] = useState<ShipperApplication[]>([]);
   const [shipperLoading, setShipperLoading] = useState(false);
-  const [shipperPage, setShipperPage] = useState(1);
+  // [MODIFIED] Khởi tạo page từ localStorage
+  const [shipperPage, setShipperPage] = useState(() => Number(localStorage.getItem('admin_shipper_page')) || 1);
   const [totalShipperPages, setTotalShipperPages] = useState(1);
   const [totalShipperApps, setTotalShipperApps] = useState(0);
 
@@ -209,7 +210,8 @@ const Admin: React.FC = () => {
   const [categoryFilter, setCategoryFilter] = useState('');
   const [storeFilter, setStoreFilter] = useState('');
   const [categories, setCategories] = useState<Category[]>([]);
-  const [foodPage, setFoodPage] = useState(1);
+  // [MODIFIED] Khởi tạo page từ localStorage
+  const [foodPage, setFoodPage] = useState(() => Number(localStorage.getItem('admin_food_page')) || 1);
   const [totalFoodPages, setTotalFoodPages] = useState(1);
   const [totalFoods, setTotalFoods] = useState(0);
   const [selectedFood, setSelectedFood] = useState<Food | null>(null);
@@ -228,7 +230,8 @@ const Admin: React.FC = () => {
   const [showOrderModal, setShowOrderModal] = useState(false);
   const [orderSearch, setOrderSearch] = useState('');
   const [orderStatus, setOrderStatus] = useState('');
-  const [orderPage, setOrderPage] = useState(1);
+  // [MODIFIED] Khởi tạo page từ localStorage
+  const [orderPage, setOrderPage] = useState(() => Number(localStorage.getItem('admin_order_page')) || 1);
   const [totalOrderPages, setTotalOrderPages] = useState(1);
   const [totalOrders, setTotalOrders] = useState(0);
 
@@ -277,11 +280,15 @@ const Admin: React.FC = () => {
     try { localStorage.setItem('admin_active_section', activeSection); } catch { }
     switch (activeSection) {
       case 'dashboard': loadDashboard(); break;
-      case 'customers': loadCustomers(1, ''); break;
-      case 'shippers': loadShipperApplications(1); break;
-      case 'foods': loadCategories(); loadFoods(1); if (stores.length === 0) loadStores(); break;
-      case 'orders': loadOrders(1); break;
-      case 'stores': setStoreViewMode('list'); loadStores(); break;
+      // [MODIFIED] Sử dụng biến state page hiện tại thay vì hardcode 1
+      case 'customers': loadCustomers(currentPage, search); break;
+      case 'shippers': loadShipperApplications(shipperPage); break;
+      case 'foods': loadCategories(); loadFoods(foodPage); if (stores.length === 0) loadStores(); break;
+      case 'orders': loadOrders(orderPage); break;
+      case 'stores': 
+          if(storeViewMode === 'applications') loadStoreApplications(applicationsPage);
+          else loadStores(); 
+          break;
       case 'promotions': loadPromotions(); break;
       case 'revenueReport': if (stores.length === 0) loadStores(); break;
       case 'popularFoodsReport': break;
@@ -315,23 +322,67 @@ const Admin: React.FC = () => {
   const deleteStore = async (id: number) => { if(!confirm('Xóa?')) return; try { await API.delete(`/stores/${id}/`); loadStores(); } catch(e){} };
   
   // Applications
-  const loadStoreApplications = async (page=1, s='') => { setApplicationsLoading(true); try { const res = await API.get(`/auth/store/applications/?page=${page}&search=${s}`); setApplications(res.applications||[]); setTotalApplicationsPages(res.total_pages||1); setApplicationsPage(page); setTotalApplications(res.total_applications||0); } catch(e){} finally { setApplicationsLoading(false); } };
+  const loadStoreApplications = async (page=applicationsPage, s=applicationsSearch) => { 
+      setApplicationsLoading(true); 
+      // [MODIFIED] Lưu page vào localStorage
+      localStorage.setItem('admin_store_app_page', String(page));
+      try { 
+          const res = await API.get(`/auth/store/applications/?page=${page}&search=${s}`); 
+          setApplications(res.applications||[]); 
+          setTotalApplicationsPages(res.total_pages||1); 
+          setApplicationsPage(page); 
+          setTotalApplications(res.total_applications||0); 
+      } catch(e){} finally { setApplicationsLoading(false); } 
+  };
   const handleApproveApplication = async (id:number) => { if(!confirm('Duyệt?')) return; await API.post(`/auth/store/applications/${id}/approve/`); loadStoreApplications(applicationsPage, applicationsSearch); };
   const handleRejectApplication = async (id:number) => { if(!confirm('Từ chối?')) return; await API.post(`/auth/store/applications/${id}/reject/`); loadStoreApplications(applicationsPage, applicationsSearch); };
 
   // Shippers
-  const loadShipperApplications = async (page=1) => { setShipperLoading(true); try { const res = await API.get(`/auth/shipper/applications/?page=${page}`); setShipperApps(res.applications||[]); setTotalShipperPages(res.total_pages||1); setShipperPage(page); setTotalShipperApps(res.total_applications||0); } catch(e){} finally { setShipperLoading(false); } };
+  const loadShipperApplications = async (page=shipperPage) => { 
+      setShipperLoading(true); 
+      // [MODIFIED] Lưu page vào localStorage
+      localStorage.setItem('admin_shipper_page', String(page));
+      try { 
+          const res = await API.get(`/auth/shipper/applications/?page=${page}`); 
+          setShipperApps(res.applications||[]); 
+          setTotalShipperPages(res.total_pages||1); 
+          setShipperPage(page); 
+          setTotalShipperApps(res.total_applications||0); 
+      } catch(e){} finally { setShipperLoading(false); } 
+  };
   const handleApproveShipper = async (id:number) => { if(!confirm('Duyệt?')) return; await API.post(`/auth/shipper/applications/${id}/approve/`); loadShipperApplications(shipperPage); };
   const handleRejectShipper = async (id:number) => { if(!confirm('Từ chối?')) return; await API.post(`/auth/shipper/applications/${id}/reject/`); loadShipperApplications(shipperPage); };
 
   // Customers
-  const loadCustomers = async (page=1, s='') => { setLoading(true); try { const res = await API.get(`/auth/admin/customers/?page=${page}&search=${s}`); setCustomers(res.customers||[]); setTotalPages(res.total_pages||1); setCurrentPage(page); setTotalCustomers(res.total_customers||0); } catch(e){} finally { setLoading(false); } };
+  const loadCustomers = async (page=currentPage, s=search) => { 
+      setLoading(true); 
+      // [MODIFIED] Lưu page vào localStorage
+      localStorage.setItem('admin_customer_page', String(page));
+      try { 
+          const res = await API.get(`/auth/admin/customers/?page=${page}&search=${s}`); 
+          setCustomers(res.customers||[]); 
+          setTotalPages(res.total_pages||1); 
+          setCurrentPage(page); 
+          setTotalCustomers(res.total_customers||0); 
+      } catch(e){} finally { setLoading(false); } 
+  };
   const viewCustomerDetail = async (id:number) => { const res = await API.get(`/auth/admin/customers/${id}/`); setSelectedCustomer(res); setShowCustomerModal(true); };
   const updateCustomer = async () => { if(!selectedCustomer) return; await API.put(`/auth/admin/customers/${selectedCustomer.id}/`, selectedCustomer); alert('Xong'); setShowCustomerModal(false); loadCustomers(currentPage, search); };
 
   // Foods
   const loadCategories = async () => { const res = await API.get('/menu/categories/'); setCategories(res.results||[]); };
-  const loadFoods = async (page=1) => { setLoading(true); try { const res = await API.get(`/menu/admin/foods/?page=${page}&search=${foodSearch}&category=${categoryFilter}&store=${storeFilter}`); setFoods(res.foods||[]); setFoodPage(page); setTotalFoodPages(res.total_pages||1); setTotalFoods(res.total_foods||0); } catch(e){} finally { setLoading(false); } };
+  const loadFoods = async (page=foodPage) => { 
+      setLoading(true); 
+      // [MODIFIED] Lưu page vào localStorage
+      localStorage.setItem('admin_food_page', String(page));
+      try { 
+          const res = await API.get(`/menu/admin/foods/?page=${page}&search=${foodSearch}&category=${categoryFilter}&store=${storeFilter}`); 
+          setFoods(res.foods||[]); 
+          setFoodPage(page); 
+          setTotalFoodPages(res.total_pages||1); 
+          setTotalFoods(res.total_foods||0); 
+      } catch(e){} finally { setLoading(false); } 
+  };
   const handleAddFood = async () => { await API.post('/menu/admin/foods/', newFood); alert('Xong'); setShowAddFoodModal(false); loadFoods(); };
   const viewFoodDetail = async (id:number) => { const res = await API.get(`/menu/admin/foods/${id}/`); setSelectedFood(res); const ratings = await API.get(`/ratings/?food=${id}`); setFoodRatings(ratings||[]); setShowEditFoodModal(true); };
   const updateFood = async () => { if(!selectedFood) return; await API.put(`/menu/admin/foods/${selectedFood.id}/`, selectedFood); alert('Xong'); setShowEditFoodModal(false); loadFoods(foodPage); };
@@ -344,7 +395,18 @@ const Admin: React.FC = () => {
   const deleteSize = async (id:number) => { if(!confirm('Xóa?')) return; await API.delete(`/menu/admin/foods/${selectedFood?.id}/sizes/${id}/`); openManageSizesModal(selectedFood!); };
 
   // Orders
-  const loadOrders = async (page=1) => { setLoading(true); try { const res = await API.get(`/orders/admin/?page=${page}&search=${orderSearch}&status=${orderStatus}`); setOrders(res.orders||[]); setOrderPage(page); setTotalOrderPages(res.total_pages||1); setTotalOrders(res.total_orders||0); } catch(e){} finally { setLoading(false); } };
+  const loadOrders = async (page=orderPage) => { 
+      setLoading(true); 
+      // [MODIFIED] Lưu page vào localStorage
+      localStorage.setItem('admin_order_page', String(page));
+      try { 
+          const res = await API.get(`/orders/admin/?page=${page}&search=${orderSearch}&status=${orderStatus}`); 
+          setOrders(res.orders||[]); 
+          setOrderPage(page); 
+          setTotalOrderPages(res.total_pages||1); 
+          setTotalOrders(res.total_orders||0); 
+      } catch(e){} finally { setLoading(false); } 
+  };
   const viewOrderDetail = async (id:number) => { const res = await API.get(`/orders/admin/${id}/`); setSelectedOrder(res); setShowOrderModal(true); };
   const updateOrderStatus = async (id:number, st:string) => { await API.patch(`/orders/admin/${id}/status/`, {order_status: st}); alert('Xong'); setShowOrderModal(false); loadOrders(orderPage); };
 
