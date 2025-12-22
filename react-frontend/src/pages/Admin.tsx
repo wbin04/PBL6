@@ -8,7 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { cn } from "@/lib/utils";
 import { 
   LayoutDashboard, 
-  Store as StoreIcon, // Alias tránh trùng tên type Store
+  Store as StoreIcon, 
   Users, 
   Utensils, 
   ShoppingBag, 
@@ -105,7 +105,6 @@ interface FoodSize {
 }
 
 // --- HELPER COMPONENT: PAGINATION ---
-// Cho phép nhập số trang để nhảy nhanh
 const PaginationControl = ({ 
     page, 
     totalPages, 
@@ -117,7 +116,6 @@ const PaginationControl = ({
 }) => {
     const [inputPage, setInputPage] = useState(page.toString());
 
-    // Sync local input state when prop page changes
     useEffect(() => {
         setInputPage(page.toString());
     }, [page]);
@@ -138,45 +136,28 @@ const PaginationControl = ({
     return (
         <div className="flex justify-end items-center gap-2 mt-4 text-sm">
             <span className="text-gray-500 mr-2">Trang {page} / {totalPages}</span>
-            
-            <Button 
-                variant="outline" 
-                size="sm" 
-                className="h-8 w-8 p-0"
-                disabled={page <= 1} 
-                onClick={() => onPageChange(page - 1)}
-            >
-                <ChevronLeft size={16} />
-            </Button>
-            
+            <Button variant="outline" size="sm" className="h-8 w-8 p-0" disabled={page <= 1} onClick={() => onPageChange(page - 1)}><ChevronLeft size={16} /></Button>
             <div className="flex items-center gap-1 border rounded bg-white px-1 h-8">
-                <input 
-                    className="w-10 h-full text-center outline-none bg-transparent text-sm"
-                    value={inputPage}
-                    onChange={(e) => setInputPage(e.target.value)}
-                    onKeyDown={handleKeyDown}
-                />
-                <button 
-                    onClick={handleGo}
-                    className="text-xs font-bold text-blue-600 hover:text-blue-800 px-1 uppercase"
-                >
-                    Go
-                </button>
+                <input className="w-10 h-full text-center outline-none bg-transparent text-sm" value={inputPage} onChange={(e) => setInputPage(e.target.value)} onKeyDown={handleKeyDown} />
+                <button onClick={handleGo} className="text-xs font-bold text-blue-600 hover:text-blue-800 px-1 uppercase">Go</button>
             </div>
-
-            <Button 
-                variant="outline" 
-                size="sm" 
-                className="h-8 w-8 p-0"
-                disabled={page >= totalPages} 
-                onClick={() => onPageChange(page + 1)}
-            >
-                <ChevronRight size={16} />
-            </Button>
+            <Button variant="outline" size="sm" className="h-8 w-8 p-0" disabled={page >= totalPages} onClick={() => onPageChange(page + 1)}><ChevronRight size={16} /></Button>
         </div>
     );
 };
 
+// --- HELPER FUNCTION: FORMAT DATE FIX TIMEZONE VN ---
+// Sử dụng 'en-CA' để lấy định dạng YYYY-MM-DD
+// Ép buộc múi giờ 'Asia/Ho_Chi_Minh' để đảm bảo 00:00 UTC (07:00 VN) hoặc 17:00 UTC hôm trước (00:00 VN) đều ra đúng ngày VN.
+const formatDateForInput = (isoString: string) => {
+    if (!isoString) return '';
+    try {
+        const date = new Date(isoString);
+        return date.toLocaleDateString('en-CA', { timeZone: 'Asia/Ho_Chi_Minh' });
+    } catch (e) {
+        return '';
+    }
+};
 
 // --- MAIN COMPONENT ---
 
@@ -264,7 +245,25 @@ const Admin: React.FC = () => {
   const [promoLoading, setPromoLoading] = useState(false);
   const [showAddPromoModal, setShowAddPromoModal] = useState(false);
   const [showEditPromoModal, setShowEditPromoModal] = useState(false);
-  const [newPromo, setNewPromo] = useState({ name: '', discount_type: 'PERCENT' as const, discount_value: '', start_date: '', end_date: '', minimum_pay: '', max_discount_amount: '', is_active: true, });
+  const [newPromo, setNewPromo] = useState<{
+      name: string;
+      discount_type: "PERCENT" | "AMOUNT";
+      discount_value: string;
+      start_date: string;
+      end_date: string;
+      minimum_pay: string | null;
+      max_discount_amount: string | null;
+      is_active: boolean;
+  }>({ 
+      name: '', 
+      discount_type: 'PERCENT', 
+      discount_value: '', 
+      start_date: '', 
+      end_date: '', 
+      minimum_pay: '', 
+      max_discount_amount: '', 
+      is_active: true, 
+  });
   const [selectedPromo, setSelectedPromo] = useState<AdminPromotion | null>(null);
 
   // --- EFFECTS ---
@@ -351,9 +350,60 @@ const Admin: React.FC = () => {
 
   // Promotions
   const loadPromotions = async () => { setPromoLoading(true); try { const res = await API.get('/promotions/admin/'); setPromotions(res||[]); } catch(e){} finally { setPromoLoading(false); } };
-  const handleAddPromo = async (e:any) => { e.preventDefault(); await API.post('/promotions/admin/create/', newPromo); alert('Xong'); setShowAddPromoModal(false); loadPromotions(); };
-  const openEditPromoModal = (p:AdminPromotion) => { setSelectedPromo({...p, start_date: p.start_date.substring(0,10), end_date: p.end_date.substring(0,10)}); setShowEditPromoModal(true); };
-  const handleUpdatePromo = async (e:any) => { e.preventDefault(); if(!selectedPromo) return; await API.put(`/promotions/admin/${selectedPromo.id}/update/`, selectedPromo); alert('Xong'); setShowEditPromoModal(false); loadPromotions(); };
+  
+  const handleAddPromo = async (e:any) => { 
+      e.preventDefault(); 
+      
+      const payload = {
+          ...newPromo,
+          minimum_pay: (newPromo.minimum_pay === '' || newPromo.minimum_pay === null) ? null : newPromo.minimum_pay,
+          max_discount_amount: (newPromo.max_discount_amount === '' || newPromo.max_discount_amount === null) ? null : newPromo.max_discount_amount
+      };
+
+      try {
+        await API.post('/promotions/admin/create/', payload); 
+        alert('Tạo khuyến mãi thành công'); 
+        setShowAddPromoModal(false); 
+        loadPromotions();
+      } catch(e: any) {
+        console.error(e);
+        alert('Lỗi: ' + (JSON.stringify(e.response?.data) || 'Không thể tạo'));
+      }
+  };
+
+  const openEditPromoModal = (p:AdminPromotion) => { 
+      // SỬA LỖI NGÀY Ở ĐÂY: Dùng hàm formatDateForInput đã fix timezone
+      setSelectedPromo({
+          ...p, 
+          start_date: formatDateForInput(p.start_date), 
+          end_date: formatDateForInput(p.end_date),
+          minimum_pay: p.minimum_pay || '',
+          max_discount_amount: p.max_discount_amount || ''
+      }); 
+      setShowEditPromoModal(true); 
+  };
+
+  const handleUpdatePromo = async (e:any) => { 
+      e.preventDefault(); 
+      if(!selectedPromo) return; 
+
+      const payload = {
+          ...selectedPromo,
+          minimum_pay: (selectedPromo.minimum_pay === '' || selectedPromo.minimum_pay === null) ? null : selectedPromo.minimum_pay,
+          max_discount_amount: (selectedPromo.max_discount_amount === '' || selectedPromo.max_discount_amount === null) ? null : selectedPromo.max_discount_amount
+      };
+
+      try {
+        await API.put(`/promotions/admin/${selectedPromo.id}/update/`, payload); 
+        alert('Cập nhật thành công'); 
+        setShowEditPromoModal(false); 
+        loadPromotions(); 
+      } catch (e) {
+         console.error(e);
+         alert('Lỗi cập nhật');
+      }
+  };
+  
   const deletePromo = async (id:number) => { if(!confirm('Xóa?')) return; await API.delete(`/promotions/admin/${id}/delete/`); loadPromotions(); };
 
   // Reports
@@ -909,8 +959,39 @@ const Admin: React.FC = () => {
                        <div><label className="text-xs text-gray-500">Tên KM</label><input required className="w-full border p-2 rounded" value={showAddPromoModal?newPromo.name:selectedPromo!.name} onChange={e=>{const v=e.target.value; showAddPromoModal?setNewPromo({...newPromo,name:v}):setSelectedPromo({...selectedPromo!,name:v})}}/></div>
                        <div className="grid grid-cols-2 gap-4">
                            <div><label className="text-xs text-gray-500">Loại</label><select className="w-full border p-2 rounded" value={showAddPromoModal?newPromo.discount_type:selectedPromo!.discount_type} onChange={e=>{const v=e.target.value as any; showAddPromoModal?setNewPromo({...newPromo,discount_type:v}):setSelectedPromo({...selectedPromo!,discount_type:v})}}><option value="PERCENT">%</option><option value="AMOUNT">VND</option></select></div>
-                           <div><label className="text-xs text-gray-500">Giá trị</label><input required type="number" className="w-full border p-2 rounded" value={showAddPromoModal?newPromo.discount_value:selectedPromo!.discount_value} onChange={e=>{const v=e.target.value; showAddPromoModal?setNewPromo({...newPromo,discount_value:v}):setSelectedPromo({...selectedPromo!,discount_value:v})}}/></div>
+                           <div><label className="text-xs text-gray-500">Giá trị giảm</label><input required type="number" className="w-full border p-2 rounded" value={showAddPromoModal?newPromo.discount_value:selectedPromo!.discount_value} onChange={e=>{const v=e.target.value; showAddPromoModal?setNewPromo({...newPromo,discount_value:v}):setSelectedPromo({...selectedPromo!,discount_value:v})}}/></div>
                        </div>
+                       
+                       {/* Đơn tối thiểu & Giảm tối đa */}
+                       <div className="grid grid-cols-2 gap-4">
+                           <div>
+                               <label className="text-xs text-gray-500">Đơn tối thiểu</label>
+                               <input 
+                                   type="number" 
+                                   className="w-full border p-2 rounded" 
+                                   placeholder="0 hoặc bỏ trống"
+                                   value={(showAddPromoModal ? newPromo.minimum_pay : selectedPromo!.minimum_pay) || ''} 
+                                   onChange={e=>{
+                                       const v=e.target.value; 
+                                       showAddPromoModal ? setNewPromo({...newPromo, minimum_pay:v}) : setSelectedPromo({...selectedPromo!, minimum_pay:v})
+                                   }}
+                               />
+                           </div>
+                           <div>
+                               <label className="text-xs text-gray-500">Giảm tối đa</label>
+                               <input 
+                                   type="number" 
+                                   className="w-full border p-2 rounded" 
+                                   placeholder="0 hoặc bỏ trống"
+                                   value={(showAddPromoModal ? newPromo.max_discount_amount : selectedPromo!.max_discount_amount) || ''} 
+                                   onChange={e=>{
+                                       const v=e.target.value; 
+                                       showAddPromoModal ? setNewPromo({...newPromo, max_discount_amount:v}) : setSelectedPromo({...selectedPromo!, max_discount_amount:v})
+                                   }}
+                               />
+                           </div>
+                       </div>
+
                        <div className="grid grid-cols-2 gap-4">
                            <div><label className="text-xs text-gray-500">Bắt đầu</label><input required type="date" className="w-full border p-2 rounded" value={showAddPromoModal?newPromo.start_date:selectedPromo!.start_date} onChange={e=>{const v=e.target.value; showAddPromoModal?setNewPromo({...newPromo,start_date:v}):setSelectedPromo({...selectedPromo!,start_date:v})}}/></div>
                            <div><label className="text-xs text-gray-500">Kết thúc</label><input required type="date" className="w-full border p-2 rounded" value={showAddPromoModal?newPromo.end_date:selectedPromo!.end_date} onChange={e=>{const v=e.target.value; showAddPromoModal?setNewPromo({...newPromo,end_date:v}):setSelectedPromo({...selectedPromo!,end_date:v})}}/></div>

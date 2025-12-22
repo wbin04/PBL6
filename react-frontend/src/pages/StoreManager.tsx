@@ -76,15 +76,28 @@ interface StorePromotion {
   minimum_pay: string | null;
   max_discount_amount: string | null;
   is_active: boolean;
+  scope?: string; // Thêm scope để khớp API
+  store_id?: number;
 }
 
-// Interface cho Rating (Mới thêm)
+// Interface cho Rating
 interface FoodRating {
   username: string;
   rating: number;
   content: string;
   created_date?: string;
 }
+
+// --- HELPER: FORMAT DATE FOR INPUT (Giống Admin.tsx) ---
+const formatDateForInput = (isoString: string) => {
+    if (!isoString) return '';
+    try {
+        const date = new Date(isoString);
+        return date.toLocaleDateString('en-CA', { timeZone: 'Asia/Ho_Chi_Minh' });
+    } catch (e) {
+        return '';
+    }
+};
 
 // --- MAIN COMPONENT ---
 
@@ -103,8 +116,6 @@ const StoreManager: React.FC = () => {
   const [orders, setOrders] = useState<StoreOrder[]>([]);
   const [selectedOrder, setSelectedOrder] = useState<StoreOrder | null>(null);
   const [showOrderModal, setShowOrderModal] = useState(false);
-  
-  // State lọc trạng thái đơn hàng
   const [filterStatus, setFilterStatus] = useState<string>('Tất cả');
 
   // --- FOOD STATE ---
@@ -121,10 +132,8 @@ const StoreManager: React.FC = () => {
   const [newFood, setNewFood] = useState({ title: '', description: '', price: '', category_id: '', availability: 'Còn hàng' });
   const [newFoodImage, setNewFoodImage] = useState<File | null>(null);
   const [editFoodImage, setEditFoodImage] = useState<File | null>(null);
-  const addImageRef = useRef<HTMLInputElement>(null);
-  const editImageRef = useRef<HTMLInputElement>(null);
-
-  // --- FOOD RATING STATE (Mới thêm) ---
+  
+  // --- FOOD RATING STATE ---
   const [foodRatings, setFoodRatings] = useState<FoodRating[]>([]);
   const [ratingsLoading, setRatingsLoading] = useState(false);
 
@@ -140,7 +149,14 @@ const StoreManager: React.FC = () => {
   const [showEditPromoModal, setShowEditPromoModal] = useState(false);
   const [selectedPromo, setSelectedPromo] = useState<StorePromotion | null>(null);
   const [newPromo, setNewPromo] = useState({
-    name: '', discount_type: 'PERCENT' as const, discount_value: '', start_date: '', end_date: '', minimum_pay: '', max_discount_amount: '', is_active: true,
+    name: '', 
+    discount_type: 'PERCENT' as const, 
+    discount_value: '', 
+    start_date: '', 
+    end_date: '', 
+    minimum_pay: '', 
+    max_discount_amount: '', 
+    is_active: true,
   });
 
   // --- STORE INFO EDIT STATE ---
@@ -177,7 +193,6 @@ const StoreManager: React.FC = () => {
   }, [activeSection, storeInfo]);
 
   // --- API CALLS ---
-
   const loadMyStore = async () => {
     try {
       setLoading(true);
@@ -193,57 +208,31 @@ const StoreManager: React.FC = () => {
 
   const loadDashboardStats = async () => {
     if (!storeInfo?.id) return;
-    try {
-      const res = await API.get(`/stores/${storeInfo.id}/stats/`);
-      setStats(res);
-    } catch (e) { console.error(e); }
+    try { const res = await API.get(`/stores/${storeInfo.id}/stats/`); setStats(res); } catch (e) { console.error(e); }
   };
 
-  // --- API ORDER ---
   const loadOrders = async () => {
     if (!storeInfo?.id) return;
     try {
       setLoading(true);
-      // Gọi API lấy tất cả đơn hàng (hoặc phân trang tùy backend, ở đây giả sử lấy list về)
       const res = await API.get(`/stores/${storeInfo.id}/orders/`);
-      // API có thể trả về array trực tiếp hoặc object { results: [] }
       const orderList = Array.isArray(res) ? res : (res.results || []);
       setOrders(orderList);
-    } catch (error) {
-      console.error('Lỗi tải đơn hàng:', error);
-    } finally {
-      setLoading(false);
-    }
+    } catch (error) { console.error('Lỗi tải đơn hàng:', error); } finally { setLoading(false); }
   };
 
-  // --- FILTERING LOGIC (Trọng tâm yêu cầu) ---
+  // --- FILTERING LOGIC ---
   const filteredOrders = useMemo(() => {
-    if (filterStatus === 'Tất cả') {
-      return orders;
-    }
+    if (filterStatus === 'Tất cả') return orders;
     return orders.filter(order => order.order_status === filterStatus);
   }, [orders, filterStatus]);
 
-  // Danh sách các trạng thái để hiển thị Tabs
-  const ORDER_STATUSES = [
-    'Tất cả',
-    'Chờ xác nhận',
-    'Đã xác nhận',
-    'Đang chuẩn bị',
-    'Sẵn sàng',
-    'Đang giao',
-    'Đã giao',
-    'Đã huỷ'
-  ];
-
-  // Hàm đếm số lượng đơn theo trạng thái (Optional UI enhancement)
+  const ORDER_STATUSES = ['Tất cả', 'Chờ xác nhận', 'Đã xác nhận', 'Đang chuẩn bị', 'Sẵn sàng', 'Đang giao', 'Đã giao', 'Đã huỷ'];
   const getStatusCount = (status: string) => {
     if (status === 'Tất cả') return orders.length;
     return orders.filter(o => o.order_status === status).length;
   };
 
-
-  // --- API FOODS ---
   const loadFoods = async (page = 1) => {
     try {
       setLoading(true);
@@ -256,13 +245,10 @@ const StoreManager: React.FC = () => {
   };
 
   const loadCategories = async () => {
-    try {
-      const res = await API.get('/menu/categories/');
-      setCategories(res.results || []);
-    } catch (e) { console.error(e); }
+    try { const res = await API.get('/menu/categories/'); setCategories(res.results || []); } catch (e) { console.error(e); }
   };
 
-  // --- CRUD FOOD HANDLERS (Giữ nguyên logic cũ nhưng rút gọn) ---
+  // --- CRUD FOOD HANDLERS ---
   const handleAddFood = async (e: React.FormEvent) => {
     e.preventDefault();
     const formData = new FormData();
@@ -272,10 +258,7 @@ const StoreManager: React.FC = () => {
     formData.append('category_id', newFood.category_id);
     formData.append('availability', newFood.availability);
     if (newFoodImage) formData.append('image_file', newFoodImage);
-    try {
-        await API.post('/menu/admin/foods/', formData, { headers: { 'Content-Type': 'multipart/form-data' } });
-        alert('Thêm thành công!'); setShowAddFoodModal(false); loadFoods();
-    } catch (e) { alert(`Lỗi: ${e}`); }
+    try { await API.post('/menu/admin/foods/', formData, { headers: { 'Content-Type': 'multipart/form-data' } }); alert('Thêm thành công!'); setShowAddFoodModal(false); loadFoods(); } catch (e) { alert(`Lỗi: ${e}`); }
   };
 
   const updateFood = async (e: React.FormEvent) => {
@@ -288,53 +271,21 @@ const StoreManager: React.FC = () => {
     formData.append('category_id', String(selectedFood.category?.id || ''));
     formData.append('availability', selectedFood.availability);
     if (editFoodImage) formData.append('image_file', editFoodImage);
-    try {
-        await API.put(`/menu/store/foods/${selectedFood.id}/`, formData);
-        alert('Cập nhật thành công!'); setShowEditFoodModal(false); loadFoods(foodPage);
-    } catch (e) { alert(`Lỗi: ${e}`); }
+    try { await API.put(`/menu/store/foods/${selectedFood.id}/`, formData); alert('Cập nhật thành công!'); setShowEditFoodModal(false); loadFoods(foodPage); } catch (e) { alert(`Lỗi: ${e}`); }
   };
 
-  // --- HÀM XỬ LÝ CLICK NÚT SỬA MÓN (CÓ LOAD RATINGS) ---
   const handleEditFoodClick = async (food: Food) => {
-    setSelectedFood(food);
-    setShowEditFoodModal(true);
-    setRatingsLoading(true);
-    try {
-        // Gọi API lấy đánh giá cho món ăn này
-        const res = await API.get(`/ratings/?food=${food.id}`);
-        setFoodRatings(res || []);
-    } catch (e) {
-        console.error("Lỗi tải đánh giá:", e);
-        setFoodRatings([]);
-    } finally {
-        setRatingsLoading(false);
-    }
+    setSelectedFood(food); setShowEditFoodModal(true); setRatingsLoading(true);
+    try { const res = await API.get(`/ratings/?food=${food.id}`); setFoodRatings(res || []); } catch (e) { setFoodRatings([]); } finally { setRatingsLoading(false); }
   };
 
-  const deleteFood = async (id: number) => {
-      if(!confirm('Xóa món này?')) return;
-      try { await API.delete(`/menu/store/foods/${id}/`); loadFoods(foodPage); } catch(e) { alert('Lỗi xóa'); }
-  };
+  const deleteFood = async (id: number) => { if(!confirm('Xóa món này?')) return; try { await API.delete(`/menu/store/foods/${id}/`); loadFoods(foodPage); } catch(e) { alert('Lỗi xóa'); } };
 
   // --- SIZES HANDLERS ---
-  const openManageSizes = async (food: Food) => {
-      setSelectedFood(food); setShowManageSizesModal(true);
-      try { const res = await API.get(`/menu/store/foods/${food.id}/sizes/`); setFoodSizes(res); } catch(e) {}
-  };
-  const handleAddSize = async (e: React.FormEvent) => {
-      e.preventDefault(); if(!selectedFood) return;
-      try { await API.post(`/menu/store/foods/${selectedFood.id}/sizes/`, newSize); 
-      setNewSize({size_name:'', price:''}); openManageSizes(selectedFood); } catch(e) {alert('Lỗi thêm size');}
-  };
-  const handleUpdateSize = async (id: number) => {
-      if(!selectedFood) return;
-      try { await API.put(`/menu/store/foods/${selectedFood.id}/sizes/${id}/`, editingSizeData); 
-      setEditingSizeId(null); openManageSizes(selectedFood); } catch(e) {alert('Lỗi sửa size');}
-  };
-  const deleteSize = async (id: number) => {
-      if(!selectedFood || !confirm('Xóa size?')) return;
-      try { await API.delete(`/menu/store/foods/${selectedFood.id}/sizes/${id}/`); openManageSizes(selectedFood); } catch(e) {}
-  };
+  const openManageSizes = async (food: Food) => { setSelectedFood(food); setShowManageSizesModal(true); try { const res = await API.get(`/menu/store/foods/${food.id}/sizes/`); setFoodSizes(res); } catch(e) {} };
+  const handleAddSize = async (e: React.FormEvent) => { e.preventDefault(); if(!selectedFood) return; try { await API.post(`/menu/store/foods/${selectedFood.id}/sizes/`, newSize); setNewSize({size_name:'', price:''}); openManageSizes(selectedFood); } catch(e) {alert('Lỗi thêm size');} };
+  const handleUpdateSize = async (id: number) => { if(!selectedFood) return; try { await API.put(`/menu/store/foods/${selectedFood.id}/sizes/${id}/`, editingSizeData); setEditingSizeId(null); openManageSizes(selectedFood); } catch(e) {alert('Lỗi sửa size');} };
+  const deleteSize = async (id: number) => { if(!selectedFood || !confirm('Xóa size?')) return; try { await API.delete(`/menu/store/foods/${selectedFood.id}/sizes/${id}/`); openManageSizes(selectedFood); } catch(e) {} };
 
   // --- ORDER HANDLERS ---
   const updateOrderStatus = async (orderId: number, status: string) => {
@@ -342,29 +293,65 @@ const StoreManager: React.FC = () => {
       try {
           await API.patch(`/stores/${storeInfo.id}/orders/${orderId}/status/`, { order_status: status });
           alert('Cập nhật trạng thái thành công!');
-          // Cập nhật state local
           setOrders(prev => prev.map(o => o.id === orderId ? { ...o, order_status: status } : o));
           if(selectedOrder) setSelectedOrder({...selectedOrder, order_status: status});
           setShowOrderModal(false);
       } catch (e) { alert(`Lỗi: ${e}`); }
   };
 
-  // --- PROMOTIONS HANDLERS ---
+  // --- PROMOTIONS HANDLERS (UPDATED) ---
   const loadPromotions = async () => {
     try { const res = await API.get<StorePromotion[]>('/promotions/'); setPromotions(res || []); } catch (e) { console.error(e); }
   };
+
+  // Xử lý khi nhấn nút Sửa KM - Format lại date để input hiển thị đúng
+  const handleEditPromoClick = (p: StorePromotion) => {
+    setSelectedPromo({
+        ...p,
+        // Format ngày về YYYY-MM-DD theo múi giờ VN để input date hiển thị đúng
+        start_date: formatDateForInput(p.start_date),
+        end_date: formatDateForInput(p.end_date),
+        // Chuyển null thành chuỗi rỗng để input không lỗi controlled/uncontrolled
+        minimum_pay: p.minimum_pay || '',
+        max_discount_amount: p.max_discount_amount || ''
+    });
+    setShowEditPromoModal(true);
+  };
+
   const handlePromoSubmit = async (e: React.FormEvent, isEdit: boolean) => {
       e.preventDefault();
-      const payload = isEdit && selectedPromo ? { 
-          ...selectedPromo, minimum_pay: selectedPromo.minimum_pay || null, max_discount_amount: selectedPromo.max_discount_amount || null 
-      } : { ...newPromo, minimum_pay: newPromo.minimum_pay || null, max_discount_amount: newPromo.max_discount_amount || null };
+      
+      // Lấy data từ form
+      const data = isEdit && selectedPromo ? selectedPromo : newPromo;
+
+      // Chuẩn bị payload theo đúng yêu cầu API
+      const payload = {
+          ...data,
+          store_id: storeInfo?.id, // Đảm bảo luôn gửi store_id
+          scope: 'STORE',          // Mặc định scope là STORE
+          // Xử lý logic null: Nếu rỗng thì gửi null, ngược lại gửi giá trị
+          minimum_pay: (data.minimum_pay === '' || data.minimum_pay === null) ? null : data.minimum_pay,
+          max_discount_amount: (data.max_discount_amount === '' || data.max_discount_amount === null) ? null : data.max_discount_amount
+      };
       
       try {
-          if (isEdit && selectedPromo) await API.put(`/promotions/${selectedPromo.id}/update/`, payload);
-          else await API.post('/promotions/create/', payload);
-          alert('Thành công!'); setShowAddPromoModal(false); setShowEditPromoModal(false); loadPromotions();
-      } catch(e) { alert(`Lỗi: ${e}`); }
+          if (isEdit && selectedPromo) {
+              // Gọi API update
+              await API.put(`/promotions/${selectedPromo.id}/update/`, payload);
+          } else {
+              // Gọi API create
+              await API.post('/promotions/create/', payload);
+          }
+          alert('Thao tác thành công!'); 
+          setShowAddPromoModal(false); 
+          setShowEditPromoModal(false); 
+          loadPromotions();
+      } catch(e: any) { 
+          console.error(e);
+          alert(`Lỗi: ${JSON.stringify(e.response?.data || e.message)}`); 
+      }
   };
+
   const deletePromo = async (id: number) => {
       if(!confirm('Xóa KM này?')) return;
       try { await API.delete(`/promotions/${id}/delete/`); loadPromotions(); } catch(e) { alert('Lỗi xóa'); }
@@ -454,7 +441,6 @@ const StoreManager: React.FC = () => {
                             <h2 className="text-2xl font-bold text-gray-800">Quản lý Đơn hàng</h2>
                             <Button variant="outline" size="sm" onClick={loadOrders}><Clock size={16} className="mr-2"/> Làm mới</Button>
                         </div>
-
                         {/* STATUS FILTER TABS */}
                         <div className="bg-white p-2 rounded-xl border shadow-sm overflow-x-auto no-scrollbar">
                             <div className="flex space-x-2 min-w-max">
@@ -462,66 +448,32 @@ const StoreManager: React.FC = () => {
                                     const isActive = filterStatus === status;
                                     const count = getStatusCount(status);
                                     return (
-                                        <button
-                                            key={status}
-                                            onClick={() => setFilterStatus(status)}
-                                            className={cn(
-                                                "px-4 py-2 rounded-lg text-sm font-medium transition-all flex items-center gap-2 border",
-                                                isActive 
-                                                    ? "bg-blue-600 text-white border-blue-600 shadow-md transform scale-105" 
-                                                    : "bg-gray-50 text-gray-600 border-transparent hover:bg-gray-100 hover:text-gray-900"
-                                            )}
-                                        >
-                                            {status}
-                                            {count > 0 && (
-                                                <span className={cn("text-xs py-0.5 px-1.5 rounded-full", isActive ? "bg-white/20 text-white" : "bg-gray-200 text-gray-700")}>
-                                                    {count}
-                                                </span>
-                                            )}
+                                        <button key={status} onClick={() => setFilterStatus(status)}
+                                            className={cn("px-4 py-2 rounded-lg text-sm font-medium transition-all flex items-center gap-2 border", isActive ? "bg-blue-600 text-white border-blue-600 shadow-md transform scale-105" : "bg-gray-50 text-gray-600 border-transparent hover:bg-gray-100 hover:text-gray-900")}>
+                                            {status} {count > 0 && (<span className={cn("text-xs py-0.5 px-1.5 rounded-full", isActive ? "bg-white/20 text-white" : "bg-gray-200 text-gray-700")}>{count}</span>)}
                                         </button>
                                     );
                                 })}
                             </div>
                         </div>
-
                         {/* ORDERS TABLE */}
                         <Card className="border-0 shadow-sm overflow-hidden">
                             <CardContent className="p-0">
                                 <table className="w-full text-sm text-left">
                                     <thead className="bg-gray-50 border-b text-gray-600 font-semibold uppercase text-xs">
-                                        <tr>
-                                            <th className="p-4">Mã đơn</th>
-                                            <th className="p-4">Khách hàng</th>
-                                            <th className="p-4">Tổng tiền</th>
-                                            <th className="p-4">Trạng thái</th>
-                                            <th className="p-4">Thời gian</th>
-                                            <th className="p-4 text-right">Thao tác</th>
-                                        </tr>
+                                        <tr><th className="p-4">Mã đơn</th><th className="p-4">Khách hàng</th><th className="p-4">Tổng tiền</th><th className="p-4">Trạng thái</th><th className="p-4">Thời gian</th><th className="p-4 text-right">Thao tác</th></tr>
                                     </thead>
                                     <tbody className="divide-y">
                                         {filteredOrders.length > 0 ? filteredOrders.map(order => (
                                             <tr key={order.id} className="hover:bg-gray-50 bg-white transition-colors">
                                                 <td className="p-4 font-mono font-bold text-blue-600">#{order.id}</td>
-                                                <td className="p-4">
-                                                    <div className="font-medium text-gray-900">{order.receiver_name}</div>
-                                                    <div className="text-xs text-gray-500">{order.phone_number}</div>
-                                                </td>
+                                                <td className="p-4"><div className="font-medium text-gray-900">{order.receiver_name}</div><div className="text-xs text-gray-500">{order.phone_number}</div></td>
                                                 <td className="p-4 font-bold text-gray-800">{formatCurrency(order.total_money)}</td>
-                                                <td className="p-4">
-                                                    <span className={cn("px-3 py-1 text-xs rounded-full font-bold border", getStatusColor(order.order_status))}>
-                                                        {order.order_status}
-                                                    </span>
-                                                </td>
+                                                <td className="p-4"><span className={cn("px-3 py-1 text-xs rounded-full font-bold border", getStatusColor(order.order_status))}>{order.order_status}</span></td>
                                                 <td className="p-4 text-gray-500 text-xs">{formatDate(order.created_date)}</td>
-                                                <td className="p-4 text-right">
-                                                    <Button size="sm" variant="outline" onClick={() => { setSelectedOrder(order); setShowOrderModal(true); }}>
-                                                        Xem chi tiết
-                                                    </Button>
-                                                </td>
+                                                <td className="p-4 text-right"><Button size="sm" variant="outline" onClick={() => { setSelectedOrder(order); setShowOrderModal(true); }}>Xem chi tiết</Button></td>
                                             </tr>
-                                        )) : (
-                                            <tr><td colSpan={6} className="p-8 text-center text-gray-500">Không có đơn hàng nào ở trạng thái này.</td></tr>
-                                        )}
+                                        )) : (<tr><td colSpan={6} className="p-8 text-center text-gray-500">Không có đơn hàng nào ở trạng thái này.</td></tr>)}
                                     </tbody>
                                 </table>
                             </CardContent>
@@ -536,16 +488,13 @@ const StoreManager: React.FC = () => {
                             <h2 className="text-2xl font-bold">Quản lý món ăn</h2>
                             <Button onClick={() => setShowAddFoodModal(true)} className="bg-blue-600"><Plus size={18} className="mr-2"/> Thêm món</Button>
                         </div>
-                        {/* Filter Bar */}
                         <div className="flex gap-2">
                              <input className="border p-2 rounded-lg flex-1" placeholder="Tìm tên món..." value={foodSearch} onChange={e=>setFoodSearch(e.target.value)}/>
                              <select className="border p-2 rounded-lg" value={categoryFilter} onChange={e=>setCategoryFilter(e.target.value)}>
-                                 <option value="">Tất cả danh mục</option>
-                                 {categories.map(c=><option key={c.id} value={c.id}>{c.cate_name}</option>)}
+                                 <option value="">Tất cả danh mục</option>{categories.map(c=><option key={c.id} value={c.id}>{c.cate_name}</option>)}
                              </select>
                              <Button onClick={() => loadFoods(1)} variant="secondary">Lọc</Button>
                         </div>
-                        {/* Food Table */}
                         <div className="bg-white rounded-lg border shadow-sm overflow-hidden">
                             <table className="w-full text-sm text-left">
                                 <thead className="bg-gray-50 border-b"><tr><th className="p-3">ID</th><th className="p-3">Ảnh</th><th className="p-3">Tên</th><th className="p-3">Giá</th><th className="p-3">TT</th><th className="p-3">Size</th><th className="p-3">Hành động</th></tr></thead>
@@ -559,7 +508,6 @@ const StoreManager: React.FC = () => {
                                             <td className="p-3"><span className={`text-xs px-2 py-1 rounded ${f.availability==='Còn hàng'?'bg-green-100 text-green-700':'bg-red-100 text-red-700'}`}>{f.availability}</span></td>
                                             <td className="p-3"><Button size="sm" variant="ghost" className="h-7 text-xs border" onClick={()=>openManageSizes(f)}>Size</Button></td>
                                             <td className="p-3 flex gap-2">
-                                                {/* Đã thay đổi handler onClick để gọi handleEditFoodClick */}
                                                 <Button size="sm" variant="outline" className="h-8 w-8 p-0" onClick={()=>handleEditFoodClick(f)}><Edit2 size={14}/></Button>
                                                 <Button size="sm" variant="destructive" className="h-8 w-8 p-0" onClick={()=>deleteFood(f.id)}><Trash2 size={14}/></Button>
                                             </td>
@@ -568,7 +516,6 @@ const StoreManager: React.FC = () => {
                                 </tbody>
                             </table>
                         </div>
-                        {/* Pagination */}
                         <div className="flex justify-between items-center text-sm">
                             <span className="text-gray-500">Trang {foodPage}/{totalFoodPages}</span>
                             <div className="flex gap-2">
@@ -597,7 +544,7 @@ const StoreManager: React.FC = () => {
                                             <td className="p-3 text-xs text-gray-500">{new Date(p.start_date).toLocaleDateString()} - {new Date(p.end_date).toLocaleDateString()}</td>
                                             <td className="p-3"><span className={`text-xs px-2 py-1 rounded ${p.is_active ? 'bg-green-100 text-green-700' : 'bg-gray-100'}`}>{p.is_active ? 'Active' : 'Paused'}</span></td>
                                             <td className="p-3 text-right flex justify-end gap-2">
-                                                <Button size="sm" variant="ghost" className="h-8 w-8 p-0" onClick={()=>{setSelectedPromo(p); setShowEditPromoModal(true);}}><Edit2 size={14}/></Button>
+                                                <Button size="sm" variant="ghost" className="h-8 w-8 p-0" onClick={()=>handleEditPromoClick(p)}><Edit2 size={14}/></Button>
                                                 <Button size="sm" variant="ghost" className="h-8 w-8 p-0 text-red-500" onClick={()=>deletePromo(p.id)}><Trash2 size={14}/></Button>
                                             </td>
                                         </tr>
@@ -642,10 +589,7 @@ const StoreManager: React.FC = () => {
           <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-in fade-in">
               <div className="bg-white rounded-xl shadow-2xl w-full max-w-2xl max-h-[90vh] flex flex-col">
                   <div className="flex justify-between items-center px-6 py-4 border-b">
-                      <h2 className="text-lg font-bold flex items-center gap-2">
-                          Đơn hàng #{selectedOrder.id} 
-                          <span className={cn("text-xs px-2 py-0.5 rounded-full border", getStatusColor(selectedOrder.order_status))}>{selectedOrder.order_status}</span>
-                      </h2>
+                      <h2 className="text-lg font-bold flex items-center gap-2">Đơn hàng #{selectedOrder.id} <span className={cn("text-xs px-2 py-0.5 rounded-full border", getStatusColor(selectedOrder.order_status))}>{selectedOrder.order_status}</span></h2>
                       <button onClick={()=>setShowOrderModal(false)}><X size={24} className="text-gray-400 hover:text-gray-600"/></button>
                   </div>
                   <div className="p-6 overflow-y-auto space-y-6">
@@ -653,18 +597,11 @@ const StoreManager: React.FC = () => {
                           <div>
                               <div className="flex items-start gap-3 mb-4">
                                   <User className="text-gray-400 mt-1" size={18}/>
-                                  <div>
-                                      <p className="text-xs font-bold text-gray-500 uppercase">Người nhận</p>
-                                      <p className="font-medium text-lg">{selectedOrder.receiver_name}</p>
-                                      <p className="text-blue-600">{selectedOrder.phone_number}</p>
-                                  </div>
+                                  <div><p className="text-xs font-bold text-gray-500 uppercase">Người nhận</p><p className="font-medium text-lg">{selectedOrder.receiver_name}</p><p className="text-blue-600">{selectedOrder.phone_number}</p></div>
                               </div>
                               <div className="flex items-start gap-3">
                                   <MapPin className="text-gray-400 mt-1" size={18}/>
-                                  <div>
-                                      <p className="text-xs font-bold text-gray-500 uppercase">Địa chỉ</p>
-                                      <p className="text-gray-700 bg-gray-50 p-2 rounded text-sm border">{selectedOrder.ship_address}</p>
-                                  </div>
+                                  <div><p className="text-xs font-bold text-gray-500 uppercase">Địa chỉ</p><p className="text-gray-700 bg-gray-50 p-2 rounded text-sm border">{selectedOrder.ship_address}</p></div>
                               </div>
                           </div>
                           <div className="bg-gray-50 p-4 rounded-xl border space-y-2">
@@ -673,8 +610,6 @@ const StoreManager: React.FC = () => {
                                <div className="text-xs text-gray-400 text-right mt-1">{formatDate(selectedOrder.created_date)}</div>
                           </div>
                       </div>
-
-                      {/* Items List */}
                       <div>
                           <p className="text-sm font-bold text-gray-500 uppercase mb-3 border-b pb-1">Chi tiết món ăn ({selectedOrder.items.length})</p>
                           <div className="space-y-3">
@@ -691,8 +626,6 @@ const StoreManager: React.FC = () => {
                               ))}
                           </div>
                       </div>
-                      
-                      {/* Action */}
                       <div className="bg-blue-50 p-4 rounded-xl border border-blue-100 flex flex-col sm:flex-row gap-4 items-center justify-between">
                           <span className="font-medium text-blue-900 flex items-center gap-2"><CheckCircle size={18}/> Cập nhật trạng thái:</span>
                           <div className="flex gap-2 w-full sm:w-auto">
@@ -710,7 +643,7 @@ const StoreManager: React.FC = () => {
           </div>
       )}
 
-      {/* ADD/EDIT FOOD MODALS (Simplified for brevity, similar structure to previous) */}
+      {/* ADD/EDIT FOOD MODALS */}
       {(showAddFoodModal || (showEditFoodModal && selectedFood)) && (
           <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
                <div className="bg-white rounded-xl shadow-lg w-full max-w-lg p-6 max-h-[90vh] overflow-y-auto">
@@ -724,31 +657,16 @@ const StoreManager: React.FC = () => {
                            </select>
                        </div>
                        <div><label className="block text-sm font-medium">Mô tả</label><textarea className="w-full border p-2 rounded" rows={2} value={showAddFoodModal ? newFood.description : selectedFood!.description} onChange={e => showAddFoodModal ? setNewFood({...newFood, description: e.target.value}) : setSelectedFood({...selectedFood!, description: e.target.value})}/></div>
-                       
-                       {/* --- HIỂN THỊ ĐÁNH GIÁ (Chỉ hiện khi sửa món) --- */}
                        {!showAddFoodModal && (
                            <div className="mt-4 pt-4 border-t">
                                <h3 className="text-sm font-bold mb-2">Đánh giá ({foodRatings.length})</h3>
                                <div className="bg-gray-50 rounded p-2 max-h-40 overflow-y-auto space-y-2">
-                                   {ratingsLoading ? (
-                                       <div className="text-center text-xs text-gray-500">Đang tải đánh giá...</div>
-                                   ) : foodRatings.length === 0 ? (
-                                       <div className="text-center text-xs text-gray-400">Chưa có đánh giá nào</div>
-                                   ) : (
-                                       foodRatings.map((r, i) => (
-                                           <div key={i} className="bg-white p-2 rounded border text-sm shadow-sm">
-                                               <div className="font-bold flex justify-between items-center mb-1">
-                                                   <span>{r.username}</span>
-                                                   <span className="text-yellow-500 text-xs">{r.rating} ⭐</span>
-                                               </div>
-                                               <div className="text-gray-600 text-xs">{r.content}</div>
-                                           </div>
-                                       ))
+                                   {ratingsLoading ? (<div className="text-center text-xs text-gray-500">Đang tải đánh giá...</div>) : foodRatings.length === 0 ? (<div className="text-center text-xs text-gray-400">Chưa có đánh giá nào</div>) : (
+                                       foodRatings.map((r, i) => (<div key={i} className="bg-white p-2 rounded border text-sm shadow-sm"><div className="font-bold flex justify-between items-center mb-1"><span>{r.username}</span><span className="text-yellow-500 text-xs">{r.rating} ⭐</span></div><div className="text-gray-600 text-xs">{r.content}</div></div>))
                                    )}
                                </div>
                            </div>
                        )}
-
                        <div className="flex justify-end gap-2 mt-4"><Button type="button" variant="ghost" onClick={()=>{setShowAddFoodModal(false); setShowEditFoodModal(false);}}>Hủy</Button><Button type="submit" className="bg-blue-600">Lưu</Button></div>
                    </form>
                </div>
@@ -765,6 +683,96 @@ const StoreManager: React.FC = () => {
               </div>
           </div>
       )}
+
+      {/* ADD/EDIT PROMOTION MODAL (UPDATED TO MATCH ADMIN STYLE) */}
+       {(showAddPromoModal || (showEditPromoModal && selectedPromo)) && (
+           <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+               <div className="bg-white rounded-xl shadow-lg w-full max-w-lg p-6 max-h-[90vh] overflow-y-auto">
+                   <h2 className="text-xl font-bold mb-4">{showAddPromoModal ? 'Tạo Khuyến mãi mới' : 'Cập nhật Khuyến mãi'}</h2>
+                   <form onSubmit={(e) => handlePromoSubmit(e, !showAddPromoModal)} className="space-y-4">
+                       {/* Name */}
+                       <div>
+                           <label className="text-xs text-gray-500 block mb-1">Tên KM</label>
+                           <input required className="w-full border p-2 rounded" 
+                               value={showAddPromoModal ? newPromo.name : selectedPromo!.name} 
+                               onChange={e => { const v = e.target.value; showAddPromoModal ? setNewPromo({...newPromo, name: v}) : setSelectedPromo({...selectedPromo!, name: v}) }}
+                           />
+                       </div>
+
+                       {/* Type & Value */}
+                       <div className="grid grid-cols-2 gap-4">
+                           <div>
+                               <label className="text-xs text-gray-500 block mb-1">Loại</label>
+                               <select className="w-full border p-2 rounded" 
+                                   value={showAddPromoModal ? newPromo.discount_type : selectedPromo!.discount_type} 
+                                   onChange={e => { const v = e.target.value as any; showAddPromoModal ? setNewPromo({...newPromo, discount_type: v}) : setSelectedPromo({...selectedPromo!, discount_type: v}) }}>
+                                   <option value="PERCENT">%</option>
+                                   <option value="AMOUNT">VND</option>
+                               </select>
+                           </div>
+                           <div>
+                               <label className="text-xs text-gray-500 block mb-1">Giá trị giảm</label>
+                               <input required type="number" className="w-full border p-2 rounded" 
+                                   value={showAddPromoModal ? newPromo.discount_value : selectedPromo!.discount_value} 
+                                   onChange={e => { const v = e.target.value; showAddPromoModal ? setNewPromo({...newPromo, discount_value: v}) : setSelectedPromo({...selectedPromo!, discount_value: v}) }}
+                               />
+                           </div>
+                       </div>
+                       
+                       {/* Min Pay & Max Discount */}
+                       <div className="grid grid-cols-2 gap-4">
+                           <div>
+                               <label className="text-xs text-gray-500 block mb-1">Đơn tối thiểu</label>
+                               <input type="number" className="w-full border p-2 rounded" placeholder="0 hoặc bỏ trống"
+                                   value={(showAddPromoModal ? newPromo.minimum_pay : selectedPromo!.minimum_pay) || ''} 
+                                   onChange={e => { const v = e.target.value; showAddPromoModal ? setNewPromo({...newPromo, minimum_pay: v}) : setSelectedPromo({...selectedPromo!, minimum_pay: v}) }}
+                               />
+                           </div>
+                           <div>
+                               <label className="text-xs text-gray-500 block mb-1">Giảm tối đa</label>
+                               <input type="number" className="w-full border p-2 rounded" placeholder="0 hoặc bỏ trống"
+                                   value={(showAddPromoModal ? newPromo.max_discount_amount : selectedPromo!.max_discount_amount) || ''} 
+                                   onChange={e => { const v = e.target.value; showAddPromoModal ? setNewPromo({...newPromo, max_discount_amount: v}) : setSelectedPromo({...selectedPromo!, max_discount_amount: v}) }}
+                               />
+                           </div>
+                       </div>
+
+                       {/* Dates */}
+                       <div className="grid grid-cols-2 gap-4">
+                           <div>
+                               <label className="text-xs text-gray-500 block mb-1">Bắt đầu</label>
+                               <input required type="date" className="w-full border p-2 rounded" 
+                                   value={showAddPromoModal ? newPromo.start_date : selectedPromo!.start_date} 
+                                   onChange={e => { const v = e.target.value; showAddPromoModal ? setNewPromo({...newPromo, start_date: v}) : setSelectedPromo({...selectedPromo!, start_date: v}) }}
+                               />
+                           </div>
+                           <div>
+                               <label className="text-xs text-gray-500 block mb-1">Kết thúc</label>
+                               <input required type="date" className="w-full border p-2 rounded" 
+                                   value={showAddPromoModal ? newPromo.end_date : selectedPromo!.end_date} 
+                                   onChange={e => { const v = e.target.value; showAddPromoModal ? setNewPromo({...newPromo, end_date: v}) : setSelectedPromo({...selectedPromo!, end_date: v}) }}
+                               />
+                           </div>
+                       </div>
+
+                       {/* Active Checkbox */}
+                       <div className="flex items-center gap-2">
+                           <input type="checkbox" id="promo_active"
+                               checked={showAddPromoModal ? newPromo.is_active : selectedPromo!.is_active} 
+                               onChange={e => { const v = e.target.checked; showAddPromoModal ? setNewPromo({...newPromo, is_active: v}) : setSelectedPromo({...selectedPromo!, is_active: v}) }}
+                           /> 
+                           <label htmlFor="promo_active" className="text-sm cursor-pointer select-none">Kích hoạt khuyến mãi này</label>
+                       </div>
+
+                       <div className="flex justify-end gap-2 mt-4 pt-4 border-t">
+                           <Button type="button" variant="outline" onClick={() => { setShowAddPromoModal(false); setShowEditPromoModal(false); }}>Hủy</Button>
+                           <Button type="submit" className="bg-blue-600">Lưu thay đổi</Button>
+                       </div>
+                   </form>
+               </div>
+           </div>
+       )}
+
     </div>
   );
 };
