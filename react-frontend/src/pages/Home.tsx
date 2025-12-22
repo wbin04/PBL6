@@ -79,8 +79,10 @@ const Home: React.FC = () => {
   // Search states
   const [searchQuery, setSearchQuery] = useState("");
   const [searchResults, setSearchResults] = useState<DetailedFood[]>([]);
+  const [storeSearchResults, setStoreSearchResults] = useState<Store[]>([]);
   const [isSearching, setIsSearching] = useState(false);
   const [showSearchResults, setShowSearchResults] = useState(false);
+  const [searchTab, setSearchTab] = useState<"foods" | "stores">("foods"); // Tab hiện tại trong kết quả search
 
   // Pagination states
   const [currentPage, setCurrentPage] = useState(1);
@@ -241,7 +243,7 @@ const Home: React.FC = () => {
     navigate(`/menu/items?category=${categoryId}`);
   };
 
-  // Search functionality
+  // Search functionality - tìm cả món ăn và cửa hàng
   const handleSearch = async () => {
     if (!searchQuery.trim()) {
       setShowSearchResults(false);
@@ -250,11 +252,33 @@ const Home: React.FC = () => {
 
     try {
       setIsSearching(true);
-      const results = await searchFoodItems(searchQuery.trim());
-      setSearchResults(results.results);
+      const query = searchQuery.trim().toLowerCase();
+
+      // Tìm kiếm món ăn (giữ logic cũ)
+      const foodResults = await searchFoodItems(query);
+      setSearchResults(foodResults.results);
+
+      // Tìm kiếm cửa hàng (local search trong allStores)
+      const filteredStores = allStores.filter(
+        (store) =>
+          store.store_name.toLowerCase().includes(query) ||
+          store.description.toLowerCase().includes(query) ||
+          store.manager.toLowerCase().includes(query)
+      );
+      setStoreSearchResults(filteredStores);
+
+      // Tự động chọn tab có kết quả
+      if (foodResults.results.length > 0) {
+        setSearchTab("foods");
+      } else if (filteredStores.length > 0) {
+        setSearchTab("stores");
+      } else {
+        setSearchTab("foods"); // Mặc định hiển thị tab món ăn
+      }
+
       setShowSearchResults(true);
     } catch (error) {
-      console.error("Error searching foods:", error);
+      console.error("Error searching:", error);
       alert("Có lỗi xảy ra khi tìm kiếm. Vui lòng thử lại!");
     } finally {
       setIsSearching(false);
@@ -270,7 +294,9 @@ const Home: React.FC = () => {
   const clearSearch = () => {
     setSearchQuery("");
     setSearchResults([]);
+    setStoreSearchResults([]);
     setShowSearchResults(false);
+    setSearchTab("foods");
   };
 
   // Modal handlers
@@ -441,7 +467,7 @@ const Home: React.FC = () => {
             <div className="relative">
               <input
                 type="text"
-                placeholder="🔍 Tìm món ăn yêu thích của bạn..."
+                placeholder="🔍 Tìm món ăn hoặc cửa hàng..."
                 className="px-6 py-3 rounded-full text-black w-96 shadow-2xl focus:ring-4 focus:ring-yellow-300 focus:outline-none transition-all"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
@@ -472,106 +498,220 @@ const Home: React.FC = () => {
           <div className="absolute inset-0 bg-gradient-to-r from-orange-100/30 to-red-100/30 rounded-3xl -z-10"></div>
 
           <div className="mb-6">
-            <h2 className="text-3xl font-bold text-gray-900 mb-2">
-              🎯 Kết quả tìm kiếm cho "{searchQuery}"{" "}
-              <span className="text-orange-600">
-                ({searchResults.length} món)
-              </span>
+            <h2 className="text-3xl font-bold text-gray-900 mb-4">
+              🎯 Kết quả tìm kiếm cho "{searchQuery}"
             </h2>
+
+            {/* Tabs */}
+            <div className="flex gap-4 mb-6">
+              <button
+                onClick={() => setSearchTab("foods")}
+                className={`px-6 py-3 rounded-lg font-semibold transition-all ${
+                  searchTab === "foods"
+                    ? "bg-orange-500 text-white shadow-lg"
+                    : "bg-white text-gray-700 hover:bg-orange-100"
+                }`}>
+                🍔 Món ăn ({searchResults.length})
+              </button>
+              <button
+                onClick={() => setSearchTab("stores")}
+                className={`px-6 py-3 rounded-lg font-semibold transition-all ${
+                  searchTab === "stores"
+                    ? "bg-orange-500 text-white shadow-lg"
+                    : "bg-white text-gray-700 hover:bg-orange-100"
+                }`}>
+                🏪 Cửa hàng ({storeSearchResults.length})
+              </button>
+            </div>
           </div>
 
-          {searchResults.length === 0 ? (
-            <div className="text-center py-8">
-              <p className="text-gray-500">Không tìm thấy món ăn nào phù hợp</p>
-            </div>
-          ) : (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-              {searchResults.map((food) => {
-                // Debug: log dữ liệu rating
-                console.log("Food rating data:", {
-                  id: food.id,
-                  title: food.title,
-                  average_rating: food.average_rating,
-                  rating_count: food.rating_count,
-                });
+          {/* Tab Content: Foods */}
+          {searchTab === "foods" &&
+            (searchResults.length === 0 ? (
+              <div className="text-center py-8">
+                <p className="text-gray-500">
+                  Không tìm thấy món ăn nào phù hợp
+                </p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+                {searchResults.map((food) => {
+                  // Debug: log dữ liệu rating
+                  console.log("Food rating data:", {
+                    id: food.id,
+                    title: food.title,
+                    average_rating: food.average_rating,
+                    rating_count: food.rating_count,
+                  });
 
-                return (
+                  return (
+                    <Card
+                      key={food.id}
+                      className="p-4 hover:shadow-lg transition-shadow">
+                      <div
+                        className="cursor-pointer"
+                        onClick={() =>
+                          openFoodModal({
+                            id: food.id,
+                            title: food.title,
+                            price: food.price,
+                            image_url: food.image_url,
+                            description: food.description,
+                          })
+                        }>
+                        <img
+                          src={food.image_url}
+                          alt={food.title}
+                          className="w-full h-40 object-cover rounded-lg mb-3"
+                          onError={(e) => {
+                            e.currentTarget.src = "/images/placeholder.jpg";
+                          }}
+                        />
+                        <div className="space-y-3">
+                          {/* Tên món ăn - màu đen đậm, nổi bật */}
+                          <h3 className="text-xl font-bold text-gray-900 cursor-pointer hover:text-orange-600 transition-colors">
+                            {food.title}
+                          </h3>
+
+                          {/* Tên cửa hàng - màu xanh dương đậm */}
+                          {food.store?.store_name && (
+                            <p className="text-sm font-semibold text-blue-700">
+                              🏪 Cửa hàng: {food.store.store_name}
+                            </p>
+                          )}
+
+                          {/* Mô tả món ăn - màu xám đậm */}
+                          {food.description && (
+                            <p
+                              className="text-sm text-gray-800 leading-relaxed overflow-hidden"
+                              style={{
+                                display: "-webkit-box",
+                                WebkitLineClamp: 2,
+                                WebkitBoxOrient: "vertical" as const,
+                              }}>
+                              {food.description}
+                            </p>
+                          )}
+
+                          {/* Giá tiền - màu đỏ cam rất nổi bật với background */}
+                          <div className="text-xl font-black text-red-600 bg-yellow-50 px-3 py-2 rounded-lg inline-block border-l-4 border-red-500">
+                            {Number(food.price).toLocaleString()} đ
+                          </div>
+
+                          {/* Đánh giá */}
+                          {/* Đánh giá */}
+                          {food.average_rating !== undefined &&
+                            food.average_rating > 0 && (
+                              <div className="flex items-center text-sm text-gray-500">
+                                <span className="text-yellow-400">★</span>
+                                <span className="ml-1">
+                                  {food.average_rating.toFixed(1)}
+                                </span>
+                                {food.rating_count && food.rating_count > 0 && (
+                                  <span className="ml-1">
+                                    ({food.rating_count})
+                                  </span>
+                                )}
+                              </div>
+                            )}
+                        </div>
+                      </div>
+                    </Card>
+                  );
+                })}
+              </div>
+            ))}
+
+          {/* Tab Content: Stores */}
+          {searchTab === "stores" &&
+            (storeSearchResults.length === 0 ? (
+              <div className="text-center py-8">
+                <p className="text-gray-500">
+                  Không tìm thấy cửa hàng nào phù hợp
+                </p>
+              </div>
+            ) : (
+              <div className="space-y-6">
+                {storeSearchResults.map((store) => (
                   <Card
-                    key={food.id}
-                    className="p-4 hover:shadow-lg transition-shadow">
-                    <div
-                      className="cursor-pointer"
-                      onClick={() =>
-                        openFoodModal({
-                          id: food.id,
-                          title: food.title,
-                          price: food.price,
-                          image_url: food.image_url,
-                          description: food.description,
-                        })
-                      }>
-                      <img
-                        src={food.image_url}
-                        alt={food.title}
-                        className="w-full h-40 object-cover rounded-lg mb-3"
-                        onError={(e) => {
-                          e.currentTarget.src = "/images/placeholder.jpg";
-                        }}
-                      />
-                      <div className="space-y-3">
-                        {/* Tên món ăn - màu đen đậm, nổi bật */}
-                        <h3 className="text-xl font-bold text-gray-900 cursor-pointer hover:text-orange-600 transition-colors">
-                          {food.title}
-                        </h3>
-
-                        {/* Tên cửa hàng - màu xanh dương đậm */}
-                        {food.store?.store_name && (
-                          <p className="text-sm font-semibold text-blue-700">
-                            🏪 Cửa hàng: {food.store.store_name}
+                    key={store.id}
+                    className="p-6 hover:shadow-2xl transition-all duration-300 bg-gradient-to-r from-white to-orange-50">
+                    <div className="flex gap-6">
+                      {/* Thông tin cửa hàng và món ăn bên trái */}
+                      <div className="flex-1 flex flex-col gap-4">
+                        {/* Thông tin cửa hàng */}
+                        <div>
+                          <h3
+                            className="font-bold text-2xl cursor-pointer hover:text-orange-600 transition-colors mb-1"
+                            onClick={() => viewStore(store.id)}>
+                            {store.store_name}
+                          </h3>
+                          <p className="text-gray-600 text-sm mb-1">
+                            {store.description}
                           </p>
-                        )}
-
-                        {/* Mô tả món ăn - màu xám đậm */}
-                        {food.description && (
-                          <p
-                            className="text-sm text-gray-800 leading-relaxed overflow-hidden"
-                            style={{
-                              display: "-webkit-box",
-                              WebkitLineClamp: 2,
-                              WebkitBoxOrient: "vertical" as const,
-                            }}>
-                            {food.description}
+                          <p className="text-xs text-gray-500 flex items-center gap-2">
+                            <span className="inline-block w-2 h-2 bg-green-500 rounded-full"></span>
+                            Quản lý: {store.manager}
                           </p>
-                        )}
-
-                        {/* Giá tiền - màu đỏ cam rất nổi bật với background */}
-                        <div className="text-xl font-black text-red-600 bg-yellow-50 px-3 py-2 rounded-lg inline-block border-l-4 border-red-500">
-                          {Number(food.price).toLocaleString()} đ
                         </div>
 
-                        {/* Đánh giá */}
-                        {/* Đánh giá */}
-                        {food.average_rating !== undefined &&
-                          food.average_rating > 0 && (
-                            <div className="flex items-center text-sm text-gray-500">
-                              <span className="text-yellow-400">★</span>
-                              <span className="ml-1">
-                                {food.average_rating.toFixed(1)}
-                              </span>
-                              {food.rating_count && food.rating_count > 0 && (
-                                <span className="ml-1">
-                                  ({food.rating_count})
-                                </span>
-                              )}
-                            </div>
+                        {/* Danh sách món ăn */}
+                        <div className="flex gap-3 flex-wrap items-start">
+                          {store.products.length === 0 ? (
+                            <p className="text-gray-500 italic text-sm">
+                              Không có món ăn
+                            </p>
+                          ) : (
+                            store.products.map((p) => (
+                              <div
+                                key={p.id}
+                                className="flex items-center gap-2 cursor-pointer hover:bg-orange-50 p-2 rounded-xl transition-all duration-300 hover:shadow-md group border border-transparent hover:border-orange-200"
+                                onClick={() => openFoodModal(p)}>
+                                <img
+                                  src={p.image_url}
+                                  alt={p.title}
+                                  className="w-24 h-24 object-cover rounded-lg shadow-md group-hover:scale-110 transition-transform"
+                                  onError={(e) => {
+                                    e.currentTarget.src =
+                                      "/images/placeholder.jpg";
+                                  }}
+                                />
+                                <div>
+                                  <p className="text-gray-900 font-bold group-hover:text-orange-600 transition-colors">
+                                    {p.title}
+                                  </p>
+                                  <div className="bg-gradient-to-r from-red-500 to-orange-500 text-white px-3 py-1 rounded-lg inline-block mt-1 shadow-sm">
+                                    <span className="font-bold text-sm">
+                                      {Number(p.price).toLocaleString()} đ
+                                    </span>
+                                  </div>
+                                </div>
+                              </div>
+                            ))
                           )}
+                        </div>
+                      </div>
+
+                      {/* Logo cửa hàng bên phải */}
+                      <div className="flex-shrink-0 w-48 self-start">
+                        <img
+                          src={
+                            getImageUrl(store.image) ||
+                            "/images/placeholder.jpg"
+                          }
+                          alt={store.store_name}
+                          className="w-48 h-48 object-contain rounded-2xl shadow-xl border-4 border-white bg-white p-3 cursor-pointer hover:scale-105 transition-transform"
+                          onClick={() => viewStore(store.id)}
+                          onError={(e) => {
+                            e.currentTarget.src = "/images/placeholder.jpg";
+                          }}
+                        />
                       </div>
                     </div>
                   </Card>
-                );
-              })}
-            </div>
-          )}
+                ))}
+              </div>
+            ))}
         </section>
       )}
 
