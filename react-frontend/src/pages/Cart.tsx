@@ -138,10 +138,9 @@ const Cart: React.FC = () => {
       ) {
         navigate("/auth/login");
       } else {
-        alert(
-          "Lỗi khi tải giỏ hàng: " +
-            (error instanceof Error ? error.message : "Vui lòng thử lại")
-        );
+        const errorMsg =
+          error instanceof Error ? error.message : "Vui lòng thử lại";
+        alert("Lỗi khi tải giỏ hàng: " + errorMsg);
         showEmptyCart();
       }
     } finally {
@@ -235,10 +234,8 @@ const Cart: React.FC = () => {
       setCart(recalcCart(newItems));
     } catch (error) {
       console.error("Error updating quantity:", error);
-      alert(
-        "Lỗi khi cập nhật số lượng: " +
-          (error instanceof Error ? error.message : String(error))
-      );
+      const errorMsg = error instanceof Error ? error.message : "Đã xảy ra lỗi";
+      alert("Lỗi khi cập nhật số lượng: " + errorMsg);
     }
   };
 
@@ -258,10 +255,9 @@ const Cart: React.FC = () => {
       alert("Đã xóa món ăn khỏi giỏ hàng");
     } catch (error) {
       console.error("Error removing item:", error);
-      alert(
-        "Lỗi khi xóa món ăn: " +
-          (error instanceof Error ? error.message : "Vui lòng thử lại")
-      );
+      const errorMsg =
+        error instanceof Error ? error.message : "Vui lòng thử lại";
+      alert("Lỗi khi xóa món ăn: " + errorMsg);
     }
   };
 
@@ -278,10 +274,9 @@ const Cart: React.FC = () => {
       alert("Đã xóa tất cả món ăn trong giỏ hàng");
     } catch (error) {
       console.error("Error clearing cart:", error);
-      alert(
-        "Lỗi khi xóa giỏ hàng: " +
-          (error instanceof Error ? error.message : "Vui lòng thử lại")
-      );
+      const errorMsg =
+        error instanceof Error ? error.message : "Vui lòng thử lại";
+      alert("Lỗi khi xóa giỏ hàng: " + errorMsg);
     }
   };
 

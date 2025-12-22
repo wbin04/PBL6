@@ -27,17 +27,17 @@ const StoreManagerRegister: React.FC = () => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     if (!formData.store_name.trim()) {
       alert("Vui lòng nhập tên cửa hàng");
       return;
     }
-    
+
     if (!formData.address.trim()) {
       alert("Vui lòng nhập địa chỉ cửa hàng");
       return;
     }
-    
+
     if (!formData.phone_number.trim()) {
       alert("Vui lòng nhập số điện thoại");
       return;
@@ -45,35 +45,21 @@ const StoreManagerRegister: React.FC = () => {
 
     try {
       setLoading(true);
-      
+
       // Update store registration status
       await API.post("/auth/registration/store/", {
-        is_registered: true
+        is_registered: true,
       });
-      
-      alert("Đăng ký thành công! Chúng tôi sẽ xem xét và phản hồi trong vòng 1-2 ngày làm việc.");
+
+      alert(
+        "Đăng ký thành công! Chúng tôi sẽ xem xét và phản hồi trong vòng 1-2 ngày làm việc."
+      );
       navigate("/");
     } catch (error: unknown) {
       console.error("Registration error:", error);
-      let errorMessage = "Có lỗi xảy ra khi đăng ký";
-      
-      if (error && typeof error === 'object' && 'response' in error) {
-        const axiosError = error as { 
-          response?: { 
-            data?: { 
-              error?: string; 
-              message?: string; 
-            } 
-          } 
-        };
-        if (axiosError.response?.data?.error) {
-          errorMessage = axiosError.response.data.error;
-        } else if (axiosError.response?.data?.message) {
-          errorMessage = axiosError.response.data.message;
-        }
-      }
-      
-      alert(errorMessage);
+      const errorMsg =
+        error instanceof Error ? error.message : "Có lỗi xảy ra khi đăng ký";
+      alert(errorMsg);
     } finally {
       setLoading(false);
     }
@@ -195,7 +181,7 @@ const StoreManagerRegister: React.FC = () => {
                   className="flex-1 bg-orange-600 hover:bg-orange-700 text-white py-3">
                   {loading ? "Đang gửi..." : "Gửi đăng ký"}
                 </Button>
-                
+
                 <Button
                   type="button"
                   variant="outline"
@@ -212,7 +198,9 @@ const StoreManagerRegister: React.FC = () => {
                 Lưu ý quan trọng:
               </h3>
               <ul className="text-sm text-blue-800 space-y-1">
-                <li>• Chúng tôi sẽ xem xét đăng ký trong vòng 1-2 ngày làm việc</li>
+                <li>
+                  • Chúng tôi sẽ xem xét đăng ký trong vòng 1-2 ngày làm việc
+                </li>
                 <li>• Bạn sẽ nhận được thông báo qua email về kết quả</li>
                 <li>• Thông tin phải chính xác và trung thực</li>
                 <li>• Cần có giấy phép kinh doanh hợp lệ (nếu áp dụng)</li>
