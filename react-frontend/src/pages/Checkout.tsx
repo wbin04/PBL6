@@ -1,9 +1,12 @@
-import React, { useEffect, useState, useMemo } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { API, getImageUrl } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { paymentService } from "@/services/paymentService";
+import { AddressPicker } from "@/components/AddressPicker";
+import { locationService } from "@/services/locationService";
+import { MapPin } from "lucide-react";
 
 // Types
 type CartItem = {
@@ -15,6 +18,13 @@ type CartItem = {
     image?: string;
     image_url?: string;
     store_name: string;
+    store?: {
+      id?: number;
+      store_name?: string;
+      address?: string | null;
+      latitude?: number | string | null;
+      longitude?: number | string | null;
+    };
   };
   food_option?: {
     id: number;
@@ -42,6 +52,20 @@ type Promo = {
   max_discount?: number;
 };
 
+type StoreDeliveryInfo = {
+  id?: number;
+  name: string;
+  address?: string | null;
+  latitude?: number | null;
+  longitude?: number | null;
+};
+
+type StoreDeliveryMetrics = {
+  distanceKm: number | null;
+  fee: number;
+  store: StoreDeliveryInfo;
+};
+
 // Backend promo response type (with different field names)
 type BackendPromo = {
   id: number;
@@ -54,12 +78,62 @@ type BackendPromo = {
   max_discount?: number;
 };
 
+const SHIPPING_BASE_FEE = 15000;
+const SHIPPING_FEE_PER_KM = 4000;
+const EARTH_RADIUS_KM = 6371;
+
+const parseCoordinate = (value: unknown): number | null => {
+  const numericValue =
+    typeof value === "string" ? parseFloat(value) : Number(value);
+  return Number.isFinite(numericValue) ? numericValue : null;
+};
+
+const haversineDistanceKm = (
+  originLat: number,
+  originLng: number,
+  destLat: number,
+  destLng: number
+): number => {
+  const dLat = ((destLat - originLat) * Math.PI) / 180;
+  const dLon = ((destLng - originLng) * Math.PI) / 180;
+  const a =
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos((originLat * Math.PI) / 180) *
+      Math.cos((destLat * Math.PI) / 180) *
+      Math.sin(dLon / 2) * Math.sin(dLon / 2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  return EARTH_RADIUS_KM * c;
+};
+
+const normalizeCoordinateForPayload = (value: number | null) => {
+  if (value == null || Number.isNaN(value)) return null;
+  return parseFloat(Number(value).toFixed(6));
+};
+
 const Checkout: React.FC = () => {
   const [cart, setCart] = useState<Cart | null>(null);
   const [promos, setPromos] = useState<Promo[]>([]);
   const [selectedPromos, setSelectedPromos] = useState<number[]>([]);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
+  const [customerCoordinates, setCustomerCoordinates] = useState<{
+    latitude: number | null;
+    longitude: number | null;
+  }>({
+    latitude: null,
+    longitude: null,
+  });
+  const [storeInfoMap, setStoreInfoMap] = useState<
+    Record<string, StoreDeliveryInfo>
+  >({});
+  const [storeDeliveryDetails, setStoreDeliveryDetails] = useState<
+    Record<string, StoreDeliveryMetrics>
+  >({});
+  const [showAddressPicker, setShowAddressPicker] = useState(false);
+  const [isComputingDelivery, setIsComputingDelivery] = useState(false);
+  const geocodeCacheRef = useRef<
+    Record<string, { latitude: number; longitude: number }>
+  >({});
 
   // Tooltip state for voucher details
   const [hoveredPromo, setHoveredPromo] = useState<number | null>(null);
@@ -79,6 +153,29 @@ const Checkout: React.FC = () => {
   const selectionState = (location.state || {}) as {
     selectedItemIds?: number[];
   };
+
+  const buildStoreInfoFromItems = useCallback((items: CartItem[]) => {
+    const storeMap: Record<string, StoreDeliveryInfo> = {};
+
+    items.forEach((item) => {
+      const foodData = item.food as Record<string, any>;
+      const storeData = (foodData.store || {}) as Record<string, any>;
+      const name =
+        storeData.store_name || foodData.store_name || "Cửa hàng chưa xác định";
+
+      if (storeMap[name]) return;
+
+      storeMap[name] = {
+        id: storeData.id,
+        name,
+        address: storeData.address || null,
+        latitude: parseCoordinate(storeData.latitude),
+        longitude: parseCoordinate(storeData.longitude),
+      };
+    });
+
+    return storeMap;
+  }, []);
 
   useEffect(() => {
     const loadCart = async () => {
@@ -108,8 +205,10 @@ const Checkout: React.FC = () => {
           };
 
           setCart(filteredCart);
+          setStoreInfoMap(buildStoreInfoFromItems(finalItems));
         } else {
           setCart(response);
+          setStoreInfoMap(buildStoreInfoFromItems(response.items));
         }
       } catch (error) {
         console.error("Error loading cart:", error);
@@ -142,6 +241,8 @@ const Checkout: React.FC = () => {
           fullname?: string;
           phone_number?: string;
           address?: string;
+          latitude?: number | string | null;
+          longitude?: number | string | null;
         };
         setFormData((prev) => ({
           ...prev,
@@ -149,6 +250,10 @@ const Checkout: React.FC = () => {
           phone_number: profile.phone_number || "",
           ship_address: profile.address || "",
         }));
+        setCustomerCoordinates({
+          latitude: parseCoordinate(profile.latitude),
+          longitude: parseCoordinate(profile.longitude),
+        });
       } catch (error) {
         console.error("Error loading user profile:", error);
         // Không cần thông báo lỗi, chỉ để form trống
@@ -174,42 +279,174 @@ const Checkout: React.FC = () => {
     }
   };
 
+  const calculateDeliveryFee = useCallback((distanceKm: number | null) => {
+    if (distanceKm == null || Number.isNaN(distanceKm)) {
+      return SHIPPING_BASE_FEE;
+    }
+    const fee = SHIPPING_BASE_FEE + distanceKm * SHIPPING_FEE_PER_KM;
+    return Math.max(SHIPPING_BASE_FEE, Math.round(fee));
+  }, []);
+
+  const formatDistanceLabel = (distanceKm: number | null) => {
+    if (distanceKm == null || Number.isNaN(distanceKm)) {
+      return "Đang tạm tính";
+    }
+    return `${distanceKm.toFixed(2)} km`;
+  };
+
+  useEffect(() => {
+    let isCancelled = false;
+
+    const loadDrivingDistances = async () => {
+      if (!cart || Object.keys(storeInfoMap).length === 0) {
+        if (!isCancelled) {
+          setStoreDeliveryDetails({});
+          setIsComputingDelivery(false);
+        }
+        return;
+      }
+
+      setIsComputingDelivery(true);
+      const customerLat = customerCoordinates.latitude;
+      const customerLon = customerCoordinates.longitude;
+
+      const entries = await Promise.all(
+        Object.entries(storeInfoMap).map(async ([storeName, info]) => {
+          let storeLat = parseCoordinate(info.latitude);
+          let storeLon = parseCoordinate(info.longitude);
+
+          if ((storeLat == null || storeLon == null) && info.address) {
+            const cached = geocodeCacheRef.current[info.address];
+            if (cached) {
+              storeLat = cached.latitude;
+              storeLon = cached.longitude;
+            } else {
+              try {
+                const geocoded = await locationService.geocodeAddress(
+                  info.address
+                );
+                storeLat = geocoded.latitude;
+                storeLon = geocoded.longitude;
+                geocodeCacheRef.current[info.address] = {
+                  latitude: storeLat,
+                  longitude: storeLon,
+                };
+              } catch (error) {
+                console.warn(
+                  "Không thể tìm toạ độ cho cửa hàng",
+                  info.id || storeName,
+                  error
+                );
+              }
+            }
+          }
+
+          let distanceKm: number | null = null;
+          const hasAllCoordinates =
+            storeLat != null &&
+            storeLon != null &&
+            customerLat != null &&
+            customerLon != null;
+
+          if (hasAllCoordinates) {
+            distanceKm = parseFloat(
+              haversineDistanceKm(
+                storeLat!,
+                storeLon!,
+                customerLat!,
+                customerLon!
+              ).toFixed(2)
+            );
+
+            try {
+              const drivingDistance = await locationService.getDrivingDistanceKm(
+                { latitude: storeLat!, longitude: storeLon! },
+                { latitude: customerLat!, longitude: customerLon! }
+              );
+
+              if (
+                typeof drivingDistance === "number" &&
+                !Number.isNaN(drivingDistance)
+              ) {
+                distanceKm = parseFloat(drivingDistance.toFixed(2));
+              }
+            } catch (error) {
+              console.warn(
+                "Không lấy được khoảng cách di chuyển thực tế cho",
+                storeName,
+                error
+              );
+            }
+          }
+
+          const metrics: StoreDeliveryMetrics = {
+            distanceKm,
+            fee: calculateDeliveryFee(distanceKm),
+            store: {
+              ...info,
+              latitude: storeLat,
+              longitude: storeLon,
+            },
+          };
+
+          return [storeName, metrics] as const;
+        })
+      );
+
+      if (isCancelled) {
+        return;
+      }
+
+      const nextDetails: Record<string, StoreDeliveryMetrics> = {};
+      entries.forEach((entry) => {
+        if (!entry) return;
+        const [storeName, metrics] = entry;
+        nextDetails[storeName] = metrics;
+      });
+
+      setStoreDeliveryDetails(nextDetails);
+      setIsComputingDelivery(false);
+    };
+
+    loadDrivingDistances().catch((error) => {
+      console.error("Error computing delivery distances:", error);
+      if (!isCancelled) setIsComputingDelivery(false);
+    });
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [
+    cart,
+    storeInfoMap,
+    customerCoordinates.latitude,
+    customerCoordinates.longitude,
+    calculateDeliveryFee,
+  ]);
+
+  const totalDeliveryFee = useMemo(() => {
+    if (!cart) return 0;
+    const storeNames = Object.keys(storeInfoMap);
+    if (storeNames.length === 0) return 0;
+
+    return storeNames.reduce((sum, storeName) => {
+      const fee = storeDeliveryDetails[storeName]?.fee ?? SHIPPING_BASE_FEE;
+      return sum + fee;
+    }, 0);
+  }, [cart, storeInfoMap, storeDeliveryDetails]);
+
   // Calculate totals
   const calculations = useMemo(() => {
     try {
       if (!cart) return { subtotal: 0, deliveryFee: 0, discount: 0, total: 0 };
 
       const subtotal = parseFloat(cart.total_money) || 0;
+      const storeCount = Object.keys(storeInfoMap).length || 1;
+      const estimatedFallbackFee =
+        storeCount * (SHIPPING_BASE_FEE + SHIPPING_FEE_PER_KM * 3);
+      const deliveryFee =
+        totalDeliveryFee > 0 ? totalDeliveryFee : estimatedFallbackFee;
 
-      // Calculate estimated delivery fee (actual fee calculated by backend based on distance)
-      // Base fee: 15,000 VND + 4,000 VND per km from store to customer
-      const storeNames = new Set();
-      cart.items.forEach((item) => {
-        try {
-          // Backend trả về store object, cần access đúng cách
-          const foodData = item.food as Record<string, unknown>;
-          let storeName = null;
-
-          // Try different possible structures
-          if (foodData.store && typeof foodData.store === "object") {
-            const storeData = foodData.store as Record<string, unknown>;
-            storeName = storeData.store_name as string;
-          } else if (typeof foodData.store_name === "string") {
-            storeName = foodData.store_name;
-          }
-
-          if (storeName) {
-            storeNames.add(storeName);
-          }
-        } catch (error) {
-          console.error("Error processing store name:", error, item);
-        }
-      });
-      const numberOfStores = storeNames.size || 1; // At least 1 store
-      // Estimated: 15k base + ~3km avg = 27k per store (actual fee calculated by backend)
-      const deliveryFee = numberOfStores * 27000;
-
-      // Calculate discount from selected promos
       let discount = 0;
       selectedPromos.forEach((promoId) => {
         try {
@@ -236,7 +473,6 @@ const Checkout: React.FC = () => {
 
       const total = Math.max(0, subtotal + deliveryFee - discount);
 
-      // Validate all numbers
       const result = {
         subtotal: isNaN(subtotal) ? 0 : subtotal,
         deliveryFee: isNaN(deliveryFee) ? 0 : deliveryFee,
@@ -260,7 +496,7 @@ const Checkout: React.FC = () => {
       console.error("Error in calculations:", error);
       return { subtotal: 0, deliveryFee: 0, discount: 0, total: 0 };
     }
-  }, [cart, selectedPromos, promos]);
+  }, [cart, selectedPromos, promos, storeInfoMap, totalDeliveryFee]);
 
   const handleInputChange = (
     e: React.ChangeEvent<
@@ -356,7 +592,19 @@ const Checkout: React.FC = () => {
         ...formData,
         promo_ids: selectedPromos,
         discount_amount: calculations.discount,
+        shipping_fee: calculations.deliveryFee,
+        total_money: calculations.total,
       };
+
+      const shipLat = normalizeCoordinateForPayload(
+        customerCoordinates.latitude
+      );
+      const shipLon = normalizeCoordinateForPayload(
+        customerCoordinates.longitude
+      );
+
+      if (shipLat != null) orderData.ship_latitude = shipLat;
+      if (shipLon != null) orderData.ship_longitude = shipLon;
 
       // Only send selected_item_ids when checkout was initiated with a subset of cart items
       if (
@@ -558,6 +806,24 @@ const Checkout: React.FC = () => {
                     rows={3}
                     required
                   />
+                  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mt-3 text-sm text-gray-700">
+                    <div className="flex items-center gap-2">
+                      <MapPin className="text-orange-500" size={18} />
+                      <span>
+                        {customerCoordinates.latitude && customerCoordinates.longitude
+                          ? "Đã chọn vị trí, tính phí theo khoảng cách"
+                          : "Chọn vị trí trên bản đồ để tính phí chính xác"}
+                      </span>
+                    </div>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setShowAddressPicker(true)}
+                    >
+                      Chọn trên bản đồ
+                    </Button>
+                  </div>
                 </div>
 
                 <div>
@@ -731,19 +997,54 @@ const Checkout: React.FC = () => {
               </div>
 
               {/* Order Totals */}
-              <div className="border-t pt-4 space-y-2">
+              <div className="border-t pt-4 space-y-3">
                 <div className="flex justify-between">
                   <span>Tạm tính:</span>
                   <span>{formatCurrency(calculations.subtotal)}</span>
                 </div>
                 <div className="flex justify-between">
-                  <span>Phí giao hàng (ước tính):</span>
+                  <span>
+                    Phí giao hàng
+                    {isComputingDelivery ? " (đang tính...)" : ""}:
+                  </span>
                   <span>{formatCurrency(calculations.deliveryFee)}</span>
                 </div>
-                <p className="text-xs text-gray-500 italic">
-                  * Phí giao hàng thực tế: 15,000đ + 4,000đ/km (tính theo khoảng
-                  cách)
-                </p>
+
+                {Object.keys(storeDeliveryDetails).length > 0 && (
+                  <div className="bg-orange-50 border border-orange-200 rounded-lg p-3 space-y-2">
+                    <p className="text-xs text-orange-800 font-medium">
+                      Chi tiết phí giao hàng theo từng cửa hàng:
+                    </p>
+                    {Object.entries(storeDeliveryDetails).map(
+                      ([storeName, detail]) => (
+                        <div
+                          key={storeName}
+                          className="flex justify-between text-sm text-gray-700"
+                        >
+                          <div className="space-y-0.5">
+                            <p className="font-medium text-gray-800">
+                              {storeName}
+                            </p>
+                            <p className="text-xs text-gray-600">
+                              Khoảng cách: {formatDistanceLabel(detail.distanceKm)}
+                            </p>
+                          </div>
+                          <span className="font-semibold text-orange-600">
+                            {formatCurrency(detail.fee)}
+                          </span>
+                        </div>
+                      )
+                    )}
+                    {(customerCoordinates.latitude == null ||
+                      customerCoordinates.longitude == null) && (
+                      <p className="text-xs text-gray-600">
+                        Chưa có toạ độ chính xác, áp dụng phí cơ bản cho mỗi cửa
+                        hàng.
+                      </p>
+                    )}
+                  </div>
+                )}
+
                 {calculations.discount > 0 && (
                   <div className="flex justify-between text-green-600">
                     <span>Giảm giá:</span>
@@ -754,6 +1055,10 @@ const Checkout: React.FC = () => {
                   <span>Tổng cộng:</span>
                   <span>{formatCurrency(calculations.total)}</span>
                 </div>
+                <p className="text-xs text-blue-600 italic">
+                  Phí vận chuyển = 15,000đ + 4,000đ/km mỗi cửa hàng (sử dụng
+                  khoảng cách thực tế khi có vị trí giao).
+                </p>
               </div>
 
               {/* Submit Button */}
@@ -774,6 +1079,29 @@ const Checkout: React.FC = () => {
           </Card>
         </div>
       </div>
+
+      <AddressPicker
+        open={showAddressPicker}
+        onClose={() => setShowAddressPicker(false)}
+        initialAddress={formData.ship_address}
+        initialCoords={
+          customerCoordinates.latitude != null &&
+          customerCoordinates.longitude != null
+            ? {
+                latitude: customerCoordinates.latitude,
+                longitude: customerCoordinates.longitude,
+              }
+            : null
+        }
+        onSelect={(data) => {
+          setFormData((prev) => ({ ...prev, ship_address: data.address }));
+          setCustomerCoordinates({
+            latitude: data.latitude,
+            longitude: data.longitude,
+          });
+          setShowAddressPicker(false);
+        }}
+      />
 
       {/* Voucher Tooltip */}
       {hoveredPromo && (

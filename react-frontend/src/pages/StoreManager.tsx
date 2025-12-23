@@ -39,17 +39,14 @@ import {
   X,
   Upload,
   Plus,
-  Save,
   Trash2,
   Edit2,
   CheckCircle,
   Clock,
   MapPin,
-  Phone,
   User,
-  Filter
+  Copy
 } from 'lucide-react';
-import { Copy } from 'lucide-react';
 
 // --- DEFINITIONS BASED ON YOUR JSON ---
 
@@ -87,10 +84,10 @@ interface StoreOrder {
   note: string;
   shipping_fee: string;
   items: OrderItem[];
-    refund_requested?: boolean;
-    refund_status?: 'Không' | 'Chờ xử lý' | 'Đã hoàn thành';
-    bank_name?: string | null;
-    bank_account?: string | null;
+  refund_requested?: boolean;
+  refund_status?: 'Không' | 'Chờ xử lý' | 'Đã hoàn thành';
+  bank_name?: string | null;
+  bank_account?: string | null;
 }
 
 interface StorePromotion {
@@ -117,7 +114,7 @@ interface FoodRating {
 
 const StoreManager: React.FC = () => {
   const navigate = useNavigate();
-    const { id: storeIdParam } = useParams();
+  const { id: storeIdParam } = useParams();
   
   // State quản lý section
   const [activeSection, setActiveSection] = useState<string>(() => localStorage.getItem('store_manager_active_section') || 'dashboard');
@@ -125,16 +122,16 @@ const StoreManager: React.FC = () => {
   // State dữ liệu chung
   const [storeInfo, setStoreInfo] = useState<MyStore | null>(null);
   const [loading, setLoading] = useState(true);
-    const [stats, setStats] = useState<any>({});
-    const [storeDash, setStoreDash] = useState<any>(null);
+  const [stats, setStats] = useState<any>({});
+  const [storeDash, setStoreDash] = useState<any>(null);
 
   // --- ORDER STATE ---
   const [orders, setOrders] = useState<StoreOrder[]>([]);
   const [selectedOrder, setSelectedOrder] = useState<StoreOrder | null>(null);
   const [showOrderModal, setShowOrderModal] = useState(false);
-    const [showRefundModal, setShowRefundModal] = useState(false);
-    const [refundOrder, setRefundOrder] = useState<StoreOrder | null>(null);
-    const [processingRefund, setProcessingRefund] = useState(false);
+  const [showRefundModal, setShowRefundModal] = useState(false);
+  const [refundOrder, setRefundOrder] = useState<StoreOrder | null>(null);
+  const [processingRefund, setProcessingRefund] = useState(false);
   
   // State lọc trạng thái đơn hàng
   const [filterStatus, setFilterStatus] = useState<string>('Tất cả');
@@ -153,8 +150,8 @@ const StoreManager: React.FC = () => {
   const [newFood, setNewFood] = useState({ title: '', description: '', price: '', category_id: '', availability: 'Còn hàng' });
   const [newFoodImage, setNewFoodImage] = useState<File | null>(null);
   const [editFoodImage, setEditFoodImage] = useState<File | null>(null);
-    const [addFoodPreview, setAddFoodPreview] = useState<string | null>(null);
-    const [editFoodPreview, setEditFoodPreview] = useState<string | null>(null);
+  const [addFoodPreview, setAddFoodPreview] = useState<string | null>(null);
+  const [editFoodPreview, setEditFoodPreview] = useState<string | null>(null);
   const addImageRef = useRef<HTMLInputElement>(null);
   const editImageRef = useRef<HTMLInputElement>(null);
 
@@ -180,9 +177,9 @@ const StoreManager: React.FC = () => {
   // --- STORE INFO EDIT STATE ---
   const [showEditStoreModal, setShowEditStoreModal] = useState(false);
   const [editableStoreInfo, setEditableStoreInfo] = useState<MyStore | null>(null);
-    const [storeImageFile, setStoreImageFile] = useState<File | null>(null);
-    const [storeImagePreview, setStoreImagePreview] = useState<string | null>(null);
-    const storeImageRef = useRef<HTMLInputElement>(null);
+  const [storeImageFile, setStoreImageFile] = useState<File | null>(null);
+  const [storeImagePreview, setStoreImagePreview] = useState<string | null>(null);
+  const storeImageRef = useRef<HTMLInputElement>(null);
 
 
   // --- INITIAL LOAD ---
@@ -708,7 +705,7 @@ const StoreManager: React.FC = () => {
                                     <ResponsiveContainer width="100%" height="100%">
                                         <PieChart>
                                             <Pie data={bestSellers} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={100} label>
-                                                {bestSellers.map((_, idx) => (<Cell key={idx} fill={colorPalette[idx % colorPalette.length]} />))}
+                                                {bestSellers.map((_: any, idx: number) => (<Cell key={idx} fill={colorPalette[idx % colorPalette.length]} />))}
                                             </Pie>
                                             <Legend />
                                             <Tooltip formatter={(v:any)=>v} />
@@ -730,7 +727,7 @@ const StoreManager: React.FC = () => {
                                             <YAxis allowDecimals={false} />
                                             <Tooltip />
                                             <Legend />
-                                            {['S','M','L','XL','Mặc định'].map((key, idx)=>(
+                                            {['S','M','L','XL','Mặc định'].map((key: string, idx: number)=>(
                                                 <Bar key={key} dataKey={key} stackId="sizes" fill={colorPalette[idx % colorPalette.length]} />
                                             ))}
                                         </BarChart>
@@ -785,7 +782,7 @@ const StoreManager: React.FC = () => {
                                     <CardContent className="flex items-center justify-center h-56">
                                         <ResponsiveContainer width="100%" height="100%">
                                             <RadialBarChart cx="50%" cy="50%" innerRadius="60%" outerRadius="90%" barSize={14} data={[{ name: 'Available', value: availabilityRatio }]}>
-                                                <RadialBar minAngle={15} clockWise dataKey="value" fill="#22c55e" background cornerRadius={8} />
+                                                <RadialBar dataKey="value" fill="#22c55e" background cornerRadius={8} />
                                                 <Legend content={() => <div className="text-center text-sm text-gray-600">{availability.in_stock}/{availability.total} món còn hàng</div>} />
                                             </RadialBarChart>
                                         </ResponsiveContainer>
