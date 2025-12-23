@@ -690,13 +690,19 @@ const Admin: React.FC = () => {
     const handleAddPromo = async (e: any) => {
         e.preventDefault();
 
-        // Chuẩn bị payload: Chuyển đổi chuỗi rỗng thành '0' hoặc số hợp lệ
         const payload = {
             ...newPromo,
-            minimum_pay: newPromo.minimum_pay === '' ? '0' : newPromo.minimum_pay,
-            max_discount_amount: newPromo.max_discount_amount === '' ? '0' : newPromo.max_discount_amount,
-            scope: 'SYSTEM', // Mặc định admin tạo là SYSTEM
-            store_id: null   // System promo không thuộc store nào
+            discount_value: Number(newPromo.discount_value) || 0,
+            minimum_pay:
+                newPromo.minimum_pay === '' || newPromo.minimum_pay === null
+                    ? null
+                    : Number(newPromo.minimum_pay),
+            max_discount_amount:
+                newPromo.max_discount_amount === '' || newPromo.max_discount_amount === null
+                    ? null
+                    : Number(newPromo.max_discount_amount),
+            scope: 'SYSTEM',
+            store_id: null,
         };
 
         try {
@@ -719,7 +725,11 @@ const Admin: React.FC = () => {
             } as any);
         } catch (error: any) {
             console.error("Lỗi tạo KM:", error);
-            const msg = error.response?.data?.minimum_pay ? `Lỗi: Đơn tối thiểu ${error.response.data.minimum_pay}` : 'Có lỗi xảy ra khi tạo khuyến mãi';
+            const msg = error.response?.data?.minimum_pay
+                ? `Lỗi: Đơn tối thiểu ${error.response.data.minimum_pay}`
+                : error.response?.data?.max_discount_amount
+                ? `Lỗi: Giảm tối đa ${error.response.data.max_discount_amount}`
+                : 'Có lỗi xảy ra khi tạo khuyến mãi';
             alert(msg);
         }
     };
@@ -741,8 +751,15 @@ const Admin: React.FC = () => {
 
         const payload = {
             ...selectedPromo,
-            minimum_pay: selectedPromo.minimum_pay === '' ? '0' : selectedPromo.minimum_pay,
-            max_discount_amount: selectedPromo.max_discount_amount === '' ? '0' : selectedPromo.max_discount_amount,
+            discount_value: Number(selectedPromo.discount_value) || 0,
+            minimum_pay:
+                selectedPromo.minimum_pay === '' || selectedPromo.minimum_pay === null
+                    ? null
+                    : Number(selectedPromo.minimum_pay),
+            max_discount_amount:
+                selectedPromo.max_discount_amount === '' || selectedPromo.max_discount_amount === null
+                    ? null
+                    : Number(selectedPromo.max_discount_amount),
         };
 
         try {
@@ -750,8 +767,14 @@ const Admin: React.FC = () => {
             alert('Cập nhật thành công');
             setShowEditPromoModal(false);
             loadPromotions();
-        } catch (e) {
-            alert('Lỗi cập nhật');
+        } catch (error: any) {
+            console.error('Lỗi cập nhật KM:', error);
+            const msg = error.response?.data?.minimum_pay
+                ? `Lỗi: Đơn tối thiểu ${error.response.data.minimum_pay}`
+                : error.response?.data?.max_discount_amount
+                ? `Lỗi: Giảm tối đa ${error.response.data.max_discount_amount}`
+                : 'Lỗi cập nhật';
+            alert(msg);
         }
     };
     const deletePromo = async (id: number) => { if (!confirm('Xóa?')) return; await API.delete(`/promotions/admin/${id}/delete/`); loadPromotions(); };

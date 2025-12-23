@@ -6,6 +6,11 @@ import { Card, CardContent } from "@/components/ui/card";
 import { paymentService } from "@/services/paymentService";
 import { AddressPicker } from "@/components/AddressPicker";
 import { locationService } from "@/services/locationService";
+import {
+  promotionsService,
+  type Promotion,
+  type AppliedPromo,
+} from "@/services/promotionsService";
 import { MapPin } from "lucide-react";
 
 // Types
@@ -43,15 +48,6 @@ type Cart = {
   items: CartItem[];
 };
 
-type Promo = {
-  id: number;
-  title: string;
-  discount_type: "PERCENTAGE" | "FIXED";
-  discount_value: number;
-  min_order_value: number;
-  max_discount?: number;
-};
-
 type StoreDeliveryInfo = {
   id?: number;
   name: string;
@@ -64,18 +60,6 @@ type StoreDeliveryMetrics = {
   distanceKm: number | null;
   fee: number;
   store: StoreDeliveryInfo;
-};
-
-// Backend promo response type (with different field names)
-type BackendPromo = {
-  id: number;
-  name: string;
-  title?: string;
-  discount_type: "PERCENTAGE" | "FIXED" | "PERCENT" | "AMOUNT";
-  discount_value: number;
-  minimum_pay: number;
-  min_order_value?: number;
-  max_discount?: number;
 };
 
 const SHIPPING_BASE_FEE = 15000;
@@ -112,8 +96,11 @@ const normalizeCoordinateForPayload = (value: number | null) => {
 
 const Checkout: React.FC = () => {
   const [cart, setCart] = useState<Cart | null>(null);
-  const [promos, setPromos] = useState<Promo[]>([]);
-  const [selectedPromos, setSelectedPromos] = useState<number[]>([]);
+  const [promos, setPromos] = useState<Promotion[]>([]);
+  const [selectedPromos, setSelectedPromos] = useState<Promotion[]>([]);
+  const [appliedPromos, setAppliedPromos] = useState<AppliedPromo[]>([]);
+  const [isLoadingPromos, setIsLoadingPromos] = useState(false);
+  const [isApplyingPromos, setIsApplyingPromos] = useState(false);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [customerCoordinates, setCustomerCoordinates] = useState<{
@@ -129,6 +116,15 @@ const Checkout: React.FC = () => {
   const [storeDeliveryDetails, setStoreDeliveryDetails] = useState<
     Record<string, StoreDeliveryMetrics>
   >({});
+  const storeNameById = useMemo(() => {
+    const map: Record<number, string> = {};
+    Object.values(storeInfoMap).forEach((info) => {
+      if (typeof info.id === "number") {
+        map[info.id] = info.name;
+      }
+    });
+    return map;
+  }, [storeInfoMap]);
   const [showAddressPicker, setShowAddressPicker] = useState(false);
   const [isComputingDelivery, setIsComputingDelivery] = useState(false);
   const geocodeCacheRef = useRef<
@@ -180,11 +176,11 @@ const Checkout: React.FC = () => {
   useEffect(() => {
     const loadCart = async () => {
       try {
-        setLoading(true);
         const response = (await API.get("/cart/")) as Cart;
 
         const selectedIds = selectionState.selectedItemIds || [];
         let finalItems = response.items;
+        let storeMap: Record<string, StoreDeliveryInfo> = {};
 
         if (selectedIds.length > 0) {
           finalItems = response.items.filter((item) =>
@@ -205,30 +201,49 @@ const Checkout: React.FC = () => {
           };
 
           setCart(filteredCart);
-          setStoreInfoMap(buildStoreInfoFromItems(finalItems));
+          storeMap = buildStoreInfoFromItems(finalItems);
+          setStoreInfoMap(storeMap);
         } else {
           setCart(response);
-          setStoreInfoMap(buildStoreInfoFromItems(response.items));
+          storeMap = buildStoreInfoFromItems(response.items);
+          setStoreInfoMap(storeMap);
         }
+
+        return storeMap;
       } catch (error) {
         console.error("Error loading cart:", error);
         alert("Lỗi khi tải giỏ hàng. Vui lòng thử lại!");
         navigate("/cart");
-      } finally {
-        setLoading(false);
+        return {};
       }
     };
 
-    const loadPromos = async () => {
+    const loadPromos = async (
+      storeMap: Record<string, StoreDeliveryInfo>
+    ): Promise<void> => {
+      const storeIds = Object.values(storeMap)
+        .map((info) => info.id)
+        .filter((id): id is number => typeof id === "number");
+
       try {
-        const response = await API.get("/promotions/");
-        const promosData = response as { results?: Promo[] } | Promo[];
-        const finalPromos = Array.isArray(promosData)
-          ? promosData
-          : promosData.results || [];
-        setPromos(finalPromos);
+        setIsLoadingPromos(true);
+        const promoRequests = [
+          promotionsService.getPromotions(0),
+          ...storeIds.map((id) => promotionsService.getPromotions(id)),
+        ];
+
+        const results = await Promise.all(promoRequests);
+        const merged = results.flat();
+        const deduped = merged.filter(
+          (promo, index, self) =>
+            index === self.findIndex((p) => p.id === promo.id)
+        );
+        setPromos(deduped);
       } catch (error) {
         console.error("Error loading promos:", error);
+        setPromos([]);
+      } finally {
+        setIsLoadingPromos(false);
       }
     };
 
@@ -261,22 +276,25 @@ const Checkout: React.FC = () => {
     };
 
     const fetchData = async () => {
-      await loadCart();
-      await loadPromos();
-      await loadUserProfile();
+      try {
+        setLoading(true);
+        const storeMap = await loadCart();
+        await loadPromos(storeMap);
+        await loadUserProfile();
+      } finally {
+        setLoading(false);
+      }
     };
 
     fetchData();
-  }, [navigate, selectionState.selectedItemIds]);
+  }, [navigate, selectionState.selectedItemIds, buildStoreInfoFromItems]);
 
   // Helper function to get minimum order value from backend data
-  const getPromoMinOrder = (promo: Promo | BackendPromo): number => {
-    try {
-      return (promo as BackendPromo).minimum_pay || promo.min_order_value || 0;
-    } catch (error) {
-      console.error("Error getting promo min order:", error, promo);
-      return 0;
-    }
+  const getPromoMinOrder = (promo: Promotion): number => {
+    const minValue = promo.minimum_pay ?? promo.min_order_value;
+    const numeric =
+      typeof minValue === "string" ? parseFloat(minValue) : Number(minValue || 0);
+    return Number.isFinite(numeric) ? numeric : 0;
   };
 
   const calculateDeliveryFee = useCallback((distanceKm: number | null) => {
@@ -435,6 +453,27 @@ const Checkout: React.FC = () => {
     }, 0);
   }, [cart, storeInfoMap, storeDeliveryDetails]);
 
+  const storeSubtotalsByStoreId = useMemo(() => {
+    const map: Record<number, number> = {};
+    if (!cart) return map;
+
+    cart.items.forEach((item) => {
+      const foodData = item.food as Record<string, any>;
+      const storeData = (foodData.store || {}) as Record<string, any>;
+      const storeId = storeData.id;
+      if (typeof storeId === "number") {
+        const subtotal = parseFloat(item.subtotal || "0") || 0;
+        map[storeId] = (map[storeId] || 0) + subtotal;
+      }
+    });
+
+    return map;
+  }, [cart]);
+
+  const totalPromoDiscount = useMemo(() => {
+    return appliedPromos.reduce((sum, ap) => sum + (ap.discount || 0), 0);
+  }, [appliedPromos]);
+
   // Calculate totals
   const calculations = useMemo(() => {
     try {
@@ -447,30 +486,7 @@ const Checkout: React.FC = () => {
       const deliveryFee =
         totalDeliveryFee > 0 ? totalDeliveryFee : estimatedFallbackFee;
 
-      let discount = 0;
-      selectedPromos.forEach((promoId) => {
-        try {
-          const promo = promos.find((p) => p.id === promoId);
-          if (promo && subtotal >= getPromoMinOrder(promo)) {
-            if (promo.discount_type === "PERCENTAGE") {
-              let promoDiscount =
-                (subtotal * Number(promo.discount_value)) / 100;
-              if (promo.max_discount) {
-                promoDiscount = Math.min(
-                  promoDiscount,
-                  Number(promo.max_discount)
-                );
-              }
-              discount += promoDiscount;
-            } else {
-              discount += Number(promo.discount_value);
-            }
-          }
-        } catch (error) {
-          console.error("Error calculating promo discount:", error, promoId);
-        }
-      });
-
+      const discount = totalPromoDiscount;
       const total = Math.max(0, subtotal + deliveryFee - discount);
 
       const result = {
@@ -480,9 +496,9 @@ const Checkout: React.FC = () => {
         total: isNaN(total) ? 0 : total,
       };
 
-      if (selectedPromos.length > 0) {
+      if (appliedPromos.length > 0) {
         console.log("Multiple promo calculation:", {
-          selectedPromos,
+          appliedPromos,
           subtotal,
           deliveryFee,
           discount,
@@ -496,7 +512,13 @@ const Checkout: React.FC = () => {
       console.error("Error in calculations:", error);
       return { subtotal: 0, deliveryFee: 0, discount: 0, total: 0 };
     }
-  }, [cart, selectedPromos, promos, storeInfoMap, totalDeliveryFee]);
+  }, [
+    cart,
+    appliedPromos,
+    storeInfoMap,
+    totalDeliveryFee,
+    totalPromoDiscount,
+  ]);
 
   const handleInputChange = (
     e: React.ChangeEvent<
@@ -509,39 +531,95 @@ const Checkout: React.FC = () => {
     });
   };
 
-  const handlePromoToggle = (promoId: number) => {
+  const togglePromoSelection = (promo: Promotion) => {
+    setSelectedPromos((prev) => {
+      const isSelected = prev.some((p) => p.id === promo.id);
+      if (isSelected) {
+        return prev.filter((p) => p.id !== promo.id);
+      }
+
+      const storeId = promo.store ?? promo.store_id;
+      if (typeof storeId === "number") {
+        const filtered = prev.filter((p) => (p.store ?? p.store_id) !== storeId);
+        return [...filtered, promo];
+      }
+
+      return [...prev, promo];
+    });
+  };
+
+  const applySelectedPromos = async () => {
+    if (!selectedPromos.length) {
+      alert("Vui lòng chọn ít nhất một mã giảm giá");
+      return;
+    }
+
     try {
-      setSelectedPromos((prev) => {
-        const newSelected = prev.includes(promoId)
-          ? prev.filter((id) => id !== promoId)
-          : [...prev, promoId];
-        return newSelected;
+      setIsApplyingPromos(true);
+      const totalAmount = parseFloat(cart?.total_money || "0") || 0;
+
+      const promosWithAmounts = selectedPromos.map((promo) => {
+        const storeId = promo.store ?? promo.store_id;
+        const storeAmount =
+          storeId && storeId !== 0
+            ? storeSubtotalsByStoreId[storeId] || 0
+            : totalAmount;
+        return { promo, storeAmount };
       });
+
+      const result = await promotionsService.validateMultiplePromos(
+        promosWithAmounts,
+        totalAmount
+      );
+
+      setAppliedPromos(result.appliedPromos);
+      if (result.appliedPromos.length > 0) {
+        setSelectedPromos(result.appliedPromos.map((ap) => ap.promo));
+      } else {
+        alert("Không có mã nào hợp lệ cho đơn hàng này");
+      }
     } catch (error) {
-      console.error("Error toggling promo:", error, promoId);
+      console.error("Error applying promos:", error);
+      alert("Không thể áp dụng mã giảm giá");
+    } finally {
+      setIsApplyingPromos(false);
     }
   };
 
-  // Helper function to format voucher details for tooltip
-  const getVoucherDetails = (promo: Promo) => {
-    const details = [];
+  const removeAppliedPromo = (promoId: number) => {
+    setAppliedPromos((prev) => prev.filter((ap) => ap.promo.id !== promoId));
+    setSelectedPromos((prev) => prev.filter((p) => p.id !== promoId));
+  };
 
-    // Discount info
-    if (promo.discount_type === "PERCENTAGE") {
+  // Helper function to format voucher details for tooltip
+  const getVoucherDetails = (promo: Promotion) => {
+    const details: string[] = [];
+    const discountType =
+      promo.discount_type || (promo.category === "PERCENT" ? "PERCENT" : "AMOUNT");
+    const isPercent =
+      discountType === "PERCENT" || discountType === "PERCENTAGE";
+    const maxDiscount = promo.max_discount ?? promo.max_discount_amount;
+
+    if (isPercent) {
       details.push(`🎯 Giảm ${promo.discount_value}% giá trị đơn hàng`);
-      if (promo.max_discount) {
-        details.push(`💰 Tối đa: ${formatCurrency(promo.max_discount)}`);
+      if (maxDiscount) {
+        details.push(`💰 Tối đa: ${formatCurrency(maxDiscount)}`);
       }
     } else {
-      details.push(
-        `💰 Giảm ${formatCurrency(promo.discount_value)} cho đơn hàng`
-      );
+      details.push(`💰 Giảm ${formatCurrency(promo.discount_value)} cho đơn hàng`);
     }
 
-    // Minimum order
-    details.push(
-      `📦 Đơn tối thiểu: ${formatCurrency(getPromoMinOrder(promo))}`
-    );
+    details.push(`📦 Đơn tối thiểu: ${formatCurrency(getPromoMinOrder(promo))}`);
+
+    const storeId = promo.store ?? promo.store_id;
+    if (storeId && storeId !== 0) {
+      const storeLabel = storeNameById[storeId]
+        ? `Cửa hàng: ${storeNameById[storeId]}`
+        : `Cửa hàng ID ${storeId}`;
+      details.push(storeLabel);
+    } else if (storeId === 0) {
+      details.push("Áp dụng toàn hệ thống");
+    }
 
     return details;
   };
@@ -590,11 +668,19 @@ const Checkout: React.FC = () => {
 
       const orderData: any = {
         ...formData,
-        promo_ids: selectedPromos,
-        discount_amount: calculations.discount,
         shipping_fee: calculations.deliveryFee,
         total_money: calculations.total,
       };
+
+      if (appliedPromos.length > 0) {
+        orderData.promo_ids = appliedPromos.map((ap) => ap.promo.id);
+        orderData.discount_amount = totalPromoDiscount;
+        orderData.promo_details = appliedPromos.map((ap) => ({
+          promo_id: ap.promo.id,
+          store_id: ap.promo.store ?? ap.promo.store_id ?? null,
+          discount: ap.discount,
+        }));
+      }
 
       const shipLat = normalizeCoordinateForPayload(
         customerCoordinates.latitude
@@ -856,15 +942,34 @@ const Checkout: React.FC = () => {
               </form>
 
               {/* Promotions */}
-              {promos.length > 0 && (
-                <div className="mt-6">
-                  <h3 className="text-lg font-semibold mb-4">Khuyến mãi</h3>
+              <div className="mt-6">
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="text-lg font-semibold">Khuyến mãi</h3>
+                  {isLoadingPromos && (
+                    <span className="text-sm text-gray-500">Đang tải...</span>
+                  )}
+                </div>
+
+                {promos.length === 0 && !isLoadingPromos && (
+                  <p className="text-sm text-gray-500">
+                    Không có mã giảm giá khả dụng.
+                  </p>
+                )}
+
+                {promos.length > 0 && (
                   <div className="space-y-2">
                     {promos.map((promo) => {
                       try {
+                        const storeId = promo.store ?? promo.store_id ?? 0;
+                        const amountToCheck =
+                          storeId && storeId !== 0
+                            ? storeSubtotalsByStoreId[storeId] || 0
+                            : calculations.subtotal;
                         const isApplicable =
-                          calculations.subtotal >= getPromoMinOrder(promo);
-                        const isSelected = selectedPromos.includes(promo.id);
+                          amountToCheck >= getPromoMinOrder(promo);
+                        const isSelected = selectedPromos.some(
+                          (p) => p.id === promo.id
+                        );
 
                         return (
                           <div
@@ -876,32 +981,30 @@ const Checkout: React.FC = () => {
                                 ? "border-gray-300 hover:border-orange-300"
                                 : "border-gray-200 opacity-50 cursor-not-allowed"
                             }`}
-                            onClick={() =>
-                              isApplicable && handlePromoToggle(promo.id)
-                            }
-                            onMouseEnter={(e) =>
-                              handlePromoMouseEnter(e, promo.id)
-                            }
+                            onClick={() => isApplicable && togglePromoSelection(promo)}
+                            onMouseEnter={(e) => handlePromoMouseEnter(e, promo.id)}
                             onMouseLeave={handlePromoMouseLeave}>
                             <div className="flex items-center justify-between">
-                              <div>
-                                <p className="font-medium">{promo.title}</p>
+                              <div className="space-y-0.5">
+                                <p className="font-medium">{promo.title || promo.name}</p>
                                 <p className="text-sm text-gray-600">
-                                  {promo.discount_type === "PERCENTAGE"
+                                  {promo.discount_type === "PERCENTAGE" || promo.discount_type === "PERCENT"
                                     ? `Giảm ${promo.discount_value}%`
-                                    : `Giảm ${formatCurrency(
-                                        promo.discount_value
-                                      )}`}
+                                    : `Giảm ${formatCurrency(promo.discount_value)}`}
                                   {promo.max_discount &&
-                                    promo.discount_type === "PERCENTAGE" &&
-                                    ` (tối đa ${formatCurrency(
-                                      promo.max_discount
-                                    )})`}
+                                    (promo.discount_type === "PERCENTAGE" || promo.discount_type === "PERCENT") &&
+                                    ` (tối đa ${formatCurrency(promo.max_discount)})`}
                                 </p>
                                 <p className="text-xs text-gray-500">
-                                  Đơn tối thiểu:{" "}
-                                  {formatCurrency(getPromoMinOrder(promo))}
+                                  Đơn tối thiểu: {formatCurrency(getPromoMinOrder(promo))}
                                 </p>
+                                {storeId ? (
+                                  <p className="text-xs text-gray-500">
+                                    Áp dụng cho: {storeNameById[storeId] || `Cửa hàng #${storeId}`}
+                                  </p>
+                                ) : (
+                                  <p className="text-xs text-gray-500">Áp dụng toàn hệ thống</p>
+                                )}
                               </div>
                               <input
                                 type="checkbox"
@@ -918,9 +1021,51 @@ const Checkout: React.FC = () => {
                         return null;
                       }
                     })}
+
+                    <div className="flex items-center justify-between pt-2">
+                      <div className="text-sm text-gray-600">
+                        {selectedPromos.length > 0
+                          ? `Đã chọn ${selectedPromos.length} mã`
+                          : "Chọn tối đa 1 mã cho mỗi cửa hàng"}
+                      </div>
+                      <Button
+                        type="button"
+                        size="sm"
+                        onClick={applySelectedPromos}
+                        disabled={isApplyingPromos || selectedPromos.length === 0}
+                      >
+                        {isApplyingPromos ? "Đang áp dụng..." : "Áp dụng"}
+                      </Button>
+                    </div>
                   </div>
-                </div>
-              )}
+                )}
+
+                {appliedPromos.length > 0 && (
+                  <div className="mt-4 border-t pt-3 space-y-2">
+                    <p className="text-sm font-semibold text-green-700">Mã đã áp dụng</p>
+                    {appliedPromos.map((ap) => (
+                      <div
+                        key={ap.promo.id}
+                        className="flex items-center justify-between text-sm bg-green-50 border border-green-200 rounded-md px-3 py-2"
+                      >
+                        <div className="space-y-0.5">
+                          <p className="font-medium text-green-800">{ap.promo.title || ap.promo.name}</p>
+                          <p className="text-xs text-green-700">Tiết kiệm: {formatCurrency(ap.discount)}</p>
+                        </div>
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="ghost"
+                          className="text-red-500 hover:text-red-600"
+                          onClick={() => removeAppliedPromo(ap.promo.id)}
+                        >
+                          Gỡ
+                        </Button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
             </CardContent>
           </Card>
         </div>
