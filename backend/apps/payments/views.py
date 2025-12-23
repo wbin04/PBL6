@@ -172,11 +172,14 @@ def create_payment_link(request):
 @api_view(['GET'])
 @permission_classes([AllowAny])
 def payos_return(request):
-    """Handle PayOS return callback"""
+    """Handle PayOS return callback - sends postMessage to opener window"""
     order_code = request.GET.get('orderCode', '')
     payment_status = request.GET.get('status', 'cancel')
     
-    # Simple HTML response for mobile redirect
+    # Map status for postMessage
+    pm_status = 'success' if payment_status == 'success' else 'cancel'
+    
+    # HTML response that sends postMessage to opener, then closes
     html = f"""
     <!DOCTYPE html>
     <html>
@@ -213,13 +216,34 @@ def payos_return(request):
                 {'✓ Thanh toán thành công!' if payment_status == 'success' else '✗ Đã hủy thanh toán'}
             </h1>
             <p>Mã đơn hàng: {order_code}</p>
-            <p>Bạn có thể đóng trang này.</p>
+            <p>Đang xử lý...</p>
         </div>
         <script>
-            // Try to close window after 2 seconds
-            setTimeout(function() {{
-                window.close();
-            }}, 2000);
+            (function() {{
+                var orderCode = '{order_code}';
+                var status = '{pm_status}';
+                
+                // Send postMessage to opener window (React app)
+                try {{
+                    if (window.opener && !window.opener.closed) {{
+                        // Try to send to any origin since opener could be localhost or production
+                        window.opener.postMessage(
+                            {{ type: 'PAYOS_RESULT', status: status, orderCode: orderCode }},
+                            '*'
+                        );
+                        console.log('postMessage sent:', {{ type: 'PAYOS_RESULT', status: status, orderCode: orderCode }});
+                    }} else {{
+                        console.log('No opener window found');
+                    }}
+                }} catch (e) {{
+                    console.error('Error sending postMessage:', e);
+                }}
+                
+                // Close window after short delay
+                setTimeout(function() {{
+                    window.close();
+                }}, 1000);
+            }})();
         </script>
     </body>
     </html>

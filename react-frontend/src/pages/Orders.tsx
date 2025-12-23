@@ -594,19 +594,6 @@ const Orders: React.FC = () => {
                     </Button>
                   )}
 
-                  {/* Nút thanh toán lại cho đơn ONLINE chưa thanh toán */}
-                  {order.payment_method === "ONLINE" &&
-                    order.payment_status !== "PAID" &&
-                    order.order_status !== "Đã huỷ" &&
-                    order.order_status !== "Đã giao" && (
-                      <Button
-                        size="sm"
-                        className="bg-blue-500 hover:bg-blue-600"
-                        onClick={() => retryPayment(order)}>
-                        💳 Thanh toán ngay
-                      </Button>
-                    )}
-
                   {order.order_status === "Đã giao" && (
                     <>
                       <Button

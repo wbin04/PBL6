@@ -116,6 +116,7 @@ const Checkout: React.FC = () => {
   const [storeDeliveryDetails, setStoreDeliveryDetails] = useState<
     Record<string, StoreDeliveryMetrics>
   >({});
+  const [showPromoModal, setShowPromoModal] = useState(false);
   const storeNameById = useMemo(() => {
     const map: Record<number, string> = {};
     Object.values(storeInfoMap).forEach((info) => {
@@ -663,132 +664,235 @@ const Checkout: React.FC = () => {
       return;
     }
 
+    // If payment method is ONLINE, handle payment flow first (like mobile)
+    if (formData.payment_method === "ONLINE") {
+      await handleOnlinePayment();
+      return;
+    }
+
+    // For COD payment, create order directly
+    await createOrderAndFinish();
+  };
+
+  // Build order payload from current form/cart state
+  const buildOrderPayload = () => {
+    const orderData: any = {
+      ...formData,
+      shipping_fee: calculations.deliveryFee,
+      total_money: calculations.total,
+    };
+
+    if (appliedPromos.length > 0) {
+      orderData.promo_ids = appliedPromos.map((ap) => ap.promo.id);
+      orderData.discount_amount = totalPromoDiscount;
+      orderData.promo_details = appliedPromos.map((ap) => ({
+        promo_id: ap.promo.id,
+        store_id: ap.promo.store ?? ap.promo.store_id ?? null,
+        discount: ap.discount,
+      }));
+    }
+
+    const shipLat = normalizeCoordinateForPayload(customerCoordinates.latitude);
+    const shipLon = normalizeCoordinateForPayload(customerCoordinates.longitude);
+
+    if (shipLat != null) orderData.ship_latitude = shipLat;
+    if (shipLon != null) orderData.ship_longitude = shipLon;
+
+    if (selectionState.selectedItemIds && selectionState.selectedItemIds.length > 0) {
+      orderData.selected_item_ids = selectionState.selectedItemIds;
+    }
+
+    return orderData;
+  };
+
+  // Handle online payment - create payment link FIRST, then order after successful payment
+  const handleOnlinePayment = async () => {
     try {
       setSubmitting(true);
 
-      const orderData: any = {
-        ...formData,
-        shipping_fee: calculations.deliveryFee,
-        total_money: calculations.total,
-      };
-
-      if (appliedPromos.length > 0) {
-        orderData.promo_ids = appliedPromos.map((ap) => ap.promo.id);
-        orderData.discount_amount = totalPromoDiscount;
-        orderData.promo_details = appliedPromos.map((ap) => ({
-          promo_id: ap.promo.id,
-          store_id: ap.promo.store ?? ap.promo.store_id ?? null,
-          discount: ap.discount,
-        }));
+      // Open popup IMMEDIATELY to avoid popup blocker
+      const paymentWindow = window.open("about:blank", "_blank");
+      if (!paymentWindow) {
+        alert("Trình duyệt đang chặn cửa sổ thanh toán. Hãy bật cho phép popup cho trang này và thử lại.");
+        setSubmitting(false);
+        return;
       }
 
-      const shipLat = normalizeCoordinateForPayload(
-        customerCoordinates.latitude
-      );
-      const shipLon = normalizeCoordinateForPayload(
-        customerCoordinates.longitude
-      );
+      // Show loading message in popup
+      paymentWindow.document.write('<html><body style="display:flex;justify-content:center;align-items:center;height:100vh;font-family:Arial"><p>Đang tạo liên kết thanh toán...</p></body></html>');
 
-      if (shipLat != null) orderData.ship_latitude = shipLat;
-      if (shipLon != null) orderData.ship_longitude = shipLon;
-
-      // Only send selected_item_ids when checkout was initiated with a subset of cart items
-      if (
-        selectionState.selectedItemIds &&
-        selectionState.selectedItemIds.length > 0
-      ) {
-        orderData.selected_item_ids = selectionState.selectedItemIds;
+      // Get user_id from token (decode JWT or fetch from profile)
+      let userId: number | undefined;
+      try {
+        const profile = await API.get("/auth/profile/") as { id?: number };
+        userId = profile.id;
+      } catch (err) {
+        console.warn("Could not get user profile for payment:", err);
       }
 
-      console.log("Submitting order:", orderData);
+      // Use a temporary order id for PayOS; only create order after payment success
+      const plannedOrderId = Date.now();
+      const amount = Math.round(calculations.total);
+      const message = `KH #${userId || 0} TT #${plannedOrderId}`;
 
-      // Create order first
-      const orderResponse = await API.post("/orders/", orderData);
-      console.log("Order created:", orderResponse);
-      console.log("Order response type:", typeof orderResponse);
-      console.log("Is array:", Array.isArray(orderResponse));
+      console.log("Creating PayOS payment link with:", {
+        user_id: userId,
+        order_id: plannedOrderId,
+        amount,
+        message,
+      });
 
-      // If payment method is online, create payment link
-      if (formData.payment_method === "ONLINE") {
-        try {
-          // Extract order ID - handle both array and single object response
-          let orderId = null;
-          let userId = null;
+      // Create payment link using the real order_id
+      const paymentData = await paymentService.createPaymentLink({
+        order_id: plannedOrderId,
+        amount,
+        message,
+        user_id: userId,
+      });
 
-          // Case 1: Response has 'orders' array (grouped orders)
-          if (orderResponse && typeof orderResponse === "object") {
-            const response = orderResponse as {
-              orders?: Array<{ id?: number; user?: { id?: number } }>;
-              id?: number;
-              user?: { id?: number };
-            };
+      if (!paymentData.checkoutUrl) {
+        paymentWindow.close();
+        throw new Error("Không nhận được link thanh toán");
+      }
 
-            if (
-              response.orders &&
-              Array.isArray(response.orders) &&
-              response.orders.length > 0
-            ) {
-              orderId = response.orders[0]?.id;
-              userId = response.orders[0]?.user?.id;
-            }
-            // Case 2: Response is a single order object
-            else if (response.id) {
-              orderId = response.id;
-              userId = response.user?.id;
-            }
-          }
-          // Case 3: Response is an array of orders
-          else if (Array.isArray(orderResponse) && orderResponse.length > 0) {
-            orderId = orderResponse[0]?.id;
-            userId = orderResponse[0]?.user?.id;
-          }
+      console.log("PayOS payment link created:", paymentData);
 
-          console.log("Extracted orderId:", orderId);
-          console.log("Extracted userId:", userId);
+      // Navigate popup to PayOS checkout
+      paymentWindow.location.href = paymentData.checkoutUrl;
 
-          if (!orderId) {
-            console.error(
-              "Could not extract order ID from response:",
-              orderResponse
-            );
-            throw new Error("Không nhận được order ID");
-          }
+      // Wait for payment result
+      const finalStatus = await waitForPaymentResult(paymentWindow, paymentData.orderCode);
 
-          // Create payment link with PayOS using payment service
-          const paymentData = await paymentService.createPaymentLink({
-            order_id: orderId,
-            amount: Math.round(calculations.total),
-            message: `Thanh toán đơn hàng #${orderId}`,
-            user_id: userId,
-          });
-
-          if (paymentData.checkoutUrl) {
-            // Redirect to PayOS checkout
-            window.location.href = paymentData.checkoutUrl;
-            return;
-          } else {
-            throw new Error("Không nhận được link thanh toán");
-          }
-        } catch (paymentError) {
-          console.error("Payment error:", paymentError);
-          const errorMsg =
-            paymentError instanceof Error
-              ? paymentError.message
-              : "Đã xảy ra lỗi";
-          alert(
-            `Đặt hàng thành công nhưng lỗi thanh toán: ${errorMsg}. Bạn có thể thanh toán sau.`
-          );
-          navigate("/orders");
-          return;
-        }
+      if (finalStatus === "PAID") {
+        // Payment successful - NOW create order and clear cart
+        console.log("Payment successful! Creating order...");
+        await createOrderAndFinish(true, plannedOrderId);
+      } else if (finalStatus === "CANCELLED") {
+        alert("Thanh toán đã bị hủy. Đơn hàng chưa được tạo.");
+        setSubmitting(false);
       } else {
-        // COD payment - just show success message
-        alert("Đặt hàng thành công! Thanh toán khi nhận hàng.");
-        navigate("/orders");
+        alert("Không xác minh được thanh toán. Vui lòng thử lại.");
+        setSubmitting(false);
       }
     } catch (error) {
+      console.error("Payment error:", error);
+      const errorMsg = error instanceof Error ? error.message : "Đã xảy ra lỗi";
+      alert(`Lỗi thanh toán: ${errorMsg}`);
+      setSubmitting(false);
+    }
+  };
+
+  // Wait for payment result from popup
+  const waitForPaymentResult = (paymentWindow: Window, orderCode: number): Promise<'PAID' | 'CANCELLED' | 'TIMEOUT'> => {
+    return new Promise((resolve) => {
+      let resolved = false;
+
+      const handleMessage = (event: MessageEvent) => {
+        const data = event.data;
+        if (data && data.type === 'PAYOS_RESULT') {
+          console.log('Received PAYOS_RESULT:', data);
+          resolved = true;
+          cleanup();
+          
+          try {
+            if (paymentWindow && !paymentWindow.closed) {
+              paymentWindow.close();
+            }
+          } catch (e) {
+            console.error('Error closing popup:', e);
+          }
+
+          resolve(data.status === 'success' ? 'PAID' : 'CANCELLED');
+        }
+      };
+
+      window.addEventListener('message', handleMessage);
+
+      // Check if popup was closed manually
+      const checkClosedInterval = setInterval(async () => {
+        if (resolved) {
+          clearInterval(checkClosedInterval);
+          return;
+        }
+
+        try {
+          if (paymentWindow && paymentWindow.closed) {
+            console.log('Payment popup was closed, checking status via API...');
+            clearInterval(checkClosedInterval);
+
+            // Short delay then check status
+            await new Promise(r => setTimeout(r, 1500));
+
+            try {
+              const status = await paymentService.checkPaymentStatus(orderCode);
+              console.log('Fallback status check:', status);
+              if (status.paid || status.status === 'PAID') {
+                resolved = true;
+                cleanup();
+                resolve('PAID');
+                return;
+              }
+            } catch (err) {
+              console.warn('Fallback status check failed:', err);
+            }
+
+            if (!resolved) {
+              resolved = true;
+              cleanup();
+              resolve('CANCELLED');
+            }
+          }
+        } catch (e) {
+          // Cross-origin error, ignore
+        }
+      }, 500);
+
+      // Timeout after 10 minutes
+      const timeoutId = setTimeout(() => {
+        if (!resolved) {
+          resolved = true;
+          cleanup();
+          try {
+            if (paymentWindow && !paymentWindow.closed) {
+              paymentWindow.close();
+            }
+          } catch (e) {}
+          resolve('TIMEOUT');
+        }
+      }, 10 * 60 * 1000);
+
+      const cleanup = () => {
+        window.removeEventListener('message', handleMessage);
+        clearInterval(checkClosedInterval);
+        clearTimeout(timeoutId);
+      };
+    });
+  };
+
+  // Create order and finish checkout
+  const createOrderAndFinish = async (isPaid = false, plannedOrderId?: number) => {
+    try {
+      if (!submitting) setSubmitting(true);
+
+      const orderData = buildOrderPayload();
+      if (plannedOrderId) {
+        orderData.order_id = plannedOrderId;
+      }
+
+      console.log("Creating order:", orderData);
+
+      const orderResponse = await API.post("/orders/", orderData);
+      console.log("Order created:", orderResponse);
+
+      if (isPaid) {
+        alert("Thanh toán thành công! Đơn hàng đang được xử lý.");
+      } else {
+        alert("Đặt hàng thành công! Thanh toán khi nhận hàng.");
+      }
+      navigate("/orders");
+    } catch (error) {
       console.error("Error creating order:", error);
-      alert("Lỗi khi đặt hàng. Vui lòng thử lại!");
+      alert("Lỗi khi tạo đơn hàng. Vui lòng thử lại!");
     } finally {
       setSubmitting(false);
     }
@@ -943,7 +1047,7 @@ const Checkout: React.FC = () => {
 
               {/* Promotions */}
               <div className="mt-6">
-                <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center justify-between mb-3">
                   <h3 className="text-lg font-semibold">Khuyến mãi</h3>
                   {isLoadingPromos && (
                     <span className="text-sm text-gray-500">Đang tải...</span>
@@ -957,86 +1061,17 @@ const Checkout: React.FC = () => {
                 )}
 
                 {promos.length > 0 && (
-                  <div className="space-y-2">
-                    {promos.map((promo) => {
-                      try {
-                        const storeId = promo.store ?? promo.store_id ?? 0;
-                        const amountToCheck =
-                          storeId && storeId !== 0
-                            ? storeSubtotalsByStoreId[storeId] || 0
-                            : calculations.subtotal;
-                        const isApplicable =
-                          amountToCheck >= getPromoMinOrder(promo);
-                        const isSelected = selectedPromos.some(
-                          (p) => p.id === promo.id
-                        );
-
-                        return (
-                          <div
-                            key={promo.id}
-                            className={`relative p-3 border rounded-lg cursor-pointer transition-colors ${
-                              isSelected
-                                ? "border-orange-500 bg-orange-50"
-                                : isApplicable
-                                ? "border-gray-300 hover:border-orange-300"
-                                : "border-gray-200 opacity-50 cursor-not-allowed"
-                            }`}
-                            onClick={() => isApplicable && togglePromoSelection(promo)}
-                            onMouseEnter={(e) => handlePromoMouseEnter(e, promo.id)}
-                            onMouseLeave={handlePromoMouseLeave}>
-                            <div className="flex items-center justify-between">
-                              <div className="space-y-0.5">
-                                <p className="font-medium">{promo.title || promo.name}</p>
-                                <p className="text-sm text-gray-600">
-                                  {promo.discount_type === "PERCENTAGE" || promo.discount_type === "PERCENT"
-                                    ? `Giảm ${promo.discount_value}%`
-                                    : `Giảm ${formatCurrency(promo.discount_value)}`}
-                                  {promo.max_discount &&
-                                    (promo.discount_type === "PERCENTAGE" || promo.discount_type === "PERCENT") &&
-                                    ` (tối đa ${formatCurrency(promo.max_discount)})`}
-                                </p>
-                                <p className="text-xs text-gray-500">
-                                  Đơn tối thiểu: {formatCurrency(getPromoMinOrder(promo))}
-                                </p>
-                                {storeId ? (
-                                  <p className="text-xs text-gray-500">
-                                    Áp dụng cho: {storeNameById[storeId] || `Cửa hàng #${storeId}`}
-                                  </p>
-                                ) : (
-                                  <p className="text-xs text-gray-500">Áp dụng toàn hệ thống</p>
-                                )}
-                              </div>
-                              <input
-                                type="checkbox"
-                                checked={isSelected}
-                                disabled={!isApplicable}
-                                onChange={() => {}}
-                                className="w-4 h-4 text-orange-600"
-                              />
-                            </div>
-                          </div>
-                        );
-                      } catch (error) {
-                        console.error("Error rendering promo:", error, promo);
-                        return null;
-                      }
-                    })}
-
-                    <div className="flex items-center justify-between pt-2">
-                      <div className="text-sm text-gray-600">
-                        {selectedPromos.length > 0
-                          ? `Đã chọn ${selectedPromos.length} mã`
-                          : "Chọn tối đa 1 mã cho mỗi cửa hàng"}
-                      </div>
-                      <Button
-                        type="button"
-                        size="sm"
-                        onClick={applySelectedPromos}
-                        disabled={isApplyingPromos || selectedPromos.length === 0}
-                      >
-                        {isApplyingPromos ? "Đang áp dụng..." : "Áp dụng"}
-                      </Button>
+                  <div className="flex items-center justify-between p-3 bg-orange-50 border border-orange-200 rounded-lg">
+                    <div className="text-sm text-gray-700">
+                      {appliedPromos.length > 0
+                        ? `Đã áp dụng ${appliedPromos.length} mã`
+                        : selectedPromos.length > 0
+                        ? `Đã chọn ${selectedPromos.length} mã, bấm áp dụng để áp dụng`
+                        : "Chưa chọn mã giảm giá"}
                     </div>
+                    <Button type="button" size="sm" onClick={() => setShowPromoModal(true)}>
+                      Chọn khuyến mãi
+                    </Button>
                   </div>
                 )}
 
@@ -1069,6 +1104,116 @@ const Checkout: React.FC = () => {
             </CardContent>
           </Card>
         </div>
+
+        {/* Promo Modal */}
+        {showPromoModal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 px-4">
+            <div className="bg-white rounded-xl shadow-xl w-full max-w-3xl max-h-[80vh] overflow-hidden">
+              <div className="flex items-center justify-between px-5 py-4 border-b">
+                <div>
+                  <h3 className="text-lg font-semibold">Chọn khuyến mãi</h3>
+                  <p className="text-sm text-gray-500">Chọn mã phù hợp, tối đa 1 mã cho mỗi cửa hàng</p>
+                </div>
+                <button
+                  className="text-gray-500 hover:text-gray-700"
+                  aria-label="Close"
+                  onClick={() => setShowPromoModal(false)}>
+                  ✕
+                </button>
+              </div>
+
+              <div className="p-5 overflow-y-auto space-y-2">
+                {promos.map((promo) => {
+                  try {
+                    const storeId = promo.store ?? promo.store_id ?? 0;
+                    const amountToCheck =
+                      storeId && storeId !== 0
+                        ? storeSubtotalsByStoreId[storeId] || 0
+                        : calculations.subtotal;
+                    const isApplicable = amountToCheck >= getPromoMinOrder(promo);
+                    const isSelected = selectedPromos.some((p) => p.id === promo.id);
+
+                    return (
+                      <div
+                        key={promo.id}
+                        className={`relative p-3 border rounded-lg cursor-pointer transition-colors ${
+                          isSelected
+                            ? "border-orange-500 bg-orange-50"
+                            : isApplicable
+                            ? "border-gray-300 hover:border-orange-300"
+                            : "border-gray-200 opacity-50 cursor-not-allowed"
+                        }`}
+                        onClick={() => isApplicable && togglePromoSelection(promo)}
+                        onMouseEnter={(e) => handlePromoMouseEnter(e, promo.id)}
+                        onMouseLeave={handlePromoMouseLeave}>
+                        <div className="flex items-center justify-between">
+                          <div className="space-y-0.5">
+                            <p className="font-medium">{promo.title || promo.name}</p>
+                            <p className="text-sm text-gray-600">
+                              {promo.discount_type === "PERCENTAGE" || promo.discount_type === "PERCENT"
+                                ? `Giảm ${promo.discount_value}%`
+                                : `Giảm ${formatCurrency(promo.discount_value)}`}
+                              {promo.max_discount &&
+                                (promo.discount_type === "PERCENTAGE" || promo.discount_type === "PERCENT") &&
+                                ` (tối đa ${formatCurrency(promo.max_discount)})`}
+                            </p>
+                            <p className="text-xs text-gray-500">
+                              Đơn tối thiểu: {formatCurrency(getPromoMinOrder(promo))}
+                            </p>
+                            {storeId ? (
+                              <p className="text-xs text-gray-500">
+                                Áp dụng cho: {storeNameById[storeId] || `Cửa hàng #${storeId}`}
+                              </p>
+                            ) : (
+                              <p className="text-xs text-gray-500">Áp dụng toàn hệ thống</p>
+                            )}
+                          </div>
+                          <input
+                            type="checkbox"
+                            checked={isSelected}
+                            disabled={!isApplicable}
+                            onChange={() => {}}
+                            className="w-4 h-4 text-orange-600"
+                          />
+                        </div>
+                      </div>
+                    );
+                  } catch (error) {
+                    console.error("Error rendering promo:", error, promo);
+                    return null;
+                  }
+                })}
+              </div>
+
+              <div className="flex items-center justify-between px-5 py-4 border-t bg-gray-50">
+                <div className="text-sm text-gray-600">
+                  {selectedPromos.length > 0
+                    ? `Đã chọn ${selectedPromos.length} mã`
+                    : "Chọn tối đa 1 mã cho mỗi cửa hàng"}
+                </div>
+                <div className="flex gap-2">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => setShowPromoModal(false)}
+                  >
+                    Hủy
+                  </Button>
+                  <Button
+                    type="button"
+                    onClick={async () => {
+                      await applySelectedPromos();
+                      setShowPromoModal(false);
+                    }}
+                    disabled={isApplyingPromos || selectedPromos.length === 0}
+                  >
+                    {isApplyingPromos ? "Đang áp dụng..." : "Áp dụng"}
+                  </Button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Right: Order Summary */}
         <div>
