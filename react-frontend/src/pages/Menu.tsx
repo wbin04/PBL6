@@ -331,6 +331,14 @@ export default function Menu() {
         return;
       }
 
+      console.log("🛒 addToCart called with:", {
+        foodId,
+        quantity,
+        note,
+        foodOptionId,
+        foodOptionIdType: typeof foodOptionId
+      });
+
       const requestBody: {
         food_id: number;
         quantity: number;
@@ -346,7 +354,10 @@ export default function Menu() {
         requestBody.food_option_id = foodOptionId;
       }
 
+      console.log("🛒 Request body being sent:", requestBody);
+
       const result = await API.post("/cart/add/", requestBody);
+      console.log("🛒 API response:", result);
       alert(`Đã thêm ${result.item.food.title} vào giỏ hàng!`);
     } catch (error) {
       console.error("Error adding to cart:", error);

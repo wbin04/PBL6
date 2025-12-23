@@ -5,6 +5,7 @@ import { API, getImageUrl, formatDate, isAuthenticated, getUser } from '@/lib/ap
 import type { Food, Category, FoodSize, MyStore } from '@/types/index-tuan';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import AddressPicker from '@/components/AddressPicker';
 import { cn } from "@/lib/utils";
 import {
     ResponsiveContainer,
@@ -179,6 +180,7 @@ const StoreManager: React.FC = () => {
   const [editableStoreInfo, setEditableStoreInfo] = useState<MyStore | null>(null);
   const [storeImageFile, setStoreImageFile] = useState<File | null>(null);
   const [storeImagePreview, setStoreImagePreview] = useState<string | null>(null);
+    const [showAddressPicker, setShowAddressPicker] = useState(false);
   const storeImageRef = useRef<HTMLInputElement>(null);
 
 
@@ -578,6 +580,13 @@ const StoreManager: React.FC = () => {
       const n = parseFloat(value);
       return Number.isNaN(n) ? null : n;
   };
+
+  const currentCoords = useMemo(() => {
+      if (!editableStoreInfo) return null;
+      const lat = parseNullableNumber((editableStoreInfo as any).latitude as any);
+      const lng = parseNullableNumber((editableStoreInfo as any).longitude as any);
+      return lat !== null && lng !== null ? { latitude: lat, longitude: lng } : null;
+  }, [editableStoreInfo]);
   const saveStoreInfo = async () => {
       if (!editableStoreInfo?.id) return;
       try {
@@ -1399,7 +1408,13 @@ const StoreManager: React.FC = () => {
                       </div>
                       <div>
                           <label className="block text-sm font-medium">Địa chỉ</label>
-                          <input className="w-full border p-2 rounded" value={(editableStoreInfo as any).address || ''} onChange={e=>handleStoreFieldChange('address' as any, e.target.value)} />
+                          <div className="flex gap-2">
+                              <input className="w-full border p-2 rounded" value={(editableStoreInfo as any).address || ''} onChange={e=>handleStoreFieldChange('address' as any, e.target.value)} />
+                              <Button type="button" variant="outline" onClick={() => setShowAddressPicker(true)} className="whitespace-nowrap">
+                                  <MapPin size={16} className="mr-2" /> Chọn trên bản đồ
+                              </Button>
+                          </div>
+                          <p className="text-xs text-gray-500 mt-1">Chọn trên bản đồ sẽ tự động điền địa chỉ và tọa độ.</p>
                       </div>
                       <div className="grid grid-cols-2 gap-3">
                           <div>
@@ -1412,13 +1427,26 @@ const StoreManager: React.FC = () => {
                           </div>
                       </div>
                       <div className="flex justify-end gap-2 mt-2">
-                          <Button variant="ghost" onClick={() => { setShowEditStoreModal(false); setEditableStoreInfo(storeInfo); setStoreImageFile(null); setStoreImagePreview(null); if (storeImageRef.current) storeImageRef.current.value = ''; }}>Hủy</Button>
+                          <Button variant="ghost" onClick={() => { setShowEditStoreModal(false); setEditableStoreInfo(storeInfo); setStoreImageFile(null); setStoreImagePreview(null); setShowAddressPicker(false); if (storeImageRef.current) storeImageRef.current.value = ''; }}>Hủy</Button>
                           <Button className="bg-blue-600" onClick={saveStoreInfo}>Lưu</Button>
                       </div>
                   </div>
               </div>
           </div>
       )}
+
+      <AddressPicker
+          open={showAddressPicker}
+          onClose={() => setShowAddressPicker(false)}
+          onSelect={(data) => {
+              handleStoreFieldChange('address' as any, data.address);
+              handleStoreFieldChange('latitude' as any, data.latitude);
+              handleStoreFieldChange('longitude' as any, data.longitude);
+              setShowAddressPicker(false);
+          }}
+          initialAddress={(editableStoreInfo as any)?.address || ''}
+          initialCoords={currentCoords}
+      />
       
       {/* MANAGE SIZE MODAL */}
       {showManageSizesModal && selectedFood && (

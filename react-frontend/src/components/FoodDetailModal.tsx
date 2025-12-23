@@ -159,6 +159,16 @@ const FoodDetailModal: React.FC<FoodDetailModalProps> = ({
   const handleAddToCart = async () => {
     try {
       setIsAddingToCart(true);
+      
+      console.log("🍔 FoodDetailModal - handleAddToCart:", {
+        foodId: currentFood.id,
+        quantity,
+        note: note || undefined,
+        selectedOptionId,
+        finalOptionId: selectedOptionId || undefined,
+        hasOptions: currentFood.food_size && currentFood.food_size.length > 0
+      });
+      
       await onAddToCart(
         currentFood.id,
         quantity,
@@ -367,7 +377,10 @@ const FoodDetailModal: React.FC<FoodDetailModalProps> = ({
                   </h4>
                   <div className="flex flex-wrap gap-2">
                     <button
-                      onClick={() => setSelectedOptionId(null)}
+                      onClick={() => {
+                        console.log("🔘 Clicked: Tiêu chuẩn (null)");
+                        setSelectedOptionId(null);
+                      }}
                       className={`px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
                         selectedOptionId === null
                           ? "bg-orange-500 text-white"
@@ -378,7 +391,10 @@ const FoodDetailModal: React.FC<FoodDetailModalProps> = ({
                     {detailedFood.sizes.map((size) => (
                       <button
                         key={size.id}
-                        onClick={() => setSelectedOptionId(size.id)}
+                        onClick={() => {
+                          console.log("🔘 Clicked size:", size.size_name, "ID:", size.id);
+                          setSelectedOptionId(size.id);
+                        }}
                         className={`px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
                           selectedOptionId === size.id
                             ? "bg-orange-500 text-white"

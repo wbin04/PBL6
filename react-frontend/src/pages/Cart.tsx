@@ -3,6 +3,13 @@ import { Link, useNavigate } from "react-router-dom";
 import { API, getImageUrl } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 
+// Size/option type from API
+type SizeOption = {
+  id: number;
+  size_name: string;
+  price: string | number;
+};
+
 type CartItem = {
   id: number;
   food: {
@@ -19,11 +26,10 @@ type CartItem = {
       image: string;
     };
   };
-  food_option?: {
-    id: number;
-    size_name: string;
-    price: string;
-  };
+  // API returns 'size', we map it to 'food_option'
+  food_option?: SizeOption;
+  size?: SizeOption;
+  food_option_id?: number;
   quantity: number;
   item_note?: string;
   subtotal: number;
@@ -127,7 +133,20 @@ const Cart: React.FC = () => {
     try {
       setLoading(true);
       const response = await API.get("/cart/");
-      setCart(response as Cart);
+      console.log("Cart API response:", response);
+      
+      // Map 'size' to 'food_option' for consistency (API returns 'size')
+      const cartData = response as Cart;
+      if (cartData.items) {
+        cartData.items = cartData.items.map(item => ({
+          ...item,
+          // Use 'size' from API if 'food_option' is not present
+          food_option: item.food_option || item.size || undefined,
+        }));
+      }
+      
+      console.log("Cart items with food_option:", cartData.items?.map(i => ({ id: i.id, food_option: i.food_option, size: i.size })));
+      setCart(cartData);
     } catch (error: unknown) {
       console.error("Error loading cart:", error);
       if (
@@ -436,82 +455,115 @@ const Cart: React.FC = () => {
                 </div>
 
                 {/* Store Items */}
-                {storeItems.map((item, index) => (
-                  <div
-                    key={`cart-item-${item.id}-${item.food.id}-${
-                      item.food_option?.id || "no-option"
-                    }-${index}`}
-                    className="flex items-center p-4 ml-4 border-b border-gray-100 last:border-b-0 hover:bg-gray-50 transition-colors">
-                    {/* Checkbox */}
-                    <div className="mr-3">
-                      <input
-                        type="checkbox"
-                        id={`item-${item.id}`}
-                        checked={selectedItems.has(item.id)}
-                        onChange={() => toggleItemSelection(item.id)}
-                        className="w-5 h-5 text-orange-500 rounded border-gray-300 focus:ring-orange-500"
-                      />
-                    </div>
-                    <div className="mr-5">
-                      <FoodImage item={item} />
-                    </div>
-                    <div className="flex-1">
-                      <div className="text-lg font-bold text-gray-800 mb-1">
-                        {item.food.title}
+                {storeItems.map((item, index) => {
+                  // Debug log
+                  console.log("Cart item render:", { id: item.id, food_option: item.food_option, subtotal: item.subtotal });
+                  
+                  const basePrice =
+                    typeof item.food.price === "number"
+                      ? item.food.price
+                      : parseFloat(String(item.food.price));
+                  
+                  // Get size info from food_option (API returns this)
+                  const sizeName = item.food_option?.size_name ?? null;
+                  const sizePriceRaw = item.food_option?.price;
+                  const sizePrice =
+                    typeof sizePriceRaw === "number"
+                      ? sizePriceRaw
+                      : typeof sizePriceRaw === "string"
+                      ? parseFloat(sizePriceRaw)
+                      : 0;
+                  
+                  const numericSubtotal =
+                    typeof item.subtotal === "number"
+                      ? item.subtotal
+                      : parseFloat(String(item.subtotal));
+                  const unitPrice = item.quantity > 0
+                    ? numericSubtotal / item.quantity
+                    : basePrice + sizePrice;
+                  
+                  // Show size badge if food_option exists (even if size_name is empty)
+                  const hasSize = item.food_option != null;
+
+                  return (
+                    <div
+                      key={`cart-item-${item.id}-${item.food.id}-${
+                        item.food_option?.id || "no-option"
+                      }-${index}`}
+                      className="flex items-center p-4 ml-4 border-b border-gray-100 last:border-b-0 hover:bg-gray-50 transition-colors">
+                      {/* Checkbox */}
+                      <div className="mr-3">
+                        <input
+                          type="checkbox"
+                          id={`item-${item.id}`}
+                          checked={selectedItems.has(item.id)}
+                          onChange={() => toggleItemSelection(item.id)}
+                          className="w-5 h-5 text-orange-500 rounded border-gray-300 focus:ring-orange-500"
+                        />
                       </div>
-                      <div className="text-orange-500 font-bold text-lg">
-                        {formatCurrency(
-                          typeof item.food.price === "number"
-                            ? item.food.price
-                            : parseFloat(item.food.price)
-                        )}
-                        {item.food_option && (
-                          <span className="text-sm text-gray-500 ml-2">
-                            ({item.food_option.size_name}: +
-                            {formatCurrency(parseFloat(item.food_option.price))}
-                            )
-                          </span>
-                        )}
+                      <div className="mr-5">
+                        <FoodImage item={item} />
                       </div>
-                      {item.item_note && (
-                        <div className="text-sm text-gray-500 italic">
-                          Ghi chú: {item.item_note}
+                      <div className="flex-1">
+                        <div className="text-lg font-bold text-gray-800 mb-1">
+                          {item.food.title}
                         </div>
-                      )}
-                    </div>
-                    <div className="flex items-center mx-5">
+                        {hasSize && (
+                          <div className="inline-flex items-center px-2 py-1 mb-1 text-xs font-medium rounded-full bg-orange-50 text-orange-700 border border-orange-100">
+                            Size: {sizeName || "Mặc định"}
+                            {unitPrice - basePrice > 0
+                              ? ` (+${formatCurrency(unitPrice - basePrice)})`
+                              : " (không phụ thu)"}
+                          </div>
+                        )}
+                        <div className="text-orange-500 font-bold text-lg">
+                          {formatCurrency(unitPrice)}
+                          {hasSize && (
+                            <span className="text-sm text-gray-500 ml-2">
+                              Đơn giá gốc: {formatCurrency(basePrice)}
+                            </span>
+                          )}
+                        </div>
+                        {item.item_note && (
+                          <div className="text-sm text-gray-500 italic">
+                            Ghi chú: {item.item_note}
+                          </div>
+                        )}
+                      </div>
+                      <div className="flex items-center mx-5">
+                        <button
+                          className="bg-orange-500 text-white border-0 w-9 h-9 rounded-full cursor-pointer text-lg flex items-center justify-center hover:bg-orange-600 transition-colors"
+                          onClick={() =>
+                            updateQuantity(item.food.id, item.quantity - 1)
+                          }>
+                          −
+                        </button>
+                        <span className="mx-4 text-lg font-bold min-w-8 text-center">
+                          {item.quantity}
+                        </span>
+                        <button
+                          className="bg-orange-500 text-white border-0 w-9 h-9 rounded-full cursor-pointer text-lg flex items-center justify-center hover:bg-orange-600 transition-colors"
+                          onClick={() =>
+                            updateQuantity(item.food.id, item.quantity + 1)
+                          }>
+                          +
+                        </button>
+                      </div>
+                      <div className="text-xl font-bold text-orange-500 ml-5 min-w-24 text-right">
+                        {formatCurrency(
+                          typeof item.subtotal === "number"
+                            ? item.subtotal
+                            : parseFloat(item.subtotal)
+                        )}
+                      </div>
                       <button
-                        className="bg-orange-500 text-white border-0 w-9 h-9 rounded-full cursor-pointer text-lg flex items-center justify-center hover:bg-orange-600 transition-colors"
-                        onClick={() =>
-                          updateQuantity(item.food.id, item.quantity - 1)
-                        }>
-                        −
-                      </button>
-                      <span className="mx-4 text-lg font-bold min-w-8 text-center">
-                        {item.quantity}
-                      </span>
-                      <button
-                        className="bg-orange-500 text-white border-0 w-9 h-9 rounded-full cursor-pointer text-lg flex items-center justify-center hover:bg-orange-600 transition-colors"
-                        onClick={() =>
-                          updateQuantity(item.food.id, item.quantity + 1)
-                        }>
-                        +
+                        className="bg-red-500 text-white border-0 px-4 py-2 rounded-full cursor-pointer ml-4 hover:bg-red-600 transition-colors"
+                        onClick={() => removeFromCart(item.food.id)}>
+                        Xóa
                       </button>
                     </div>
-                    <div className="text-xl font-bold text-orange-500 ml-5 min-w-24 text-right">
-                      {formatCurrency(
-                        typeof item.subtotal === "number"
-                          ? item.subtotal
-                          : parseFloat(item.subtotal)
-                      )}
-                    </div>
-                    <button
-                      className="bg-red-500 text-white border-0 px-4 py-2 rounded-full cursor-pointer ml-4 hover:bg-red-600 transition-colors"
-                      onClick={() => removeFromCart(item.food.id)}>
-                      Xóa
-                    </button>
-                  </div>
-                ))}
+                  );
+                })}
 
                 {/* Store Total */}
                 <div className="ml-4 mt-3 mb-3 p-3 bg-gray-50 border rounded-lg">

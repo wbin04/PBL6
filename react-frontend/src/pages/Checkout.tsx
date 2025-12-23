@@ -14,6 +14,13 @@ import {
 import { MapPin } from "lucide-react";
 
 // Types
+// Size/option type from API
+type SizeOption = {
+  id: number;
+  size_name: string;
+  price: string | number;
+};
+
 type CartItem = {
   id: number;
   food: {
@@ -31,11 +38,10 @@ type CartItem = {
       longitude?: number | string | null;
     };
   };
-  food_option?: {
-    id: number;
-    size_name: string;
-    price: string;
-  };
+  // API returns 'size', we map it to 'food_option'
+  food_option?: SizeOption;
+  size?: SizeOption;
+  food_option_id?: number;
   quantity: number;
   item_note?: string;
   subtotal: string;
@@ -178,6 +184,16 @@ const Checkout: React.FC = () => {
     const loadCart = async () => {
       try {
         const response = (await API.get("/cart/")) as Cart;
+        
+        // Map 'size' to 'food_option' for consistency (API returns 'size')
+        if (response.items) {
+          response.items = response.items.map(item => ({
+            ...item,
+            // Use 'size' from API if 'food_option' is not present
+            food_option: item.food_option || item.size || undefined,
+          }));
+        }
+        console.log("Checkout - cart items with food_option:", response.items?.map(i => ({ id: i.id, food_option: i.food_option, size: i.size })));
 
         const selectedIds = selectionState.selectedItemIds || [];
         let finalItems = response.items;
@@ -1223,67 +1239,94 @@ const Checkout: React.FC = () => {
 
               {/* Cart Items */}
               <div className="space-y-4 mb-6">
-                {cart.items.map((item) => (
-                  <div key={item.id} className="flex items-center space-x-4">
-                    <div className="relative">
-                      <img
-                        src={getImageUrl(
-                          item.food.image_url || item.food.image || ""
+                {cart.items.map((item) => {
+                  // Debug log
+                  console.log("Checkout item render:", { id: item.id, food_option: item.food_option, subtotal: item.subtotal });
+                  
+                  // Get size info from food_option (API returns this)
+                  const sizeName = item.food_option?.size_name ?? null;
+                  const sizePriceRaw = item.food_option?.price;
+                  const sizePrice =
+                    typeof sizePriceRaw === "number"
+                      ? sizePriceRaw
+                      : typeof sizePriceRaw === "string"
+                      ? parseFloat(sizePriceRaw)
+                      : 0;
+                  const basePrice = parseFloat(String(item.food.price));
+                  const numericSubtotal = parseFloat(String(item.subtotal));
+                  const unitPrice = item.quantity > 0
+                    ? numericSubtotal / item.quantity
+                    : basePrice + sizePrice;
+                  // Show size badge if food_option exists
+                  const hasSize = item.food_option != null;
+
+                  return (
+                    <div key={item.id} className="flex items-center space-x-4">
+                      <div className="relative">
+                        <img
+                          src={getImageUrl(
+                            item.food.image_url || item.food.image || ""
+                          )}
+                          alt={item.food.title}
+                          className="w-16 h-16 object-cover rounded-lg"
+                          onError={(e) => {
+                            console.log(
+                              "Image error for:",
+                              item.food.title,
+                              "URL:",
+                              item.food.image_url || item.food.image
+                            );
+                            e.currentTarget.src =
+                              "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='64' height='64'%3E%3Crect fill='%23f97316' width='64' height='64'/%3E%3Ctext x='50%25' y='50%25' text-anchor='middle' dy='.3em' font-size='32'%3E🍔%3C/text%3E%3C/svg%3E";
+                          }}
+                        />
+                      </div>
+                      <div className="flex-1">
+                        <h4 className="font-semibold">{item.food.title}</h4>
+                        <p className="text-sm text-gray-600">
+                          {(() => {
+                            const foodData = item.food as Record<string, unknown>;
+                            if (
+                              foodData.store &&
+                              typeof foodData.store === "object"
+                            ) {
+                              const storeData = foodData.store as Record<
+                                string,
+                                unknown
+                              >;
+                              return storeData.store_name as string;
+                            } else if (typeof foodData.store_name === "string") {
+                              return foodData.store_name;
+                            }
+                            return "Unknown Store";
+                          })()}
+                        </p>
+                        {hasSize && (
+                          <div className="inline-flex items-center px-2 py-1 mt-1 text-xs font-medium rounded-full bg-orange-50 text-orange-700 border border-orange-100">
+                            Size: {sizeName || "Mặc định"}
+                            {unitPrice - basePrice > 0
+                              ? ` (+${formatCurrency(unitPrice - basePrice)})`
+                              : " (không phụ thu)"}
+                          </div>
                         )}
-                        alt={item.food.title}
-                        className="w-16 h-16 object-cover rounded-lg"
-                        onError={(e) => {
-                          console.log(
-                            "Image error for:",
-                            item.food.title,
-                            "URL:",
-                            item.food.image_url || item.food.image
-                          );
-                          e.currentTarget.src =
-                            "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='64' height='64'%3E%3Crect fill='%23f97316' width='64' height='64'/%3E%3Ctext x='50%25' y='50%25' text-anchor='middle' dy='.3em' font-size='32'%3E🍔%3C/text%3E%3C/svg%3E";
-                        }}
-                      />
-                    </div>
-                    <div className="flex-1">
-                      <h4 className="font-semibold">{item.food.title}</h4>
-                      <p className="text-sm text-gray-600">
-                        {(() => {
-                          const foodData = item.food as Record<string, unknown>;
-                          if (
-                            foodData.store &&
-                            typeof foodData.store === "object"
-                          ) {
-                            const storeData = foodData.store as Record<
-                              string,
-                              unknown
-                            >;
-                            return storeData.store_name as string;
-                          } else if (typeof foodData.store_name === "string") {
-                            return foodData.store_name;
-                          }
-                          return "Unknown Store";
-                        })()}
-                      </p>
-                      {item.food_option && (
-                        <p className="text-sm text-gray-500">
-                          {item.food_option.size_name}: +
-                          {formatCurrency(parseFloat(item.food_option.price))}
+                        {item.item_note && (
+                          <p className="text-sm text-gray-500">
+                            Ghi chú: {item.item_note}
+                          </p>
+                        )}
+                      </div>
+                      <div className="text-right">
+                        <p className="font-semibold">x{item.quantity}</p>
+                        <p className="text-orange-500 font-bold">
+                          {formatCurrency(numericSubtotal)}
                         </p>
-                      )}
-                      {item.item_note && (
-                        <p className="text-sm text-gray-500">
-                          Ghi chú: {item.item_note}
-                        </p>
-                      )}
+                        {hasSize && (
+                          <p className="text-xs text-gray-500">Đơn giá gốc: {formatCurrency(basePrice)}</p>
+                        )}
+                      </div>
                     </div>
-                    <div className="text-right">
-                      <p className="font-semibold">x{item.quantity}</p>
-                      <p className="text-orange-500 font-bold">
-                        {formatCurrency(parseFloat(item.subtotal))}
-                      </p>
-                    </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
 
               {/* Order Totals */}
