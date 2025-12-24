@@ -19,7 +19,7 @@ import { CopilotIcon } from '@/assets/images/CopilotIcon';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import chatbotService from '@/services/chatbotService';
 import { FoodListMessage } from '@/components/chatbot/FoodListMessage';
-import { ChatbotRecommendation, RecommendationItem } from '@/components/chatbot/ChatbotRecommendation';
+import { RecommendationItem } from '@/components/chatbot/ChatbotRecommendation';
 
 interface Message {
   id: string;
@@ -63,6 +63,23 @@ export default function ChatbotScreen() {
   const [sessionId, setSessionId] = useState<string>('');
   const flatListRef = useRef<FlatList>(null);
 
+  const mapRecommendationsToFoods = (recs?: RecommendationItem[]) => {
+    if (!recs) return [];
+    return recs.map((item) => ({
+      id: item.id,
+      title: item.title,
+      price: typeof item.price === 'number' ? String(item.price) : item.price,
+      image: item.image_url || item.image,
+      image_url: item.image_url || item.image,
+      store_id: item.store_id || 0,
+      store_name: item.store_name || 'Cửa hàng',
+      average_rating: item.average_rating,
+      total_sold: item.total_sold,
+      badge_type: item.badge_type as any,
+      badge_text: item.badge,
+    }));
+  };
+
   // Initialize session ID
   useEffect(() => {
     const initSession = async () => {
@@ -81,12 +98,18 @@ export default function ChatbotScreen() {
     initSession();
   }, []);
 
-  const sendMessage = async () => {
-    if (!inputText.trim() || loading) return;
+  const sendMessage = async (overrideText?: string | { nativeEvent?: { text?: string } }) => {
+    const rawText = typeof overrideText === 'string'
+      ? overrideText
+      : overrideText?.nativeEvent?.text
+        ? overrideText.nativeEvent.text
+        : inputText;
+    const textToSend = (rawText || '').trim();
+    if (!textToSend || loading) return;
 
     const userMessage: Message = {
       id: Date.now().toString(),
-      text: inputText.trim(),
+      text: textToSend,
       isUser: true,
       timestamp: new Date(),
     };
@@ -197,19 +220,17 @@ export default function ChatbotScreen() {
         </View>
       </View>
       
-      {/* Hiển thị ChatbotRecommendation cho recommendation messages */}
-      {!item.isUser && item.type === 'recommendation' && item.recommendations && item.recommendations.length > 0 && (
-        <View style={styles.recommendationContainer}>
-          <ChatbotRecommendation 
-            data={item.recommendations}
-            onPressItem={handleRecommendationPress}
-            showViewAll={true}
+      {/* Hiển thị FoodListMessage cho recommendations và foods để có nhóm theo cửa hàng và thêm giỏ */}
+      {!item.isUser && item.recommendations && item.recommendations.length > 0 && (
+        <View style={styles.foodListContainer}>
+          <FoodListMessage 
+            foods={mapRecommendationsToFoods(item.recommendations)} 
+            statisticsType={item.statisticsType}
           />
         </View>
       )}
-      
-      {/* Fallback: Hiển thị FoodListMessage cho foods (non-recommendation) */}
-      {!item.isUser && item.type !== 'recommendation' && item.foods && item.foods.length > 0 && (
+
+      {!item.isUser && !item.recommendations && item.foods && item.foods.length > 0 && (
         <View style={styles.foodListContainer}>
           <FoodListMessage 
             foods={item.foods} 
@@ -295,6 +316,18 @@ export default function ChatbotScreen() {
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
       >
+        <View style={styles.quickPromptContainer}>
+          {['Món nào bán chạy?', 'Các món được đánh giá cao'].map((prompt) => (
+            <TouchableOpacity
+              key={prompt}
+              style={[styles.quickPromptChip, loading && styles.quickPromptChipDisabled]}
+              onPress={() => sendMessage(prompt)}
+              disabled={loading}
+            >
+              <Text style={styles.quickPromptText}>{prompt}</Text>
+            </TouchableOpacity>
+          ))}
+        </View>
         <View style={styles.inputContainer}>
           <TextInput
             style={styles.input}
@@ -456,6 +489,35 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontFamily: Fonts.LeagueSpartanRegular,
     color: '#6B7280',
+  },
+  quickPromptContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    paddingHorizontal: 16,
+    paddingTop: 8,
+    paddingBottom: 4,
+    backgroundColor: '#fff',
+    borderTopWidth: 1,
+    borderTopColor: '#e5e7eb',
+  },
+  quickPromptChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 16,
+    backgroundColor: '#fef3f0',
+    borderWidth: 1,
+    borderColor: '#fcd8c5',
+  },
+  quickPromptChipDisabled: {
+    opacity: 0.6,
+  },
+  quickPromptText: {
+    fontSize: 14,
+    fontFamily: Fonts.LeagueSpartanSemiBold,
+    color: '#e95322',
   },
   inputContainer: {
     flexDirection: 'row',
