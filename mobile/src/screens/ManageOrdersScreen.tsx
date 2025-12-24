@@ -198,6 +198,12 @@ const ManageOrdersScreen: React.FC = () => {
       status: order.order_status,
       note: order.note,
       appliedPromos: order.applied_promos || [],
+      // Refund info
+      refund_requested: order.refund_requested,
+      refund_status: order.refund_status,
+      bank_name: order.bank_name,
+      bank_account: order.bank_account,
+      proof_image: order.proof_image,
     };
   };
 

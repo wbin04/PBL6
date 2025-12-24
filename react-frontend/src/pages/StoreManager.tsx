@@ -89,6 +89,7 @@ interface StoreOrder {
   refund_status?: 'Không' | 'Chờ xử lý' | 'Đã hoàn thành';
   bank_name?: string | null;
   bank_account?: string | null;
+    proof_image?: string | null;
 }
 
 interface StorePromotion {
@@ -133,6 +134,11 @@ const StoreManager: React.FC = () => {
   const [showRefundModal, setShowRefundModal] = useState(false);
   const [refundOrder, setRefundOrder] = useState<StoreOrder | null>(null);
   const [processingRefund, setProcessingRefund] = useState(false);
+    const [proofImageFile, setProofImageFile] = useState<File | null>(null);
+    const [proofImagePreview, setProofImagePreview] = useState<string | null>(null);
+    const proofImageInputRef = useRef<HTMLInputElement>(null);
+    const [showProofModal, setShowProofModal] = useState(false);
+    const [proofModalSrc, setProofModalSrc] = useState<string | null>(null);
   
   // State lọc trạng thái đơn hàng
   const [filterStatus, setFilterStatus] = useState<string>('Tất cả');
@@ -450,23 +456,46 @@ const StoreManager: React.FC = () => {
           refund_status?: 'Không' | 'Chờ xử lý' | 'Đã hoàn thành';
           bank_name?: string | null;
           bank_account?: string | null;
+          proof_image_file?: File | null;
       }
   ) => {
-      if(!storeInfo) return;
+      if(!storeInfo) return null;
       try {
-          const payload: any = { order_status: status };
-          if (extraData) {
-              Object.entries(extraData).forEach(([key, val]) => {
-                  if (val !== undefined) payload[key] = val;
-              });
+          const current = orders.find(o => o.id === orderId) || selectedOrder;
+          if (current && isFinalStatus(current.order_status) && status !== current.order_status) {
+              alert('Đơn đã ở trạng thái cuối, không thể đổi trạng thái.');
+              return null;
           }
-          await API.patch(`/stores/${storeInfo.id}/orders/${orderId}/status/`, payload);
+
+          const url = `/stores/${storeInfo.id}/orders/${orderId}/status/`;
+          let updatedOrder: StoreOrder;
+
+          if (extraData?.proof_image_file) {
+              const formData = new FormData();
+              formData.append('order_status', status);
+              if (extraData.refund_requested !== undefined) formData.append('refund_requested', String(extraData.refund_requested));
+              if (extraData.refund_status) formData.append('refund_status', extraData.refund_status);
+              if (extraData.bank_name !== undefined && extraData.bank_name !== null) formData.append('bank_name', extraData.bank_name);
+              if (extraData.bank_account !== undefined && extraData.bank_account !== null) formData.append('bank_account', extraData.bank_account);
+              formData.append('proof_image', extraData.proof_image_file);
+              updatedOrder = await API.patch(url, formData);
+          } else {
+              const payload: any = { order_status: status };
+              if (extraData) {
+                  Object.entries(extraData).forEach(([key, val]) => {
+                      if (val !== undefined) payload[key] = val;
+                  });
+              }
+              updatedOrder = await API.patch(url, payload);
+          }
+
           alert('Cập nhật trạng thái thành công!');
-          // Cập nhật state local
-          setOrders(prev => prev.map(o => o.id === orderId ? { ...o, order_status: status, ...extraData } : o));
-          if(selectedOrder) setSelectedOrder({...selectedOrder, order_status: status, ...extraData});
+          setOrders(prev => prev.map(o => o.id === orderId ? { ...o, ...updatedOrder } : o));
+          if(selectedOrder && selectedOrder.id === orderId) setSelectedOrder(updatedOrder);
+          if(refundOrder && refundOrder.id === orderId) setRefundOrder(updatedOrder);
           setShowOrderModal(false);
-      } catch (e) { alert(`Lỗi: ${e}`); }
+          return updatedOrder;
+      } catch (e) { alert(`Lỗi: ${e}`); return null; }
   };
 
   const isCancelledStatus = (status: string) => {
@@ -474,13 +503,32 @@ const StoreManager: React.FC = () => {
       return s.includes('huỷ') || s.includes('hủy');
   };
 
-  const isRefundPending = (order: StoreOrder) => (
-      isCancelledStatus(order.order_status) && order.payment_method && order.payment_method !== 'cash' && !!order.refund_requested
+  const hasRefundInfo = (order: StoreOrder) => (
+      isCancelledStatus(order.order_status)
+      && order.payment_method
+      && order.payment_method !== 'cash'
+      && (order.refund_requested || order.refund_status || order.proof_image)
   );
+
+  const isRefundPending = (order: StoreOrder) => (
+      hasRefundInfo(order) && order.refund_status !== 'Đã hoàn thành'
+  );
+
+  const isFinalStatus = (status: string) => ['Đã giao', 'Đã huỷ'].includes(status);
 
   const openRefundModal = (order: StoreOrder) => {
       setRefundOrder(order);
+      setProofImageFile(null);
+      setProofImagePreview(order.proof_image ? getImageUrl(order.proof_image) : null);
+      if (proofImageInputRef.current) proofImageInputRef.current.value = '';
       setShowRefundModal(true);
+  };
+
+  const handleProofImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+      const file = e.target.files?.[0];
+      if (!file) return;
+      setProofImageFile(file);
+      setProofImagePreview(URL.createObjectURL(file));
   };
 
   const copyBankAccount = async () => {
@@ -497,12 +545,17 @@ const StoreManager: React.FC = () => {
       if (!refundOrder) return;
       try {
           setProcessingRefund(true);
-          await updateOrderStatus(refundOrder.id, refundOrder.order_status, {
+          const updated = await updateOrderStatus(refundOrder.id, refundOrder.order_status, {
               refund_requested: false,
               refund_status: 'Đã hoàn thành',
+              proof_image_file: proofImageFile || undefined,
           });
+          if (updated) setRefundOrder(updated);
           setShowRefundModal(false);
           setRefundOrder(null);
+          setProofImageFile(null);
+          setProofImagePreview(null);
+          if (proofImageInputRef.current) proofImageInputRef.current.value = '';
       } catch (e: any) {
           alert(e?.message || 'Không thể cập nhật hoàn tiền');
       } finally {
@@ -1080,7 +1133,7 @@ const StoreManager: React.FC = () => {
                                <div className="flex justify-between text-sm"><span className="text-gray-500">Phí ship</span><span>{formatCurrency(selectedOrder.shipping_fee)}</span></div>
                                <div className="flex justify-between text-lg font-bold pt-2 border-t"><span className="text-gray-800">Tổng cộng</span><span className="text-blue-600">{formatCurrency(selectedOrder.total_money)}</span></div>
                                <div className="text-xs text-gray-400 text-right mt-1">{formatDate(selectedOrder.created_date)}</div>
-                               {isRefundPending(selectedOrder) && (
+                               {hasRefundInfo(selectedOrder) && (
                                    <div className="mt-3 space-y-2 bg-amber-50 border border-amber-200 rounded-lg p-3">
                                        <div className="flex items-center gap-2">
                                            <span className="text-sm font-semibold text-amber-800">Hoàn tiền</span>
@@ -1104,6 +1157,21 @@ const StoreManager: React.FC = () => {
                                                </Button>
                                            </div>
                                        )}
+                                       {selectedOrder.refund_status === 'Đã hoàn thành' && selectedOrder.proof_image && (
+                                            <div className="flex gap-2">
+                                                <Button
+                                                    size="sm"
+                                                    variant="outline"
+                                                    className="border-amber-400 text-amber-700 hover:bg-amber-100"
+                                                    onClick={() => {
+                                                        setProofModalSrc(getImageUrl(selectedOrder.proof_image!));
+                                                        setShowProofModal(true);
+                                                    }}
+                                                >
+                                                    Xem minh chứng
+                                                </Button>
+                                            </div>
+                                        )}
                                    </div>
                                )}
                           </div>
@@ -1131,14 +1199,28 @@ const StoreManager: React.FC = () => {
                       <div className="bg-blue-50 p-4 rounded-xl border border-blue-100 flex flex-col sm:flex-row gap-4 items-center justify-between">
                           <span className="font-medium text-blue-900 flex items-center gap-2"><CheckCircle size={18}/> Cập nhật trạng thái:</span>
                           <div className="flex gap-2 w-full sm:w-auto">
-                              <select id="status_select" defaultValue={selectedOrder.order_status} className="border border-blue-300 rounded px-3 py-2 text-sm flex-1">
+                              <select
+                                  id="status_select"
+                                  defaultValue={selectedOrder.order_status}
+                                  className="border border-blue-300 rounded px-3 py-2 text-sm flex-1"
+                                  disabled={isFinalStatus(selectedOrder.order_status)}
+                              >
                                   {ORDER_STATUSES.filter(s => s !== 'Tất cả').map(s => <option key={s} value={s}>{s}</option>)}
                               </select>
-                              <Button onClick={() => {
-                                  const val = (document.getElementById('status_select') as HTMLSelectElement).value;
-                                  updateOrderStatus(selectedOrder.id, val);
-                              }} className="bg-blue-600 hover:bg-blue-700">Lưu</Button>
+                              <Button
+                                  onClick={() => {
+                                      const val = (document.getElementById('status_select') as HTMLSelectElement).value;
+                                      updateOrderStatus(selectedOrder.id, val);
+                                  }}
+                                  className="bg-blue-600 hover:bg-blue-700"
+                                  disabled={isFinalStatus(selectedOrder.order_status)}
+                              >
+                                  Lưu
+                              </Button>
                           </div>
+                          {isFinalStatus(selectedOrder.order_status) && (
+                              <p className="text-xs text-gray-500 mt-1">Đơn đã hoàn tất/huỷ, không thể đổi trạng thái.</p>
+                          )}
                       </div>
                   </div>
               </div>
@@ -1151,7 +1233,13 @@ const StoreManager: React.FC = () => {
               <div className="bg-white rounded-xl shadow-2xl w-full max-w-md p-6 space-y-4">
                   <div className="flex items-center justify-between">
                       <h3 className="text-lg font-bold text-gray-800">Thông tin tài khoản</h3>
-                      <button onClick={() => { setShowRefundModal(false); setRefundOrder(null); }} className="text-gray-500 hover:text-gray-700"><X size={20}/></button>
+                      <button onClick={() => {
+                          setShowRefundModal(false);
+                          setRefundOrder(null);
+                          setProofImageFile(null);
+                          setProofImagePreview(refundOrder?.proof_image ? getImageUrl(refundOrder.proof_image) : null);
+                          if (proofImageInputRef.current) proofImageInputRef.current.value = '';
+                      }} className="text-gray-500 hover:text-gray-700"><X size={20}/></button>
                   </div>
                   <div className="space-y-3">
                       <div>
@@ -1175,9 +1263,48 @@ const StoreManager: React.FC = () => {
                           <span className="text-gray-500">Trạng thái hoàn tiền:</span>
                           <span className="px-2 py-1 rounded-full border border-amber-200 bg-amber-50 text-amber-700 text-xs">{refundOrder.refund_status || 'Chờ xử lý'}</span>
                       </div>
+                      <div>
+                          <p className="text-sm text-gray-500 mb-1">Hình ảnh minh chứng</p>
+                          <div className="flex items-start gap-3">
+                              <div className="w-24 h-24 rounded-lg border bg-gray-50 flex items-center justify-center overflow-hidden">
+                                  {proofImagePreview ? (
+                                      <img src={proofImagePreview} alt="Minh chứng hoàn tiền" className="w-full h-full object-cover" />
+                                  ) : (
+                                      <span className="text-xs text-gray-400 text-center px-2">Chưa có ảnh</span>
+                                  )}
+                              </div>
+                              <div className="flex flex-col gap-2">
+                                  <input ref={proofImageInputRef} type="file" accept="image/*" className="hidden" onChange={handleProofImageChange} />
+                                  <Button variant="outline" size="sm" className="gap-2 w-fit" onClick={() => proofImageInputRef.current?.click()}>
+                                      <Upload size={16}/> Chọn ảnh
+                                  </Button>
+                                  {proofImagePreview && (
+                                      <Button
+                                          variant="ghost"
+                                          size="sm"
+                                          className="w-fit text-red-500"
+                                          onClick={() => {
+                                              setProofImageFile(null);
+                                              setProofImagePreview(refundOrder?.proof_image ? getImageUrl(refundOrder.proof_image) : null);
+                                              if (proofImageInputRef.current) proofImageInputRef.current.value = '';
+                                          }}
+                                      >
+                                          Xóa ảnh tạm
+                                      </Button>
+                                  )}
+                              </div>
+                          </div>
+                          <p className="text-xs text-gray-400 mt-1">Ảnh sẽ được lưu tại backend/media/assets/ và gửi kèm yêu cầu hoàn tiền.</p>
+                      </div>
                   </div>
                   <div className="flex gap-3 justify-end pt-2">
-                      <Button variant="ghost" onClick={() => { setShowRefundModal(false); setRefundOrder(null); }}>
+                      <Button variant="ghost" onClick={() => {
+                          setShowRefundModal(false);
+                          setRefundOrder(null);
+                          setProofImageFile(null);
+                          setProofImagePreview(null);
+                          if (proofImageInputRef.current) proofImageInputRef.current.value = '';
+                      }}>
                           Huỷ
                       </Button>
                       <Button
@@ -1187,6 +1314,20 @@ const StoreManager: React.FC = () => {
                       >
                           {processingRefund ? 'Đang xử lý...' : 'Hoàn tiền'}
                       </Button>
+                  </div>
+              </div>
+          </div>
+      )}
+
+      {showProofModal && proofModalSrc && (
+          <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[60] p-4" onClick={() => setShowProofModal(false)}>
+              <div className="bg-white rounded-xl shadow-2xl p-4 max-w-3xl w-full max-h-[90vh] overflow-auto" onClick={(e) => e.stopPropagation()}>
+                  <div className="flex items-center justify-between mb-3">
+                      <h3 className="text-lg font-bold text-gray-800">Minh chứng hoàn tiền</h3>
+                      <button onClick={() => setShowProofModal(false)} className="text-gray-500 hover:text-gray-700"><X size={20}/></button>
+                  </div>
+                  <div className="w-full">
+                      <img src={proofModalSrc} alt="Proof" className="w-full h-auto rounded-lg border" />
                   </div>
               </div>
           </div>

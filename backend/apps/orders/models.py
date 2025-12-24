@@ -82,6 +82,7 @@ class Order(models.Model):
     refund_status = models.CharField(max_length=20, choices=REFUND_STATUS_CHOICES, default='Không')
     bank_name = models.CharField(max_length=100, null=True, blank=True)
     bank_account = models.CharField(max_length=50, null=True, blank=True)
+    proof_image = models.CharField(max_length=255, null=True, blank=True)
     
     # New many-to-many relationship with promotions
     promotions = models.ManyToManyField('promotions.Promo', through='promotions.OrderPromo', blank=True, related_name='orders')

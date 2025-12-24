@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Linking, Modal, Alert, RefreshControl, TextInput } from 'react-native';
-import { Menu, X, ShoppingBag, Phone, User } from 'lucide-react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Linking, Modal, Alert, RefreshControl, TextInput, Image, ActivityIndicator, Dimensions } from 'react-native';
+import { Menu, X, ShoppingBag, Phone, User, Camera, Trash2 } from 'lucide-react-native';
 import { ordersApi, apiClient } from '@/services/api';
+import { API_CONFIG } from '@/constants';
 import { Order, PaginatedResponse, ApiError } from '@/types';
 import { ORDER_STATUS } from '@/constants';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -11,6 +12,7 @@ import { useSelector } from 'react-redux';
 import { RootState } from '@/store';
 import Sidebar from '@/components/sidebar';
 import * as Clipboard from 'expo-clipboard';
+import * as ImagePicker from 'expo-image-picker';
 
 const menuItems = [
   { title: 'Trang chủ', icon: Menu, section: 'dashboard' },
@@ -58,6 +60,7 @@ type OrderWithDisplayData = {
   refund_status?: 'Không' | 'Chờ xử lý' | 'Đã hoàn thành';
   bank_name?: string | null;
   bank_account?: string | null;
+  proof_image?: string | null;
 };
 
 const NewOrderListScreen = ({ navigation }: any) => {
@@ -74,7 +77,78 @@ const NewOrderListScreen = ({ navigation }: any) => {
   const [refundModalVisible, setRefundModalVisible] = useState(false);
   const [refundOrder, setRefundOrder] = useState<OrderWithDisplayData | null>(null);
   const [isCompletingRefund, setIsCompletingRefund] = useState(false);
+  const [proofViewerVisible, setProofViewerVisible] = useState(false);
+  const [proofViewerSrc, setProofViewerSrc] = useState<string | null>(null);
+  const [proofLoadError, setProofLoadError] = useState<string | null>(null);
+  const [imageLoading, setImageLoading] = useState(true);
+  const [proofImageUri, setProofImageUri] = useState<string | null>(null);
+  const [isUploadingProof, setIsUploadingProof] = useState(false);
   const { user } = useSelector((state: RootState) => state.auth);
+
+  const resolveProofUrl = (path?: string | null) => {
+    if (!path) return null;
+    if (path.startsWith('http')) return path;
+
+    const base = API_CONFIG.BASE_URL || (apiClient as any)?.defaults?.baseURL || '';
+    const hostBase = base.replace(/\/?api\/?$/, '');
+    const normalized = path.replace(/^\//, '');
+    const needsMedia = !normalized.startsWith('media/');
+    const finalPath = needsMedia ? `media/${normalized}` : normalized;
+    const url = `${hostBase.replace(/\/$/, '')}/${finalPath}`;
+    console.log('Proof image resolve', { path, base, hostBase, normalized, finalPath, url });
+    return url;
+  };
+
+  // Pick proof image from gallery or camera
+  const pickProofImage = async (source: 'gallery' | 'camera') => {
+    try {
+      let result;
+      if (source === 'camera') {
+        const { status } = await ImagePicker.requestCameraPermissionsAsync();
+        if (status !== 'granted') {
+          Alert.alert('Cần quyền truy cập', 'Vui lòng cấp quyền truy cập camera');
+          return;
+        }
+        result = await ImagePicker.launchCameraAsync({
+          mediaTypes: ImagePicker.MediaTypeOptions.Images,
+          allowsEditing: true,
+          aspect: [4, 3],
+          quality: 0.8,
+        });
+      } else {
+        const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+        if (status !== 'granted') {
+          Alert.alert('Cần quyền truy cập', 'Vui lòng cấp quyền truy cập thư viện ảnh');
+          return;
+        }
+        result = await ImagePicker.launchImageLibraryAsync({
+          mediaTypes: ImagePicker.MediaTypeOptions.Images,
+          allowsEditing: true,
+          aspect: [4, 3],
+          quality: 0.8,
+        });
+      }
+
+      if (!result.canceled && result.assets[0]) {
+        setProofImageUri(result.assets[0].uri);
+      }
+    } catch (error) {
+      console.error('Error picking image:', error);
+      Alert.alert('Lỗi', 'Không thể chọn ảnh');
+    }
+  };
+
+  const showImagePickerOptions = () => {
+    Alert.alert(
+      'Chọn ảnh minh chứng',
+      'Chọn nguồn ảnh',
+      [
+        { text: 'Chụp ảnh', onPress: () => pickProofImage('camera') },
+        { text: 'Thư viện', onPress: () => pickProofImage('gallery') },
+        { text: 'Hủy', style: 'cancel' },
+      ]
+    );
+  };
 
   // Helper function to convert API order to display format
   const convertOrderToDisplay = (order: Order): OrderWithDisplayData => {
@@ -117,6 +191,7 @@ const NewOrderListScreen = ({ navigation }: any) => {
       refund_status: order.refund_status,
       bank_name: order.bank_name,
       bank_account: order.bank_account,
+      proof_image: order.proof_image,
     };
   };
 
@@ -777,6 +852,38 @@ const NewOrderListScreen = ({ navigation }: any) => {
                             <Text style={styles.refundBadgeText}>{selectedOrder.refund_status}</Text>
                           </View>
                         </View>
+                        {selectedOrder.refund_status === 'Đã hoàn thành' && selectedOrder.proof_image ? (
+                          <>
+                            <View style={styles.infoDivider} />
+                            <TouchableOpacity
+                              style={[styles.infoRow, { alignItems: 'center' }]}
+                              onPress={() => {
+                                console.log('Proof click', { proof_image: selectedOrder.proof_image });
+                                setProofLoadError(null);
+                                setImageLoading(false);
+                                const url = resolveProofUrl(selectedOrder.proof_image);
+                                console.log('Opening proof viewer with URL:', url);
+                                if (url) {
+                                  setProofViewerSrc(url);
+                                  // Close order detail modal first, then open proof viewer
+                                  setModalVisible(false);
+                                  setTimeout(() => {
+                                    setProofViewerVisible(true);
+                                  }, 300);
+                                } else {
+                                  Alert.alert('Không có ảnh', 'Không tìm thấy đường dẫn minh chứng.');
+                                }
+                              }}
+                              activeOpacity={0.8}
+                            >
+                              <Text style={styles.infoLabel}>Minh chứng</Text>
+                              <Text style={[styles.infoValue, { color: '#ea580c', textDecorationLine: 'underline' }]}>Xem ảnh</Text>
+                            </TouchableOpacity>
+                          </>
+                        ) : null}
+                        {selectedOrder.status === 'rejected' && selectedOrder.proof_image ? (
+                          <Text style={[styles.infoLabel, { marginTop: 6, color: '#6b7280' }]}>Ảnh minh chứng: {selectedOrder.proof_image}</Text>
+                        ) : null}
                       </>
                     ) : null}
                   </View>
@@ -931,82 +1038,204 @@ const NewOrderListScreen = ({ navigation }: any) => {
           onRequestClose={() => {
             setRefundModalVisible(false);
             setRefundOrder(null);
+            setProofImageUri(null);
           }}
         >
           <View style={styles.refundModalOverlay}>
             <View style={styles.refundModalContent}>
-              <Text style={styles.refundModalTitle}>Thông tin tài khoản</Text>
+              <ScrollView showsVerticalScrollIndicator={false}>
+                <Text style={styles.refundModalTitle}>Thông tin tài khoản</Text>
 
-              <View style={styles.refundField}>
-                <Text style={styles.refundFieldLabel}>Tên ngân hàng</Text>
-                <TextInput
-                  style={styles.refundFieldInput}
-                  value={refundOrder.bank_name || '—'}
-                  editable={false}
-                />
-              </View>
-
-              <View style={styles.refundField}>
-                <Text style={styles.refundFieldLabel}>Số tài khoản</Text>
-                <View style={styles.refundAccountRow}>
+                <View style={styles.refundField}>
+                  <Text style={styles.refundFieldLabel}>Tên ngân hàng</Text>
                   <TextInput
-                    style={[styles.refundFieldInput, { flex: 1 }]}
-                    value={refundOrder.bank_account || '—'}
+                    style={styles.refundFieldInput}
+                    value={refundOrder.bank_name || '—'}
                     editable={false}
                   />
-                  <TouchableOpacity
-                    style={styles.copyButton}
-                    onPress={async () => {
-                      await Clipboard.setStringAsync(refundOrder.bank_account || '');
-                      Alert.alert('Đã sao chép', 'Đã sao chép số tài khoản');
-                    }}
-                  >
-                    <Text style={styles.copyButtonText}>Sao chép</Text>
-                  </TouchableOpacity>
                 </View>
-              </View>
 
-              <View style={styles.refundModalActions}>
-                <TouchableOpacity
-                  style={[styles.refundActionButton, styles.refundCancelButton]}
-                  onPress={() => {
-                    setRefundModalVisible(false);
-                    setRefundOrder(null);
-                  }}
-                  disabled={isCompletingRefund}
-                >
-                  <Text style={styles.refundCancelText}>Hủy</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={[styles.refundActionButton, styles.refundConfirmButton]}
-                  onPress={async () => {
-                    if (!refundOrder) return;
-                    try {
-                      setIsCompletingRefund(true);
-                      await updateOrderStatusAsync(refundOrder.id, refundOrder.status, {
-                        refund_requested: false,
-                        refund_status: 'Đã hoàn thành',
-                      });
-                      Alert.alert('Thành công', 'Đã đánh dấu hoàn tiền');
+                <View style={styles.refundField}>
+                  <Text style={styles.refundFieldLabel}>Số tài khoản</Text>
+                  <View style={styles.refundAccountRow}>
+                    <TextInput
+                      style={[styles.refundFieldInput, { flex: 1 }]}
+                      value={refundOrder.bank_account || '—'}
+                      editable={false}
+                    />
+                    <TouchableOpacity
+                      style={styles.copyButton}
+                      onPress={async () => {
+                        await Clipboard.setStringAsync(refundOrder.bank_account || '');
+                        Alert.alert('Đã sao chép', 'Đã sao chép số tài khoản');
+                      }}
+                    >
+                      <Text style={styles.copyButtonText}>Sao chép</Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+
+                {/* Proof Image Upload Section */}
+                <View style={styles.refundField}>
+                  <Text style={styles.refundFieldLabel}>Ảnh minh chứng chuyển khoản</Text>
+                  {proofImageUri ? (
+                    <View style={styles.proofPreviewContainer}>
+                      <Image
+                        source={{ uri: proofImageUri }}
+                        style={styles.proofPreviewImage}
+                        resizeMode="cover"
+                      />
+                      <TouchableOpacity
+                        style={styles.removeProofBtn}
+                        onPress={() => setProofImageUri(null)}
+                      >
+                        <Trash2 size={18} color="#fff" />
+                      </TouchableOpacity>
+                    </View>
+                  ) : (
+                    <TouchableOpacity
+                      style={styles.uploadProofBtn}
+                      onPress={showImagePickerOptions}
+                    >
+                      <Camera size={24} color="#6b7280" />
+                      <Text style={styles.uploadProofText}>Chọn hoặc chụp ảnh</Text>
+                    </TouchableOpacity>
+                  )}
+                </View>
+
+                <View style={styles.refundModalActions}>
+                  <TouchableOpacity
+                    style={[styles.refundActionButton, styles.refundCancelButton]}
+                    onPress={() => {
                       setRefundModalVisible(false);
                       setRefundOrder(null);
-                    } catch (e: any) {
-                      Alert.alert('Lỗi', e?.message || 'Không thể cập nhật hoàn tiền');
-                    } finally {
-                      setIsCompletingRefund(false);
-                    }
-                  }}
-                  disabled={isCompletingRefund}
-                >
-                  <Text style={styles.refundConfirmText}>
-                    {isCompletingRefund ? 'Đang xử lý...' : 'Hoàn thành'}
-                  </Text>
-                </TouchableOpacity>
-              </View>
+                      setProofImageUri(null);
+                    }}
+                    disabled={isCompletingRefund}
+                  >
+                    <Text style={styles.refundCancelText}>Hủy</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[styles.refundActionButton, styles.refundConfirmButton]}
+                    onPress={async () => {
+                      if (!refundOrder) return;
+                      try {
+                        setIsCompletingRefund(true);
+                        
+                        // Create FormData for multipart upload
+                        const formData = new FormData();
+                        formData.append('order_status', refundOrder.order_status);
+                        formData.append('refund_requested', 'false');
+                        formData.append('refund_status', 'Đã hoàn thành');
+                        
+                        if (proofImageUri) {
+                          const filename = proofImageUri.split('/').pop() || 'proof.jpg';
+                          const match = /\.(\w+)$/.exec(filename);
+                          const type = match ? `image/${match[1]}` : 'image/jpeg';
+                          formData.append('proof_image', {
+                            uri: proofImageUri,
+                            name: filename,
+                            type,
+                          } as any);
+                        }
+                        
+                        // Get store ID
+                        let currentStoreId = storeId;
+                        if (!currentStoreId) {
+                          currentStoreId = await getStoreId();
+                          setStoreId(currentStoreId);
+                        }
+                        
+                        // Upload with FormData
+                        await apiClient.patch(
+                          `/stores/${currentStoreId}/orders/${refundOrder.id}/status/`,
+                          formData,
+                          {
+                            headers: {
+                              'Content-Type': 'multipart/form-data',
+                            },
+                          }
+                        );
+                        
+                        // Refresh orders
+                        await fetchOrders();
+                        
+                        Alert.alert('Thành công', 'Đã đánh dấu hoàn tiền');
+                        setRefundModalVisible(false);
+                        setRefundOrder(null);
+                        setProofImageUri(null);
+                      } catch (e: any) {
+                        console.error('Refund error:', e);
+                        Alert.alert('Lỗi', e?.message || 'Không thể cập nhật hoàn tiền');
+                      } finally {
+                        setIsCompletingRefund(false);
+                      }
+                    }}
+                    disabled={isCompletingRefund}
+                  >
+                    <Text style={styles.refundConfirmText}>
+                      {isCompletingRefund ? 'Đang xử lý...' : 'Hoàn thành'}
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+              </ScrollView>
             </View>
           </View>
         </Modal>
       )}
+
+      <Modal
+        visible={proofViewerVisible}
+        animationType="slide"
+        transparent={true}
+        onRequestClose={() => setProofViewerVisible(false)}
+        onShow={() => console.log('Proof modal SHOWN, proofViewerSrc:', proofViewerSrc)}
+      >
+        <View style={styles.proofModalOverlay}>
+          <View style={styles.proofModalContent}>
+            <View style={styles.proofModalHeader}>
+              <Text style={styles.proofModalTitle}>Ảnh minh chứng</Text>
+              <TouchableOpacity
+                onPress={() => setProofViewerVisible(false)}
+                style={styles.proofModalCloseBtn}
+              >
+                <X size={24} color="#111827" />
+              </TouchableOpacity>
+            </View>
+
+            <View style={styles.proofImageContainer}>
+              {proofViewerSrc ? (
+                <Image
+                  source={{ uri: proofViewerSrc }}
+                  style={{
+                    width: Dimensions.get('window').width - 72,
+                    height: 280,
+                  }}
+                  resizeMode="contain"
+                  onError={(e) => {
+                    const msg = e?.nativeEvent?.error || 'Không thể tải ảnh';
+                    console.log('Image load error:', msg);
+                    setProofLoadError(msg);
+                  }}
+                />
+              ) : (
+                <Text style={{ color: '#6b7280', textAlign: 'center' }}>Không có hình ảnh</Text>
+              )}
+            </View>
+
+            {proofLoadError ? (
+              <Text style={styles.proofErrorText}>Lỗi: {proofLoadError}</Text>
+            ) : null}
+
+            <TouchableOpacity
+              style={styles.proofCloseButton}
+              onPress={() => setProofViewerVisible(false)}
+            >
+              <Text style={styles.proofCloseButtonText}>Đóng</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 };
@@ -1421,15 +1650,15 @@ const styles = StyleSheet.create({
   refundModalOverlay: {
     flex: 1,
     backgroundColor: 'rgba(0,0,0,0.5)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 20,
+    justifyContent: 'flex-end',
   },
   refundModalContent: {
     width: '100%',
     backgroundColor: '#fff',
-    borderRadius: 16,
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
     padding: 20,
+    paddingBottom: 32,
   },
   refundModalTitle: {
     fontSize: 18,
@@ -1497,6 +1726,45 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontFamily: Fonts.LeagueSpartanBold,
     fontSize: 14,
+  },
+
+  // Proof Image Upload styles
+  proofPreviewContainer: {
+    position: 'relative',
+    width: '100%',
+    height: 200,
+    borderRadius: 12,
+    overflow: 'hidden',
+    backgroundColor: '#f3f4f6',
+  },
+  proofPreviewImage: {
+    width: '100%',
+    height: '100%',
+  },
+  removeProofBtn: {
+    position: 'absolute',
+    top: 8,
+    right: 8,
+    backgroundColor: 'rgba(239, 68, 68, 0.9)',
+    borderRadius: 20,
+    padding: 8,
+  },
+  uploadProofBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    backgroundColor: '#f3f4f6',
+    borderWidth: 2,
+    borderColor: '#e5e7eb',
+    borderStyle: 'dashed',
+    borderRadius: 12,
+    paddingVertical: 32,
+  },
+  uploadProofText: {
+    fontSize: 14,
+    color: '#6b7280',
+    fontFamily: Fonts.LeagueSpartanMedium,
   },
 
   // Modal styles - Redesigned
@@ -1827,6 +2095,80 @@ const styles = StyleSheet.create({
   modalConfirmText: {
     fontSize: 15,
     color: '#fff',
+    fontFamily: Fonts.LeagueSpartanBold,
+  },
+
+  // Proof Image Modal Styles
+  proofModalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.7)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  proofModalContent: {
+    width: Dimensions.get('window').width - 40,
+    maxHeight: Dimensions.get('window').height * 0.8,
+    backgroundColor: '#fff',
+    borderRadius: 16,
+    padding: 16,
+  },
+  proofModalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  proofModalTitle: {
+    fontSize: 18,
+    fontFamily: Fonts.LeagueSpartanBold,
+    color: '#111827',
+  },
+  proofModalCloseBtn: {
+    padding: 4,
+  },
+  proofImageContainer: {
+    width: '100%',
+    minHeight: 280,
+    backgroundColor: '#f3f4f6',
+    borderRadius: 12,
+    overflow: 'hidden',
+    justifyContent: 'center',
+    alignItems: 'center',
+    position: 'relative',
+  },
+  proofLoadingOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#f3f4f6',
+    zIndex: 10,
+  },
+  proofImage: {
+    width: '100%',
+    height: '100%',
+  },
+  proofErrorText: {
+    marginTop: 8,
+    fontSize: 13,
+    color: '#ef4444',
+    textAlign: 'center',
+    fontFamily: Fonts.LeagueSpartanRegular,
+  },
+  proofCloseButton: {
+    marginTop: 16,
+    backgroundColor: '#ea580c',
+    borderRadius: 10,
+    paddingVertical: 12,
+    alignItems: 'center',
+  },
+  proofCloseButtonText: {
+    color: '#fff',
+    fontSize: 15,
     fontFamily: Fonts.LeagueSpartanBold,
   },
 });

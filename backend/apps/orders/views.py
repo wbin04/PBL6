@@ -6,6 +6,9 @@ from django.shortcuts import get_object_or_404
 from django.core.paginator import Paginator
 from django.db.models import Q
 from decimal import Decimal, ROUND_HALF_UP
+import os
+import uuid
+from django.core.files.storage import default_storage
 from .models import Order, OrderDetail
 from .serializers import OrderSerializer, OrderDetailSerializer
 from apps.menu.models import Food
@@ -830,6 +833,7 @@ def admin_update_order_status(request, pk):
         bank_name = request.data.get('bank_name')
         bank_account = request.data.get('bank_account')
         refund_requested_flag = request.data.get('refund_requested')
+        proof_image_file = request.FILES.get('proof_image')
         
         if not new_status:
             return Response({'error': 'order_status is required'}, status=status.HTTP_400_BAD_REQUEST)
@@ -868,6 +872,20 @@ def admin_update_order_status(request, pk):
                     order.bank_name = bank_name
                 if bank_account:
                     order.bank_account = bank_account
+
+        if proof_image_file:
+            ext = os.path.splitext(proof_image_file.name)[1]
+            filename = f"assets/{uuid.uuid4().hex}{ext}"
+            saved_path = default_storage.save(filename, proof_image_file)
+
+            if order.proof_image and order.proof_image != saved_path:
+                try:
+                    if default_storage.exists(order.proof_image):
+                        default_storage.delete(order.proof_image)
+                except Exception:
+                    pass
+
+            order.proof_image = saved_path
         
         order.save()
         

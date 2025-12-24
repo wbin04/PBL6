@@ -6,6 +6,9 @@ from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
 from django.shortcuts import get_object_or_404
 from django.db.models import F
 from decimal import Decimal
+import os
+import uuid
+from django.core.files.storage import default_storage
 from .models import Store
 from .serializers import StoreSerializer
 from apps.menu.models import Food
@@ -150,10 +153,15 @@ class StoreViewSet(viewsets.ModelViewSet):
         refund_status = request.data.get('refund_status')
         bank_name = request.data.get('bank_name')
         bank_account = request.data.get('bank_account')
+        proof_image_file = request.FILES.get('proof_image')
         valid_statuses = [choice[0] for choice in Order.ORDER_STATUS_CHOICES]
         
         if new_status not in valid_statuses:
             return Response({'error': 'Invalid status'}, status=status.HTTP_400_BAD_REQUEST)
+
+        # Disallow changing status away from completed/cancelled; allow metadata updates when status unchanged
+        if order.order_status in ['Đã giao', 'Đã huỷ'] and new_status != order.order_status:
+            return Response({'error': 'Không thể thay đổi trạng thái khi đơn đã hoàn tất hoặc đã huỷ'}, status=status.HTTP_400_BAD_REQUEST)
         
         # Preserve previous refund status to detect state change
         previous_refund_status = order.refund_status
@@ -177,6 +185,21 @@ class StoreViewSet(viewsets.ModelViewSet):
             order.bank_name = bank_name
         if bank_account:
             order.bank_account = bank_account
+        if proof_image_file:
+            ext = os.path.splitext(proof_image_file.name)[1]
+            filename = f"assets/{uuid.uuid4().hex}{ext}"
+            saved_path = default_storage.save(filename, proof_image_file)
+
+            # Remove old proof image if replaced
+            if order.proof_image and order.proof_image != saved_path:
+                try:
+                    if default_storage.exists(order.proof_image):
+                        default_storage.delete(order.proof_image)
+                except Exception:
+                    # Do not fail request if cleanup fails
+                    pass
+
+            order.proof_image = saved_path
         
         order.save()
 

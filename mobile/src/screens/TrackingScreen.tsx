@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, StatusBar, Image, LayoutAnimation, Platform, UIManager } from "react-native";
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, StatusBar, Image, LayoutAnimation, Platform, UIManager, Modal, Dimensions } from "react-native";
 import { useNavigation, useRoute, useFocusEffect } from "@react-navigation/native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
@@ -34,6 +34,13 @@ interface TrackingInfo {
   orderDate: string;
   orderTime: string;
   note?: string; // Ghi chú cho toàn đơn hàng
+  status?: string; // Order status
+  // Refund info
+  refund_requested?: boolean;
+  refund_status?: 'Không' | 'Chờ xử lý' | 'Đã hoàn thành';
+  bank_name?: string | null;
+  bank_account?: string | null;
+  proof_image?: string | null;
 }
 
 export default function TrackingScreen() {
@@ -41,6 +48,7 @@ export default function TrackingScreen() {
   const route = useRoute();
   const [isExpanded, setIsExpanded] = useState(false);
   const [isDetailsExpanded, setIsDetailsExpanded] = useState(false);
+  const [proofViewerVisible, setProofViewerVisible] = useState(false);
   const [updatedAddress, setUpdatedAddress] = useState<{
     customerName: string;
     phoneNumber: string;
@@ -54,6 +62,43 @@ export default function TrackingScreen() {
   
   // Get tracking info from route params
   const { trackingInfo } = route.params as { trackingInfo: TrackingInfo };
+
+  // Helper to resolve proof image URL
+  const resolveProofUrl = (path?: string | null) => {
+    if (!path) return null;
+    if (path.startsWith('http')) return path;
+    const baseUrl = API_CONFIG.BASE_URL.replace(/\/?api\/?$/, '');
+    const normalized = path.replace(/^\//, '');
+    const needsMedia = !normalized.startsWith('media/');
+    const finalPath = needsMedia ? `media/${normalized}` : normalized;
+    return `${baseUrl.replace(/\/$/, '')}/${finalPath}`;
+  };
+
+  // Get status color
+  const getStatusColor = (status?: string) => {
+    switch (status) {
+      case 'Chờ xác nhận': return '#3b82f6';
+      case 'Đã xác nhận': return '#8b5cf6';
+      case 'Đang chuẩn bị': return '#f97316';
+      case 'Sẵn sàng': return '#06b6d4';
+      case 'Đã giao': return '#10b981';
+      case 'Đã huỷ':
+      case 'Đã hủy': return '#ef4444';
+      default: return '#6b7280';
+    }
+  };
+
+  // Get refund status style
+  const getRefundStatusStyle = (status?: string) => {
+    switch (status) {
+      case 'Chờ xử lý': return { bg: '#fef3c7', text: '#b45309', border: '#f59e0b' };
+      case 'Đã hoàn thành': return { bg: '#d1fae5', text: '#047857', border: '#10b981' };
+      default: return { bg: '#e5e7eb', text: '#374151', border: '#9ca3af' };
+    }
+  };
+
+  // Check if order is cancelled
+  const isCancelled = trackingInfo.status === 'Đã huỷ' || trackingInfo.status === 'Đã hủy';
   
   // Debug information for data validation
   React.useEffect(() => {
@@ -380,30 +425,98 @@ export default function TrackingScreen() {
       </View>
 
       <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
-        {/* Status Banner - chỉ hiển thị khi không phải Chờ xác nhận */}
-        {!(trackingInfo as any).status || (trackingInfo as any).status !== 'Chờ xác nhận' ? (
-          <TouchableOpacity 
-            style={styles.statusBanner}
-            onPress={() => (navigation as any).navigate('MapTracking', { 
-              trackingInfo: {
-                orderId: trackingInfo.orderId,
-                shopName: trackingInfo.shopName,
-                customerName: trackingInfo.customerName,
-                phoneNumber: trackingInfo.phoneNumber,
-                deliveryAddress: trackingInfo.deliveryAddress,
-                estimatedDelivery: estimatedDeliveryTime,
-              }
-            })}
-          >
-            <Text style={styles.statusText}>Thời gian giao hàng dự kiến: {estimatedDeliveryTime}</Text>
-          </TouchableOpacity>
-        ) : (
-          <View style={styles.pendingStatusBanner}>
-            <Text style={styles.pendingStatusText}>Đơn hàng đang chờ xác nhận</Text>
+        {/* Order Status Section */}
+        <View style={styles.orderStatusSection}>
+          <View style={styles.orderStatusRow}>
+            <Text style={styles.orderStatusLabel}>Trạng thái đơn hàng</Text>
+            <View style={[styles.orderStatusBadge, { backgroundColor: getStatusColor(trackingInfo.status) }]}>
+              <Text style={styles.orderStatusText}>{trackingInfo.status || 'Chờ xác nhận'}</Text>
+            </View>
           </View>
-        )}        
+        </View>
 
-        {/* Delivery Address */}
+        {/* Refund Info Section - Only show for cancelled orders with refund request */}
+        {isCancelled && trackingInfo.refund_status && trackingInfo.refund_status !== 'Không' && (
+          <View style={styles.refundSection}>
+            <Text style={styles.refundSectionTitle}>Thông tin hoàn tiền</Text>
+            
+            {/* Refund Status */}
+            <View style={styles.refundInfoRow}>
+              <Text style={styles.refundInfoLabel}>Trạng thái hoàn tiền</Text>
+              <View style={[
+                styles.refundStatusBadge,
+                { 
+                  backgroundColor: getRefundStatusStyle(trackingInfo.refund_status).bg,
+                  borderColor: getRefundStatusStyle(trackingInfo.refund_status).border,
+                }
+              ]}>
+                <Text style={[
+                  styles.refundStatusText,
+                  { color: getRefundStatusStyle(trackingInfo.refund_status).text }
+                ]}>
+                  {trackingInfo.refund_status}
+                </Text>
+              </View>
+            </View>
+
+            {/* Bank Name */}
+            {trackingInfo.bank_name && (
+              <View style={styles.refundInfoRow}>
+                <Text style={styles.refundInfoLabel}>Ngân hàng</Text>
+                <Text style={styles.refundInfoValue}>{trackingInfo.bank_name}</Text>
+              </View>
+            )}
+
+            {/* Bank Account */}
+            {trackingInfo.bank_account && (
+              <View style={styles.refundInfoRow}>
+                <Text style={styles.refundInfoLabel}>Số tài khoản</Text>
+                <Text style={styles.refundInfoValue}>{trackingInfo.bank_account}</Text>
+              </View>
+            )}
+
+            {/* Proof Image - Only show when refund is completed */}
+            {trackingInfo.refund_status === 'Đã hoàn thành' && trackingInfo.proof_image && (
+              <View style={styles.proofImageSection}>
+                <Text style={styles.refundInfoLabel}>Minh chứng chuyển khoản</Text>
+                <TouchableOpacity 
+                  style={styles.viewProofBtn}
+                  onPress={() => setProofViewerVisible(true)}
+                >
+                  <Ionicons name="image-outline" size={18} color="#ea580c" />
+                  <Text style={styles.viewProofText}>Xem ảnh minh chứng</Text>
+                </TouchableOpacity>
+              </View>
+            )}
+          </View>
+        )}
+
+        {/* Status Banner - chỉ hiển thị khi không phải đã huỷ */}
+        {!isCancelled && (
+          <>
+            {trackingInfo.status !== 'Chờ xác nhận' ? (
+              <TouchableOpacity 
+                style={styles.statusBanner}
+                onPress={() => (navigation as any).navigate('MapTracking', { 
+                  trackingInfo: {
+                    orderId: trackingInfo.orderId,
+                    shopName: trackingInfo.shopName,
+                    customerName: trackingInfo.customerName,
+                    phoneNumber: trackingInfo.phoneNumber,
+                    deliveryAddress: trackingInfo.deliveryAddress,
+                    estimatedDelivery: estimatedDeliveryTime,
+                  }
+                })}
+              >
+                <Text style={styles.statusText}>Thời gian giao hàng dự kiến: {estimatedDeliveryTime}</Text>
+              </TouchableOpacity>
+            ) : (
+              <View style={styles.pendingStatusBanner}>
+                <Text style={styles.pendingStatusText}>Đơn hàng đang chờ xác nhận</Text>
+              </View>
+            )}
+          </>
+        )}        {/* Delivery Address */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Địa chỉ nhận hàng</Text>
           <View style={styles.addressContainer}>
@@ -666,7 +779,52 @@ export default function TrackingScreen() {
         </View>
       </ScrollView>
 
-      
+      {/* Proof Image Viewer Modal */}
+      <Modal
+        visible={proofViewerVisible}
+        animationType="fade"
+        transparent={true}
+        onRequestClose={() => setProofViewerVisible(false)}
+      >
+        <View style={styles.proofModalOverlay}>
+          <View style={styles.proofModalContent}>
+            <View style={styles.proofModalHeader}>
+              <Text style={styles.proofModalTitle}>Ảnh minh chứng</Text>
+              <TouchableOpacity
+                onPress={() => setProofViewerVisible(false)}
+                style={styles.proofModalCloseBtn}
+              >
+                <Ionicons name="close" size={24} color="#111827" />
+              </TouchableOpacity>
+            </View>
+
+            <View style={styles.proofImageContainer}>
+              {trackingInfo.proof_image ? (
+                <Image
+                  source={{ uri: resolveProofUrl(trackingInfo.proof_image) || '' }}
+                  style={{
+                    width: Dimensions.get('window').width - 72,
+                    height: 280,
+                  }}
+                  resizeMode="contain"
+                  onError={(e) => {
+                    console.log('Proof image load error:', e.nativeEvent);
+                  }}
+                />
+              ) : (
+                <Text style={{ color: '#6b7280', textAlign: 'center' }}>Không có hình ảnh</Text>
+              )}
+            </View>
+
+            <TouchableOpacity
+              style={styles.proofCloseButton}
+              onPress={() => setProofViewerVisible(false)}
+            >
+              <Text style={styles.proofCloseButtonText}>Đóng</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -698,6 +856,167 @@ const styles = StyleSheet.create({
     flex: 1,
     paddingVertical: 8,
   },
+  
+  // Order Status Section
+  orderStatusSection: {
+    backgroundColor: '#FFF',
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    marginHorizontal: 16,
+    marginTop: 8,
+    marginBottom: 4,
+    borderRadius: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
+    elevation: 1,
+  },
+  orderStatusRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  orderStatusLabel: {
+    fontSize: 14,
+    color: '#6b7280',
+    fontFamily: Fonts.LeagueSpartanMedium,
+  },
+  orderStatusBadge: {
+    paddingHorizontal: 14,
+    paddingVertical: 6,
+    borderRadius: 999,
+  },
+  orderStatusText: {
+    fontSize: 13,
+    color: '#fff',
+    fontFamily: Fonts.LeagueSpartanBold,
+  },
+
+  // Refund Section
+  refundSection: {
+    backgroundColor: '#FFF',
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    marginHorizontal: 16,
+    marginTop: 4,
+    marginBottom: 4,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#fef3c7',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
+    elevation: 1,
+  },
+  refundSectionTitle: {
+    fontSize: 15,
+    color: '#ea580c',
+    fontFamily: Fonts.LeagueSpartanBold,
+    marginBottom: 12,
+  },
+  refundInfoRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f3f4f6',
+  },
+  refundInfoLabel: {
+    fontSize: 13,
+    color: '#6b7280',
+    fontFamily: Fonts.LeagueSpartanMedium,
+  },
+  refundInfoValue: {
+    fontSize: 14,
+    color: '#111827',
+    fontFamily: Fonts.LeagueSpartanSemiBold,
+  },
+  refundStatusBadge: {
+    paddingHorizontal: 12,
+    paddingVertical: 4,
+    borderRadius: 999,
+    borderWidth: 1,
+  },
+  refundStatusText: {
+    fontSize: 12,
+    fontFamily: Fonts.LeagueSpartanSemiBold,
+  },
+  proofImageSection: {
+    paddingTop: 12,
+    marginTop: 4,
+  },
+  viewProofBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+    backgroundColor: '#fff7ed',
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#fed7aa',
+    marginTop: 8,
+  },
+  viewProofText: {
+    fontSize: 14,
+    color: '#ea580c',
+    fontFamily: Fonts.LeagueSpartanSemiBold,
+  },
+
+  // Proof Modal Styles
+  proofModalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.7)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  proofModalContent: {
+    width: Dimensions.get('window').width - 40,
+    maxHeight: Dimensions.get('window').height * 0.8,
+    backgroundColor: '#fff',
+    borderRadius: 16,
+    padding: 16,
+  },
+  proofModalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  proofModalTitle: {
+    fontSize: 18,
+    fontFamily: Fonts.LeagueSpartanBold,
+    color: '#111827',
+  },
+  proofModalCloseBtn: {
+    padding: 4,
+  },
+  proofImageContainer: {
+    width: '100%',
+    minHeight: 280,
+    backgroundColor: '#f3f4f6',
+    borderRadius: 12,
+    overflow: 'hidden',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  proofCloseButton: {
+    marginTop: 16,
+    backgroundColor: '#ea580c',
+    borderRadius: 10,
+    paddingVertical: 12,
+    alignItems: 'center',
+  },
+  proofCloseButtonText: {
+    color: '#fff',
+    fontSize: 15,
+    fontFamily: Fonts.LeagueSpartanBold,
+  },
+
   statusBanner: {
     backgroundColor: '#E95322',
     paddingVertical: 16,

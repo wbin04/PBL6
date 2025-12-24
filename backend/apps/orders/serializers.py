@@ -95,7 +95,7 @@ class OrderSerializer(serializers.ModelSerializer):
             'store_name', 'store_info_id', 'store_image', 'store_address', 'store_latitude', 'store_longitude', 'items', 'is_rated', 
             'created_date', 'promo_discount', 'applied_promos',
             'total_before_discount', 'total_discount', 'total_after_discount',
-            'refund_requested', 'refund_status', 'bank_name', 'bank_account'
+            'refund_requested', 'refund_status', 'bank_name', 'bank_account', 'proof_image'
         ]
         read_only_fields = ['id', 'created_date']
     
@@ -238,7 +238,7 @@ class OrderListSerializer(serializers.ModelSerializer):
             'id', 'order_status', 'delivery_status', 'total_money', 'payment_method',
             'receiver_name', 'shipper', 'items_count', 'created_date',
             'cancel_reason', 'cancelled_date', 'cancelled_by_role',
-            'refund_requested', 'refund_status', 'bank_name', 'bank_account'
+            'refund_requested', 'refund_status', 'bank_name', 'bank_account', 'proof_image'
         ]
     
     def get_items_count(self, obj):
