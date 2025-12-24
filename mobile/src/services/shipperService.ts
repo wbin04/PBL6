@@ -191,6 +191,38 @@ class ShipperService {
     }
   }
 
+  // Mark order as delivered with proof image
+  async markDeliveredWithProof(orderId: number, proofImageUri: string): Promise<ShipperOrder> {
+    try {
+      console.log(`=== MARK DELIVERED WITH PROOF DEBUG ===`);
+      console.log(`Order ID: ${orderId}`);
+      console.log(`Proof Image URI: ${proofImageUri}`);
+
+      const formData = new FormData();
+      formData.append('delivery_status', 'Đã giao');
+      
+      // Get file extension and create filename
+      const uriParts = proofImageUri.split('.');
+      const fileExtension = uriParts[uriParts.length - 1];
+      
+      formData.append('proof_image', {
+        uri: proofImageUri,
+        name: `delivery_proof_${orderId}.${fileExtension}`,
+        type: `image/${fileExtension === 'jpg' ? 'jpeg' : fileExtension}`,
+      } as any);
+
+      const data = await apiClient.putMultipart<any>(`/orders/shipper/${orderId}/status/`, formData);
+
+      console.log(`Success response:`, data);
+      console.log(`=== END MARK DELIVERED WITH PROOF DEBUG ===`);
+
+      return data.order || data;
+    } catch (error) {
+      console.error('Error marking as delivered with proof:', error);
+      throw error;
+    }
+  }
+
   // Cancel order (update delivery_status to "Đã huỷ")
   async cancelOrder(orderId: number, reason?: string): Promise<ShipperOrder> {
     try {

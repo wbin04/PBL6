@@ -187,6 +187,18 @@ class ApiClient {
     });
     return response.data;
   }
+
+  // PUT with multipart/form-data for file uploads
+  async putMultipart<T>(url: string, formData: FormData, config?: AxiosRequestConfig): Promise<T> {
+    const response: AxiosResponse<T> = await this.client.put(url, formData, {
+      ...config,
+      headers: {
+        'Content-Type': 'multipart/form-data',
+        ...config?.headers,
+      },
+    });
+    return response.data;
+  }
 }
 
 export const apiClient = new ApiClient();

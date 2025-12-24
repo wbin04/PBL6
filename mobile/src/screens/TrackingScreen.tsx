@@ -491,6 +491,20 @@ export default function TrackingScreen() {
           </View>
         )}
 
+        {/* Proof image for delivered orders */}
+        {trackingInfo.status === 'Đã giao' && trackingInfo.proof_image && (
+          <View style={styles.refundSection}>
+            <Text style={styles.refundSectionTitle}>Minh chứng giao hàng</Text>
+            <TouchableOpacity 
+              style={styles.viewProofBtn}
+              onPress={() => setProofViewerVisible(true)}
+            >
+              <Ionicons name="image-outline" size={18} color="#ea580c" />
+              <Text style={styles.viewProofText}>Xem ảnh minh chứng</Text>
+            </TouchableOpacity>
+          </View>
+        )}
+
         {/* Status Banner - chỉ hiển thị khi không phải đã huỷ */}
         {!isCancelled && (
           <>
@@ -516,7 +530,9 @@ export default function TrackingScreen() {
               </View>
             )}
           </>
-        )}        {/* Delivery Address */}
+        )}
+
+        {/* Delivery Address */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Địa chỉ nhận hàng</Text>
           <View style={styles.addressContainer}>

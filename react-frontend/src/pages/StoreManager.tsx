@@ -139,6 +139,7 @@ const StoreManager: React.FC = () => {
     const proofImageInputRef = useRef<HTMLInputElement>(null);
     const [showProofModal, setShowProofModal] = useState(false);
     const [proofModalSrc, setProofModalSrc] = useState<string | null>(null);
+    const [proofModalTitle, setProofModalTitle] = useState<string>('Minh chứng');
   
   // State lọc trạng thái đơn hàng
   const [filterStatus, setFilterStatus] = useState<string>('Tất cả');
@@ -1164,6 +1165,7 @@ const StoreManager: React.FC = () => {
                                                     variant="outline"
                                                     className="border-amber-400 text-amber-700 hover:bg-amber-100"
                                                     onClick={() => {
+                                                        setProofModalTitle('Minh chứng hoàn tiền');
                                                         setProofModalSrc(getImageUrl(selectedOrder.proof_image!));
                                                         setShowProofModal(true);
                                                     }}
@@ -1172,6 +1174,29 @@ const StoreManager: React.FC = () => {
                                                 </Button>
                                             </div>
                                         )}
+                                   </div>
+                               )}
+
+                               {selectedOrder.order_status === 'Đã giao' && selectedOrder.proof_image && (
+                                   <div className="mt-3 space-y-2 bg-emerald-50 border border-emerald-200 rounded-lg p-3">
+                                       <div className="flex items-center gap-2">
+                                           <span className="text-sm font-semibold text-emerald-800">Minh chứng giao hàng</span>
+                                           <span className="text-xs px-2 py-1 rounded-full border border-emerald-300 bg-white text-emerald-700">Đã giao</span>
+                                       </div>
+                                       <div className="flex gap-2">
+                                           <Button
+                                               size="sm"
+                                               variant="outline"
+                                               className="border-emerald-400 text-emerald-700 hover:bg-emerald-100"
+                                               onClick={() => {
+                                                   setProofModalTitle('Minh chứng giao hàng');
+                                                   setProofModalSrc(getImageUrl(selectedOrder.proof_image!));
+                                                   setShowProofModal(true);
+                                               }}
+                                           >
+                                               Xem minh chứng
+                                           </Button>
+                                       </div>
                                    </div>
                                )}
                           </div>
@@ -1323,7 +1348,7 @@ const StoreManager: React.FC = () => {
           <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[60] p-4" onClick={() => setShowProofModal(false)}>
               <div className="bg-white rounded-xl shadow-2xl p-4 max-w-3xl w-full max-h-[90vh] overflow-auto" onClick={(e) => e.stopPropagation()}>
                   <div className="flex items-center justify-between mb-3">
-                      <h3 className="text-lg font-bold text-gray-800">Minh chứng hoàn tiền</h3>
+                      <h3 className="text-lg font-bold text-gray-800">{proofModalTitle}</h3>
                       <button onClick={() => setShowProofModal(false)} className="text-gray-500 hover:text-gray-700"><X size={20}/></button>
                   </div>
                   <div className="w-full">

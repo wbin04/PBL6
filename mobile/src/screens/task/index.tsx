@@ -10,6 +10,9 @@ import {
   RefreshControl,
   Modal,
   Pressable,
+  Image,
+  ActivityIndicator,
+  Dimensions,
 } from "react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import {
@@ -25,10 +28,14 @@ import {
   Eye,
   Navigation,
   X,
+  Camera,
+  ImageIcon,
 } from "lucide-react-native";
+import * as ImagePicker from 'expo-image-picker';
 
 import Sidebar from "@/components/sidebar";
 import { Fonts } from "@/constants/Fonts";
+import { API_CONFIG } from "@/constants";
 import { shipperService, type ShipperOrder } from "@/services/shipperService";
 import MapView, { Marker, Polyline, PROVIDER_GOOGLE, LatLng } from "react-native-maps";
 import { Linking } from "react-native";
@@ -180,6 +187,16 @@ export default function ShipperOrdersScreen() {
   const [showMapModal, setShowMapModal] = useState(false);
   const [mapTargetOrder, setMapTargetOrder] = useState<UIOrder | null>(null);
   const [activeRoute, setActiveRoute] = useState<ActiveRouteState | null>(null);
+  
+  // Proof image upload states
+  const [showProofModal, setShowProofModal] = useState(false);
+  const [proofOrderId, setProofOrderId] = useState<number | null>(null);
+  const [proofImageUri, setProofImageUri] = useState<string | null>(null);
+  const [uploadingProof, setUploadingProof] = useState(false);
+  
+  // Proof image viewer states
+  const [showProofViewer, setShowProofViewer] = useState(false);
+  const [viewProofImageUrl, setViewProofImageUrl] = useState<string | null>(null);
 
   // Fetch orders based on current tab
   const fetchOrders = useCallback(async () => {
@@ -448,38 +465,125 @@ export default function ShipperOrdersScreen() {
     }
   };
 
-  // Đang giao -> cập nhật delivery_status  
-  const handleStartDelivery = async (orderId: number) => {
-    try {
-      setLoading(true);
-      await shipperService.updateDeliveryStatus(orderId, 'Đang giao');
-      
-      // Stay in delivering tab and refresh
-      await fetchOrders();
-      
-      Alert.alert('Thành công', 'Đã bắt đầu giao hàng');
-    } catch (error) {
-      console.error('Error starting delivery:', error);
-      Alert.alert('Lỗi', 'Không thể cập nhật trạng thái');
-    } finally {
-      setLoading(false);
+  // Mở modal để tải ảnh minh chứng giao hàng
+  const openProofModal = (orderId: number) => {
+    setProofOrderId(orderId);
+    setProofImageUri(null);
+    setShowProofModal(true);
+  };
+
+  // Chọn ảnh từ camera
+  const pickImageFromCamera = async () => {
+    const { status } = await ImagePicker.requestCameraPermissionsAsync();
+    if (status !== 'granted') {
+      Alert.alert('Cần quyền truy cập', 'Vui lòng cấp quyền sử dụng camera để chụp ảnh minh chứng');
+      return;
+    }
+
+    const result = await ImagePicker.launchCameraAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      allowsEditing: true,
+      aspect: [4, 3],
+      quality: 0.8,
+    });
+
+    if (!result.canceled && result.assets[0]) {
+      setProofImageUri(result.assets[0].uri);
     }
   };
 
-  // Giao thành công -> sang tab "Đã giao"
-  const handleMarkDelivered = async (orderId: number) => {
+  // Chọn ảnh từ thư viện
+  const pickImageFromGallery = async () => {
+    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (status !== 'granted') {
+      Alert.alert('Cần quyền truy cập', 'Vui lòng cấp quyền truy cập thư viện ảnh');
+      return;
+    }
+
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      allowsEditing: true,
+      aspect: [4, 3],
+      quality: 0.8,
+    });
+
+    if (!result.canceled && result.assets[0]) {
+      setProofImageUri(result.assets[0].uri);
+    }
+  };
+
+  // Xác nhận giao hàng với ảnh minh chứng
+  const handleConfirmDelivered = async () => {
+    if (!proofOrderId) return;
+    
+    if (!proofImageUri) {
+      Alert.alert('Thiếu ảnh minh chứng', 'Vui lòng chụp hoặc chọn ảnh minh chứng giao hàng');
+      return;
+    }
+
     try {
-      setLoading(true);
-      await shipperService.updateDeliveryStatus(orderId, 'Đã giao');
+      setUploadingProof(true);
+      await shipperService.markDeliveredWithProof(proofOrderId, proofImageUri);
+      
+      setShowProofModal(false);
+      setProofOrderId(null);
+      setProofImageUri(null);
+      
       await fetchOrders();
       setActiveOrderTab("delivered");
       Alert.alert('Thành công', 'Đã giao hàng thành công');
     } catch (error) {
-      console.error('Error marking as delivered:', error);
-      Alert.alert('Lỗi', 'Không thể cập nhật trạng thái');
+      console.error('Error marking as delivered with proof:', error);
+      Alert.alert('Lỗi', 'Không thể cập nhật trạng thái. Vui lòng thử lại.');
     } finally {
-      setLoading(false);
+      setUploadingProof(false);
     }
+  };
+
+  // Đóng modal proof
+  const closeProofModal = () => {
+    setShowProofModal(false);
+    setProofOrderId(null);
+    setProofImageUri(null);
+  };
+
+  // Helper to resolve proof image URL (same as NewOrderListScreen)
+  const resolveProofUrl = (path?: string | null) => {
+    if (!path) return null;
+    if (path.startsWith('http')) return path;
+
+    const base = API_CONFIG.BASE_URL || '';
+    const hostBase = base.replace(/\/?api\/?$/, '');
+    const normalized = path.replace(/^\//, '');
+    const needsMedia = !normalized.startsWith('media/');
+    const finalPath = needsMedia ? `media/${normalized}` : normalized;
+    const url = `${hostBase.replace(/\/$/, '')}/${finalPath}`;
+    console.log('Proof image resolve', { path, base, hostBase, normalized, finalPath, url });
+    return url;
+  };
+
+  // Mở modal xem ảnh minh chứng đã giao
+  const openProofViewer = (proofImage: string) => {
+    console.log('Opening proof viewer, proofImage:', proofImage);
+    const url = resolveProofUrl(proofImage);
+    console.log('Resolved URL:', url);
+    
+    if (url) {
+      setViewProofImageUrl(url);
+      // Close order detail modal first, then open proof viewer
+      setShowOrderDetails(false);
+      setTimeout(() => {
+        setShowProofViewer(true);
+      }, 300);
+    } else {
+      Alert.alert('Đã giao', 'Không tìm thấy đường dẫn ảnh minh chứng.');
+    }
+  };
+
+  // Đóng modal xem ảnh
+  const closeProofViewer = () => {
+    setShowProofViewer(false);
+    setViewProofImageUrl(null);
   };
 
   // Huỷ đơn (khi gọi >= 3 lần)
@@ -771,11 +875,7 @@ export default function ShipperOrdersScreen() {
 
                     {activeOrderTab === "delivering" && (
                       <>
-                        {order.delivery_status === "Đã lấy hàng" ? (
-                          <PrimaryBtn title="Bắt đầu giao" onPress={() => handleStartDelivery(order.id)} />
-                        ) : (
-                          <PrimaryBtn title="Giao thành công" onPress={() => handleMarkDelivered(order.id)} />
-                        )}
+                        <PrimaryBtn title="Đã giao" onPress={() => openProofModal(order.id)} />
 
                         <TouchableOpacity style={styles.iconBtnOutline} onPress={() => handleCall(order)}>
                           <Phone size={20} color="#4b5563" />
@@ -927,6 +1027,17 @@ export default function ShipperOrdersScreen() {
 
               {/* Actions */}
               <View style={styles.modalActions}>
+                {/* View Proof Image button - only show for delivered orders with proof */}
+                {selectedOrder.delivery_status === "Đã giao" && selectedOrder.raw.proof_image && (
+                  <TouchableOpacity 
+                    style={[styles.modalActionBtn, { marginBottom: 12, backgroundColor: "#f0fdf4", borderColor: "#bbf7d0" }]}
+                    onPress={() => openProofViewer(selectedOrder.raw.proof_image)}
+                  >
+                    <Eye size={20} color="#16a34a" />
+                    <Text style={[styles.modalActionText, { color: "#16a34a" }]}>Xem ảnh minh chứng</Text>
+                  </TouchableOpacity>
+                )}
+                
                 <TouchableOpacity 
                   style={styles.modalActionBtn}
                   onPress={() => {
@@ -1029,6 +1140,136 @@ export default function ShipperOrdersScreen() {
             ) : (
               <Text style={styles.emptySub}>Không tìm thấy dữ liệu bản đồ</Text>
             )}
+          </View>
+        </View>
+      </Modal>
+
+      {/* Delivery Proof Image Modal */}
+      <Modal
+        visible={showProofModal}
+        transparent
+        animationType="fade"
+        onRequestClose={closeProofModal}
+      >
+        <View style={styles.proofModalOverlay}>
+          <View style={styles.proofModalContent}>
+            <View style={styles.proofModalHeader}>
+              <Text style={styles.proofModalTitle}>Hình ảnh minh chứng</Text>
+              <TouchableOpacity onPress={closeProofModal} style={styles.closeButton}>
+                <X size={24} color="#6b7280" />
+              </TouchableOpacity>
+            </View>
+
+            <Text style={styles.proofModalSubtitle}>
+              Vui lòng chụp hoặc chọn ảnh minh chứng đã giao hàng thành công
+            </Text>
+
+            {/* Image Preview */}
+            <View style={styles.proofImageContainer}>
+              {proofImageUri ? (
+                <Image
+                  source={{ uri: proofImageUri }}
+                  style={styles.proofImagePreview}
+                  resizeMode="cover"
+                />
+              ) : (
+                <View style={styles.proofImagePlaceholder}>
+                  <ImageIcon size={48} color="#9ca3af" />
+                  <Text style={styles.proofPlaceholderText}>Chưa có ảnh</Text>
+                </View>
+              )}
+            </View>
+
+            {/* Image Selection Buttons */}
+            <View style={styles.proofButtonsRow}>
+              <TouchableOpacity
+                style={styles.proofSelectButton}
+                onPress={pickImageFromCamera}
+              >
+                <Camera size={20} color="#e95322" />
+                <Text style={styles.proofSelectButtonText}>Chụp ảnh</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.proofSelectButton}
+                onPress={pickImageFromGallery}
+              >
+                <ImageIcon size={20} color="#e95322" />
+                <Text style={styles.proofSelectButtonText}>Thư viện</Text>
+              </TouchableOpacity>
+            </View>
+
+            {/* Action Buttons */}
+            <View style={styles.proofActionsRow}>
+              <TouchableOpacity
+                style={styles.proofCancelButton}
+                onPress={closeProofModal}
+                disabled={uploadingProof}
+              >
+                <Text style={styles.proofCancelButtonText}>Huỷ</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[
+                  styles.proofConfirmButton,
+                  (!proofImageUri || uploadingProof) && styles.proofButtonDisabled
+                ]}
+                onPress={handleConfirmDelivered}
+                disabled={!proofImageUri || uploadingProof}
+              >
+                {uploadingProof ? (
+                  <ActivityIndicator size="small" color="#fff" />
+                ) : (
+                  <Text style={styles.proofConfirmButtonText}>Hoàn thành</Text>
+                )}
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Proof Image Viewer Modal */}
+      <Modal
+        visible={showProofViewer}
+        transparent={true}
+        animationType="slide"
+        onRequestClose={closeProofViewer}
+        onShow={() => console.log('Proof modal SHOWN, viewProofImageUrl:', viewProofImageUrl)}
+      >
+        <View style={styles.proofViewerOverlay}>
+          <View style={styles.proofViewerContent}>
+            <View style={styles.proofViewerHeader}>
+              <Text style={styles.proofViewerTitle}>Ảnh minh chứng giao hàng</Text>
+              <TouchableOpacity onPress={closeProofViewer} style={styles.closeButton}>
+                <X size={24} color="#111827" />
+              </TouchableOpacity>
+            </View>
+            
+            <View style={styles.proofViewerImageContainer}>
+              {viewProofImageUrl ? (
+                <Image
+                  source={{ uri: viewProofImageUrl }}
+                  style={{
+                    width: Dimensions.get('window').width - 72,
+                    height: 280,
+                  }}
+                  resizeMode="contain"
+                  onError={(e) => {
+                    console.log('Image load error:', e?.nativeEvent?.error);
+                    Alert.alert('Lỗi', 'Không thể tải ảnh minh chứng');
+                  }}
+                />
+              ) : (
+                <Text style={{ color: '#6b7280', textAlign: 'center' }}>Không có hình ảnh</Text>
+              )}
+            </View>
+            
+            <TouchableOpacity
+              style={styles.proofViewerCloseBtn}
+              onPress={closeProofViewer}
+            >
+              <Text style={styles.proofViewerCloseBtnText}>Đóng</Text>
+            </TouchableOpacity>
           </View>
         </View>
       </Modal>
@@ -1535,5 +1776,166 @@ const styles = StyleSheet.create({
     color: "#fff",
     fontFamily: Fonts.LeagueSpartanBold,
     fontSize: 15,
+  },
+  
+  // Proof Image Modal Styles
+  proofModalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.5)",
+    justifyContent: "center",
+    alignItems: "center",
+    padding: 20,
+  },
+  proofModalContent: {
+    backgroundColor: "#fff",
+    borderRadius: 20,
+    padding: 24,
+    width: "100%",
+    maxWidth: 400,
+  },
+  proofModalHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 8,
+  },
+  proofModalTitle: {
+    fontSize: 20,
+    fontFamily: Fonts.LeagueSpartanBold,
+    color: "#111827",
+  },
+  proofModalSubtitle: {
+    fontSize: 14,
+    fontFamily: Fonts.LeagueSpartanRegular,
+    color: "#6b7280",
+    marginBottom: 20,
+  },
+  proofImageContainer: {
+    width: "100%",
+    height: 200,
+    borderRadius: 12,
+    overflow: "hidden",
+    marginBottom: 16,
+    backgroundColor: "#f3f4f6",
+  },
+  proofImagePreview: {
+    width: "100%",
+    height: "100%",
+  },
+  proofImagePlaceholder: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    gap: 8,
+  },
+  proofPlaceholderText: {
+    fontSize: 14,
+    fontFamily: Fonts.LeagueSpartanRegular,
+    color: "#9ca3af",
+  },
+  proofButtonsRow: {
+    flexDirection: "row",
+    gap: 12,
+    marginBottom: 20,
+  },
+  proofSelectButton: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    paddingVertical: 12,
+    borderRadius: 12,
+    borderWidth: 1.5,
+    borderColor: "#e95322",
+    backgroundColor: "#fff",
+  },
+  proofSelectButtonText: {
+    fontSize: 14,
+    fontFamily: Fonts.LeagueSpartanSemiBold,
+    color: "#e95322",
+  },
+  proofActionsRow: {
+    flexDirection: "row",
+    gap: 12,
+  },
+  proofCancelButton: {
+    flex: 1,
+    paddingVertical: 14,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "#d1d5db",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  proofCancelButtonText: {
+    fontSize: 15,
+    fontFamily: Fonts.LeagueSpartanSemiBold,
+    color: "#6b7280",
+  },
+  proofConfirmButton: {
+    flex: 1,
+    paddingVertical: 14,
+    borderRadius: 12,
+    backgroundColor: "#e95322",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  proofConfirmButtonText: {
+    fontSize: 15,
+    fontFamily: Fonts.LeagueSpartanBold,
+    color: "#fff",
+  },
+  proofButtonDisabled: {
+    backgroundColor: "#d1d5db",
+  },
+  
+  // Proof Image Viewer Styles
+  proofViewerOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0, 0, 0, 0.7)",
+    justifyContent: "center",
+    alignItems: "center",
+    padding: 20,
+  },
+  proofViewerContent: {
+    width: Dimensions.get('window').width - 40,
+    maxHeight: Dimensions.get('window').height * 0.8,
+    backgroundColor: "#fff",
+    borderRadius: 16,
+    padding: 16,
+  },
+  proofViewerHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 16,
+  },
+  proofViewerTitle: {
+    fontSize: 18,
+    fontFamily: Fonts.LeagueSpartanBold,
+    color: "#111827",
+  },
+  proofViewerImageContainer: {
+    width: "100%",
+    minHeight: 280,
+    backgroundColor: "#f3f4f6",
+    borderRadius: 12,
+    overflow: "hidden",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  proofViewerCloseBtn: {
+    marginTop: 16,
+    paddingVertical: 12,
+    borderRadius: 12,
+    backgroundColor: "#e95322",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  proofViewerCloseBtnText: {
+    fontSize: 15,
+    fontFamily: Fonts.LeagueSpartanBold,
+    color: "#fff",
   },
 });

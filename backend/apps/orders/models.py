@@ -29,6 +29,7 @@ class Order(models.Model):
         ('Đã xác nhận', 'Đã xác nhận'), 
         ('Đã lấy hàng', 'Đã lấy hàng'),
         ('Đang giao', 'Đang giao'),
+        ('Đã giao', 'Đã giao'),
         ('Đã huỷ', 'Đã huỷ'),
     ]
     

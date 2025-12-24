@@ -695,14 +695,18 @@ def shipper_orders(request):
     
     try:
         shipper = Shipper.objects.get(user=request.user)
+        print(f"DEBUG: Current user: {request.user.id}, Shipper ID: {shipper.id}")
     except Shipper.DoesNotExist:
         return Response({'error': 'User is not a shipper'}, status=status.HTTP_403_FORBIDDEN)
     
     # Get orders assigned to this shipper
     orders = Order.objects.filter(shipper=shipper).order_by('-created_date')
+    print(f"DEBUG: Total orders for shipper {shipper.id}: {orders.count()}")
     
     # Filter by delivery status or order status
     status_filter = request.GET.get('delivery_status') or request.GET.get('status') 
+    print(f"DEBUG: Status filter requested: '{status_filter}'")
+    
     if status_filter:
         if status_filter == 'Đã hủy' or status_filter == 'Đã huỷ':
             # For cancelled tab, show orders where EITHER delivery_status OR order_status is cancelled
@@ -773,8 +777,8 @@ def update_delivery_status(request, order_id):
     valid_transitions = {
         'Chờ xác nhận': ['Đã xác nhận'],   # Can accept pending orders
         'Đã xác nhận': ['Đã lấy hàng'],    # After accepting, can pick up
-        'Đã lấy hàng': ['Đang giao'],      # After pickup, start delivery  
-        'Đang giao': ['Đã giao'],          # After delivery start, mark as delivered
+        'Đã lấy hàng': ['Đã giao'],        # After pickup, mark as delivered directly
+        'Đang giao': ['Đã giao'],          # Legacy: still allow from Đang giao
         'Đã giao': []                       # Cannot change from delivered
     }
     
@@ -798,6 +802,30 @@ def update_delivery_status(request, order_id):
         order.order_status = 'Đang giao'  
     elif new_status == 'Đã giao':
         order.order_status = 'Đã giao'
+        
+        # Handle proof image upload when marking as delivered
+        proof_image = request.FILES.get('proof_image')
+        if proof_image:
+            import os
+            from django.conf import settings
+            
+            # Generate unique filename
+            ext = os.path.splitext(proof_image.name)[1]
+            filename = f"delivery_proof_{order.id}_{shipper.id}{ext}"
+            # Use forward slash for URL compatibility (not os.path.join which uses backslash on Windows)
+            filepath = f"assets/{filename}"
+            
+            # Save file to media directory
+            full_path = os.path.join(settings.MEDIA_ROOT, 'assets', filename)
+            os.makedirs(os.path.dirname(full_path), exist_ok=True)
+            
+            with open(full_path, 'wb+') as destination:
+                for chunk in proof_image.chunks():
+                    destination.write(chunk)
+            
+            # Save path to database with forward slashes
+            order.proof_image = filepath
+            print(f"DEBUG: Saved delivery proof image: {filepath}")
     
     print(f"DEBUG: Updating order {order.id}")
     print(f"DEBUG: Before save - delivery_status: {order.delivery_status}, order_status: {order.order_status}")
