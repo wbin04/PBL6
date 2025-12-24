@@ -24,6 +24,15 @@ from .serializers import (
     ChatCartItemSerializer,
     ChatSessionSerializer
 )
+from .utils import (
+    classify_statistics_intent,
+    get_statistics_for_intent,
+    generate_statistics_response,
+    get_best_selling_foods,
+    get_top_rated_foods,
+    get_trending_foods
+)
+from .services import ChatbotQueryService
 from apps.menu.models import Food, FoodSize, Category
 from apps.stores.models import Store
 from apps.orders.models import OrderDetail
@@ -1083,6 +1092,125 @@ def chat_endpoint(request):
             reply = f"❌ Không tìm thấy cửa hàng. Vui lòng chọn:\n{stores_str}"
             ChatMessage.objects.create(session=session, message=reply, is_user=False, intent='ask_store')
             return Response({'reply': reply, 'intent': 'ask_store'})
+    
+    # === CHECK FOR RECOMMENDATION INTENT using ChatbotQueryService ===
+    # Uses the new service class for cleaner code structure
+    base_url = request.build_absolute_uri('/').rstrip('/')
+    recommendation_result = ChatbotQueryService.process_recommendation_intent(user_message, base_url)
+    
+    if recommendation_result and recommendation_result.get('data'):
+        intent_type = ChatbotQueryService.classify_intent(user_message).get('intent_type', 'recommendation')
+        
+        # Map intent to display name
+        intent_display_map = {
+            'best_seller': 'statistics_best_seller',
+            'top_rated': 'statistics_top_rated',
+            'trending': 'statistics_trending',
+            'cheap_eats': 'statistics_cheap_eats'
+        }
+        
+        response_message = recommendation_result.get('message', '')
+        foods_data = recommendation_result.get('data', [])
+        
+        # Build recommendations array for mobile app
+        recommendations = []
+        for food in foods_data:
+            recommendations.append({
+                'id': food.get('id'),
+                'title': food.get('title'),
+                'price': food.get('price'),
+                'image': food.get('image', ''),
+                'image_url': food.get('image', ''),
+                'average_rating': food.get('average_rating', 0),
+                'total_sold': food.get('total_sold', 0),
+                'store_id': food.get('store_id', 0),
+                'store_name': food.get('store_name', ''),
+                'badge': food.get('badge', ''),
+                'badge_type': food.get('badge_type', ''),
+            })
+        
+        ChatMessage.objects.create(
+            session=session,
+            message=response_message,
+            is_user=False,
+            intent=intent_display_map.get(intent_type, 'recommendation')
+        )
+        
+        return Response({
+            'reply': response_message,
+            'intent': intent_display_map.get(intent_type, 'recommendation'),
+            'type': 'recommendation',
+            'data': {
+                'foods': foods_data,
+                'recommendations': recommendations,
+                'statistics_type': intent_type
+            }
+        })
+    
+    # === FALLBACK: CHECK FOR STATISTICS INTENT using utils (legacy) ===
+    statistics_intent = classify_statistics_intent(user_message)
+    
+    if statistics_intent['intent_type'] and statistics_intent['confidence'] >= 0.3:
+        intent_type = statistics_intent['intent_type']
+        
+        # Get statistics data based on intent
+        foods_data, response_text = get_statistics_for_intent(
+            intent_type=intent_type,
+            limit=5,
+            days_for_trending=7
+        )
+        
+        if foods_data:
+            # Create recommendations array for mobile app
+            recommendations = []
+            for food in foods_data:
+                recommendations.append({
+                    'id': food['id'],
+                    'title': food['title'],
+                    'price': food['price'],
+                    'image_url': food.get('image', ''),
+                    'average_rating': food.get('average_rating', 0),
+                    'total_sold': food.get('total_sold', 0),
+                    'store_id': food.get('store_id', 0),
+                    'store_name': food.get('store_name', ''),
+                    'badge_type': food.get('badge_type', ''),
+                    'badge_text': food.get('badge_text', ''),
+                    'sizes': food.get('sizes', [])
+                })
+            
+            # Map intent to Vietnamese display name
+            intent_display_map = {
+                'best_seller': 'statistics_best_seller',
+                'top_rated': 'statistics_top_rated',
+                'trending': 'statistics_trending'
+            }
+            
+            ChatMessage.objects.create(
+                session=session, 
+                message=response_text, 
+                is_user=False, 
+                intent=intent_display_map.get(intent_type, 'statistics')
+            )
+            
+            return Response({
+                'reply': response_text,
+                'intent': intent_display_map.get(intent_type, 'statistics'),
+                'data': {
+                    'foods': foods_data,
+                    'recommendations': recommendations,
+                    'statistics_type': intent_type
+                }
+            })
+        else:
+            # No data found, but intent was recognized - give helpful response
+            no_data_responses = {
+                'best_seller': "Hiện tại chưa có dữ liệu về món bán chạy. Bạn có muốn xem menu không?",
+                'top_rated': "Hiện tại chưa có đánh giá nào. Bạn có muốn xem menu không?",
+                'trending': "Gần đây chưa có món nào nổi bật. Bạn có muốn xem menu không?"
+            }
+            reply = no_data_responses.get(intent_type, "Không tìm thấy thông tin.")
+            ChatMessage.objects.create(session=session, message=reply, is_user=False, intent='statistics')
+            return Response({'reply': reply, 'intent': 'statistics'})
     
     # Process new order with AI
     menu_summary = []

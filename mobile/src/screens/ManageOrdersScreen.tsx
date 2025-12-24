@@ -605,7 +605,7 @@ const ManageOrdersScreen: React.FC = () => {
             <Ionicons name="chevron-back" size={24} color="#eb552d" />
           </TouchableOpacity>
 
-          <Text style={styles.headerTitle}>Danh sách đơn hàng1</Text>
+          <Text style={styles.headerTitle}>Danh sách đơn hàng</Text>
 
           <TouchableOpacity
             style={styles.iconCircle}

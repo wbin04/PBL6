@@ -9,7 +9,7 @@ import {
   Alert,
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
-import { Plus, Minus, ShoppingCart, Store as StoreIcon } from 'lucide-react-native';
+import { Plus, Minus, ShoppingCart, Store as StoreIcon, Star, Flame, TrendingUp } from 'lucide-react-native';
 import { Fonts } from '@/constants/Fonts';
 import { API_CONFIG } from '@/constants';
 import { useDispatch } from 'react-redux';
@@ -22,8 +22,15 @@ interface FoodItem {
   description?: string;
   price: string;
   image: string;
+  image_url?: string; // Alternative field for image
   store_id: number;
   store_name: string;
+  // Statistics fields (for recommendations)
+  average_rating?: number;
+  avg_rating?: number;
+  total_sold?: number;
+  badge_type?: 'best_seller' | 'top_rated' | 'trending' | '';
+  badge_text?: string;
   sizes?: Array<{
     id: number;
     size_name: string;
@@ -39,9 +46,10 @@ interface StoreGroup {
 
 interface FoodListMessageProps {
   foods: FoodItem[];
+  statisticsType?: 'best_seller' | 'top_rated' | 'trending';
 }
 
-export const FoodListMessage: React.FC<FoodListMessageProps> = ({ foods }) => {
+export const FoodListMessage: React.FC<FoodListMessageProps> = ({ foods, statisticsType }) => {
   const navigation = useNavigation<any>();
   const dispatch = useDispatch<AppDispatch>();
   const [quantities, setQuantities] = useState<{ [key: number]: number }>({});
@@ -113,7 +121,9 @@ export const FoodListMessage: React.FC<FoodListMessageProps> = ({ foods }) => {
     }).format(numPrice);
   };
 
-  const getImageUrl = (imageUrl: string): string => {
+  const getImageUrl = (food: FoodItem): string => {
+    const imageUrl = food.image_url || food.image;
+    
     if (!imageUrl) {
       return 'https://via.placeholder.com/150';
     }
@@ -133,6 +143,61 @@ export const FoodListMessage: React.FC<FoodListMessageProps> = ({ foods }) => {
     
     // Nếu không có /media, thêm vào
     return `${baseUrl}/media${imageUrl.startsWith('/') ? '' : '/'}${imageUrl}`;
+  };
+
+  // Render badge dựa trên loại thống kê
+  const renderBadge = (food: FoodItem) => {
+    const badgeType = food.badge_type || statisticsType;
+    const rating = food.average_rating || food.avg_rating || 0;
+    const sold = food.total_sold || 0;
+    
+    if (badgeType === 'best_seller' && sold > 0) {
+      return (
+        <View style={[styles.badge, styles.badgeBestSeller]}>
+          <Flame size={12} color="#fff" />
+          <Text style={styles.badgeText}>
+            {food.badge_text || `${sold} đã bán`}
+          </Text>
+        </View>
+      );
+    }
+    
+    if (badgeType === 'top_rated' && rating > 0) {
+      const stars = '⭐'.repeat(Math.min(5, Math.round(rating)));
+      return (
+        <View style={[styles.badge, styles.badgeTopRated]}>
+          <Star size={12} color="#fff" fill="#fff" />
+          <Text style={styles.badgeText}>
+            {food.badge_text || `${rating.toFixed(1)}`}
+          </Text>
+        </View>
+      );
+    }
+    
+    if (badgeType === 'trending') {
+      return (
+        <View style={[styles.badge, styles.badgeTrending]}>
+          <TrendingUp size={12} color="#fff" />
+          <Text style={styles.badgeText}>
+            {food.badge_text || 'Hot 🔥'}
+          </Text>
+        </View>
+      );
+    }
+    
+    // Show rating if available (even without badge_type)
+    if (rating > 0) {
+      return (
+        <View style={[styles.badge, styles.badgeRating]}>
+          <Star size={10} color="#FFD700" fill="#FFD700" />
+          <Text style={[styles.badgeText, { color: '#333' }]}>
+            {rating.toFixed(1)}
+          </Text>
+        </View>
+      );
+    }
+    
+    return null;
   };
 
   if (!foods || foods.length === 0) {
@@ -169,16 +234,20 @@ export const FoodListMessage: React.FC<FoodListMessageProps> = ({ foods }) => {
           >
             {group.foods.map((food) => (
               <View key={food.id} style={styles.foodCard}>
-                {/* Food Image */}
+                {/* Food Image with Badge */}
                 <TouchableOpacity
                   onPress={() => handleFoodPress(food.id)}
                   activeOpacity={0.8}
                 >
-                  <Image
-                    source={{ uri: getImageUrl(food.image) }}
-                    style={styles.foodImage}
-                    resizeMode="cover"
-                  />
+                  <View style={styles.imageContainer}>
+                    <Image
+                      source={{ uri: getImageUrl(food) }}
+                      style={styles.foodImage}
+                      resizeMode="cover"
+                    />
+                    {/* Badge Overlay */}
+                    {renderBadge(food)}
+                  </View>
                 </TouchableOpacity>
 
                 {/* Food Info */}
@@ -193,6 +262,19 @@ export const FoodListMessage: React.FC<FoodListMessageProps> = ({ foods }) => {
                   <Text style={styles.foodPrice}>
                     {formatPrice(food.price)}
                   </Text>
+                  {/* Show stats if available */}
+                  {(food.total_sold || food.average_rating || food.avg_rating) && (
+                    <View style={styles.statsRow}>
+                      {food.total_sold ? (
+                        <Text style={styles.statsText}>🔥 {food.total_sold} đã bán</Text>
+                      ) : null}
+                      {(food.average_rating || food.avg_rating) ? (
+                        <Text style={styles.statsText}>
+                          ⭐ {(food.average_rating || food.avg_rating || 0).toFixed(1)}
+                        </Text>
+                      ) : null}
+                    </View>
+                  )}
                 </TouchableOpacity>
 
                 {/* Quantity Controls */}
@@ -293,10 +375,44 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#e5e7eb',
   },
+  imageContainer: {
+    position: 'relative',
+  },
   foodImage: {
     width: '100%',
     height: 120,
     backgroundColor: '#f3f4f6',
+  },
+  // Badge styles
+  badge: {
+    position: 'absolute',
+    top: 8,
+    left: 8,
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
+    gap: 4,
+  },
+  badgeBestSeller: {
+    backgroundColor: '#ef4444',
+  },
+  badgeTopRated: {
+    backgroundColor: '#f59e0b',
+  },
+  badgeTrending: {
+    backgroundColor: '#8b5cf6',
+  },
+  badgeRating: {
+    backgroundColor: '#fff',
+    borderWidth: 1,
+    borderColor: '#e5e7eb',
+  },
+  badgeText: {
+    fontSize: 10,
+    fontFamily: Fonts.LeagueSpartanSemiBold,
+    color: '#fff',
   },
   foodInfo: {
     padding: 12,
@@ -313,6 +429,17 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontFamily: Fonts.LeagueSpartanBold,
     color: '#e95322',
+  },
+  statsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 4,
+    gap: 8,
+  },
+  statsText: {
+    fontSize: 11,
+    fontFamily: Fonts.LeagueSpartanRegular,
+    color: '#6B7280',
   },
   quantityContainer: {
     flexDirection: 'row',

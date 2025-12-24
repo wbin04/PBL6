@@ -19,6 +19,7 @@ import { CopilotIcon } from '@/assets/images/CopilotIcon';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import chatbotService from '@/services/chatbotService';
 import { FoodListMessage } from '@/components/chatbot/FoodListMessage';
+import { ChatbotRecommendation, RecommendationItem } from '@/components/chatbot/ChatbotRecommendation';
 
 interface Message {
   id: string;
@@ -26,15 +27,25 @@ interface Message {
   isUser: boolean;
   timestamp: Date;
   intent?: string;
+  type?: 'text' | 'recommendation';
   foods?: Array<{
     id: number;
     title: string;
     description?: string;
-    price: string;
+    price: string | number;
     image: string;
+    image_url?: string;
     store_id: number;
     store_name: string;
+    average_rating?: number;
+    avg_rating?: number;
+    total_sold?: number;
+    badge?: string;
+    badge_type?: 'best_seller' | 'top_rated' | 'trending' | 'cheap_eats' | '';
+    badge_text?: string;
   }>;
+  recommendations?: RecommendationItem[];
+  statisticsType?: 'best_seller' | 'top_rated' | 'trending' | 'cheap_eats';
 }
 
 export default function ChatbotScreen() {
@@ -92,13 +103,43 @@ export default function ChatbotScreen() {
       
       console.log('[ChatbotScreen] Received response:', data);
 
+      // Check if this is a recommendation response
+      const isRecommendation = data.type === 'recommendation' || 
+        data.intent?.startsWith('statistics_') ||
+        (data.data?.recommendations && data.data.recommendations.length > 0);
+      
+      // Determine which foods to display (prefer recommendations for statistics)
+      const foodsToShow = data.data?.recommendations || data.data?.foods || undefined;
+      const statisticsType = data.data?.statistics_type;
+
+      // Convert recommendations to proper format for ChatbotRecommendation
+      let recommendations: RecommendationItem[] | undefined;
+      if (data.data?.recommendations) {
+        recommendations = data.data.recommendations.map((item: any) => ({
+          id: item.id,
+          title: item.title,
+          price: item.price,
+          image: item.image || item.image_url || '',
+          image_url: item.image_url || item.image || '',
+          badge: item.badge || item.badge_text || '',
+          badge_type: item.badge_type || '',
+          store_name: item.store_name || '',
+          store_id: item.store_id || 0,
+          total_sold: item.total_sold || 0,
+          average_rating: item.average_rating || 0,
+        }));
+      }
+
       const botMessage: Message = {
         id: (Date.now() + 1).toString(),
         text: data.reply || 'Xin lỗi, tôi không hiểu. Bạn có thể nói rõ hơn không?',
         isUser: false,
         timestamp: new Date(),
         intent: data.intent,
-        foods: data.data?.foods || undefined, // Thêm danh sách foods nếu có
+        type: isRecommendation ? 'recommendation' : 'text',
+        foods: foodsToShow,
+        recommendations: recommendations,
+        statisticsType: statisticsType,
       };
 
       setMessages((prev) => [...prev, botMessage]);
@@ -114,6 +155,10 @@ export default function ChatbotScreen() {
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleRecommendationPress = (item: RecommendationItem) => {
+    navigation.navigate('FoodDetail', { foodId: item.id });
   };
 
   const renderMessage = ({ item }: { item: Message }) => (
@@ -152,10 +197,24 @@ export default function ChatbotScreen() {
         </View>
       </View>
       
-      {/* Hiển thị danh sách món ăn nếu có */}
-      {!item.isUser && item.foods && item.foods.length > 0 && (
+      {/* Hiển thị ChatbotRecommendation cho recommendation messages */}
+      {!item.isUser && item.type === 'recommendation' && item.recommendations && item.recommendations.length > 0 && (
+        <View style={styles.recommendationContainer}>
+          <ChatbotRecommendation 
+            data={item.recommendations}
+            onPressItem={handleRecommendationPress}
+            showViewAll={true}
+          />
+        </View>
+      )}
+      
+      {/* Fallback: Hiển thị FoodListMessage cho foods (non-recommendation) */}
+      {!item.isUser && item.type !== 'recommendation' && item.foods && item.foods.length > 0 && (
         <View style={styles.foodListContainer}>
-          <FoodListMessage foods={item.foods} />
+          <FoodListMessage 
+            foods={item.foods} 
+            statisticsType={item.statisticsType}
+          />
         </View>
       )}
     </View>
@@ -378,6 +437,11 @@ const styles = StyleSheet.create({
   },
   foodListContainer: {
     marginTop: 8,
+    width: '100%',
+  },
+  recommendationContainer: {
+    marginTop: 8,
+    marginLeft: -8,
     width: '100%',
   },
   loadingContainer: {

@@ -8,10 +8,60 @@ export interface ChatMessage {
   session_id: string;
 }
 
+// Food recommendation with statistics (for best seller, top rated, trending)
+export interface FoodRecommendation {
+  id: number;
+  title: string;
+  price: string | number;
+  image?: string;
+  image_url?: string;
+  average_rating: number;
+  total_sold: number;
+  store_id: number;
+  store_name: string;
+  badge?: string;
+  badge_type: 'best_seller' | 'top_rated' | 'trending' | 'cheap_eats' | '';
+  badge_text?: string;
+  sizes?: Array<{
+    id: number;
+    size_name: string;
+    price: string;
+  }>;
+}
+
+// Regular food item from search
+export interface FoodItem {
+  id: number;
+  title: string;
+  description?: string;
+  price: string | number;
+  image: string;
+  image_url?: string;
+  store_id: number;
+  store_name: string;
+  avg_rating?: number;
+  average_rating?: number;
+  total_sold?: number;
+  badge?: string;
+  badge_type?: string;
+  sizes?: Array<{
+    id: number;
+    size_name: string;
+    price: string;
+  }>;
+}
+
 export interface ChatResponse {
   reply: string;
   intent?: string;
-  data?: any;
+  type?: 'text' | 'recommendation' | 'error';
+  data?: {
+    foods?: FoodItem[];
+    recommendations?: FoodRecommendation[];
+    statistics_type?: 'best_seller' | 'top_rated' | 'trending' | 'cheap_eats';
+    filters?: any;
+    stores?: any[];
+  };
 }
 
 export interface CartItem {
