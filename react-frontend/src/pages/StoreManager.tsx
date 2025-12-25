@@ -683,19 +683,19 @@ const StoreManager: React.FC = () => {
   // --- RENDER HELPERS ---
   const SidebarItem = ({ id, label, icon: Icon }: any) => (
       <button onClick={() => { setActiveSection(id); if(id === 'foods') setFoodPage(1); }}
-          className={cn("w-full flex items-center gap-3 px-4 py-3 text-sm font-medium rounded-lg transition-all", 
-          activeSection === id ? "bg-blue-50 text-blue-600 shadow-sm" : "text-gray-600 hover:bg-gray-50 hover:text-gray-900")}>
+          className={cn("w-full flex items-center gap-3 px-4 py-3 text-sm font-medium rounded-lg transition-all border border-transparent", 
+          activeSection === id ? "bg-orange-50 text-orange-700 border-orange-100 shadow-sm" : "text-gray-700 hover:bg-orange-50/60 hover:text-orange-700") }>
           <Icon size={18} /> {label}
       </button>
   );
 
   if (loading && !storeInfo) return <div className="h-screen flex items-center justify-center">Loading...</div>;
 
-  return (
-    <div className="flex h-screen bg-gray-50">
+    return (
+        <div className="flex h-screen bg-[#fffaf3]">
       {/* SIDEBAR */}
-      <aside className="w-64 bg-white border-r shadow-sm hidden md:flex flex-col z-20">
-        <div className="p-6 border-b flex justify-center"><h1 className="text-xl font-bold text-blue-600 flex gap-2"><Store/> QUẢN LÝ</h1></div>
+            <aside className="w-64 bg-white border-r shadow-sm hidden md:flex flex-col z-20">
+                <div className="p-6 border-b flex justify-center"><h1 className="text-xl font-bold text-orange-600 flex gap-2"><Store/> QUẢN LÝ</h1></div>
         <nav className="flex-1 p-4 space-y-1 overflow-y-auto">
             <p className="text-xs font-bold text-gray-400 uppercase px-4 mb-2 mt-2">Tổng quan</p>
             <SidebarItem id="dashboard" label="Dashboard" icon={LayoutDashboard} />
@@ -706,21 +706,21 @@ const StoreManager: React.FC = () => {
             <p className="text-xs font-bold text-gray-400 uppercase px-4 mt-6 mb-2">Hệ thống</p>
             <SidebarItem id="my-store" label="Thông tin Cửa hàng" icon={Store} />
         </nav>
-        <div className="p-4 border-t"><div className="flex items-center gap-3"><div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center text-blue-600 font-bold">{storeInfo?.manager?.fullname?.[0]}</div><div className="text-sm font-medium truncate">{storeInfo?.manager?.fullname}</div></div></div>
+                <div className="p-4 border-t"><div className="flex items-center gap-3"><div className="w-8 h-8 rounded-full bg-orange-100 flex items-center justify-center text-orange-700 font-bold">{storeInfo?.manager?.fullname?.[0]}</div><div className="text-sm font-medium truncate text-gray-800">{storeInfo?.manager?.fullname}</div></div></div>
       </aside>
 
       {/* MAIN CONTENT */}
       <div className="flex-1 flex flex-col overflow-hidden">
         {/* HEADER */}
-        <header className="h-16 bg-white border-b shadow-sm flex items-center justify-between px-6 z-10">
-             <h2 className="text-lg font-bold text-gray-800">{storeInfo?.store_name}</h2>
+        <header className="h-16 bg-white border-b border-orange-100 shadow-sm flex items-center justify-between px-6 z-10">
+             <h2 className="text-lg font-bold text-[#391713]">{storeInfo?.store_name}</h2>
              <div className="flex gap-4">
-                 <Button variant="ghost" onClick={() => navigate('/')}><ExternalLink size={16} className="mr-2"/> Trang chủ</Button>
-                 <Button variant="ghost" className="text-red-500 hover:bg-red-50" onClick={logout}><LogOut size={16} className="mr-2"/> Đăng xuất</Button>
+                 <Button variant="ghost" className="text-orange-700 hover:bg-orange-50" onClick={() => navigate('/')}>\<ExternalLink size={16} className="mr-2"/> Trang chủ</Button>
+                 <Button variant="ghost" className="text-red-500 hover:bg-red-50" onClick={logout}>\<LogOut size={16} className="mr-2"/> Đăng xuất</Button>
              </div>
         </header>
 
-        <main className="flex-1 overflow-y-auto bg-gray-50/50 p-6">
+        <main className="flex-1 overflow-y-auto bg-[#fff7ec] p-6">
             <div className="max-w-6xl mx-auto pb-10">
                 
                 {/* 1. DASHBOARD */}
@@ -781,7 +781,7 @@ const StoreManager: React.FC = () => {
                         {/* Charts Row 2 */}
                         <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
                             <Card className="shadow-sm border-0 xl:col-span-2">
-                                <CardHeader><CardTitle className="text-sm text-gray-600">Doanh số theo Size (Stacked)</CardTitle></CardHeader>
+                                <CardHeader><CardTitle className="text-sm text-gray-600">Doanh số theo Size</CardTitle></CardHeader>
                                 <CardContent className="h-80">
                                     <ResponsiveContainer width="100%" height="100%">
                                         <BarChart data={sizeStackData} margin={{ top: 10, right: 20, left: 0, bottom: 30 }}>
@@ -908,8 +908,8 @@ const StoreManager: React.FC = () => {
                                             className={cn(
                                                 "px-4 py-2 rounded-lg text-sm font-medium transition-all flex items-center gap-2 border",
                                                 isActive 
-                                                    ? "bg-blue-600 text-white border-blue-600 shadow-md transform scale-105" 
-                                                    : "bg-gray-50 text-gray-600 border-transparent hover:bg-gray-100 hover:text-gray-900"
+                                                    ? "bg-orange-600 text-white border-orange-600 shadow-md transform scale-105" 
+                                                    : "bg-orange-50/60 text-gray-700 border-transparent hover:bg-orange-50 hover:text-orange-700"
                                             )}
                                         >
                                             {status}
@@ -925,10 +925,10 @@ const StoreManager: React.FC = () => {
                         </div>
 
                         {/* ORDERS TABLE */}
-                        <Card className="border-0 shadow-sm overflow-hidden">
+                        <Card className="border border-orange-100 shadow-sm overflow-hidden bg-white">
                             <CardContent className="p-0">
                                 <table className="w-full text-sm text-left">
-                                    <thead className="bg-gray-50 border-b text-gray-600 font-semibold uppercase text-xs">
+                                    <thead className="bg-orange-50 border-b border-orange-100 text-orange-800 font-semibold uppercase text-xs">
                                         <tr>
                                             <th className="p-4">Mã đơn</th>
                                             <th className="p-4">Khách hàng</th>
@@ -941,13 +941,13 @@ const StoreManager: React.FC = () => {
                                     </thead>
                                     <tbody className="divide-y">
                                         {filteredOrders.length > 0 ? filteredOrders.map(order => (
-                                            <tr key={order.id} className="hover:bg-gray-50 bg-white transition-colors">
-                                                <td className="p-4 font-mono font-bold text-blue-600">#{order.id}</td>
+                                            <tr key={order.id} className="hover:bg-orange-50/60 bg-white transition-colors">
+                                                <td className="p-4 font-mono font-bold text-orange-700">#{order.id}</td>
                                                 <td className="p-4">
                                                     <div className="font-medium text-gray-900">{order.receiver_name}</div>
                                                     <div className="text-xs text-gray-500">{order.phone_number}</div>
                                                 </td>
-                                                <td className="p-4 font-bold text-gray-800">{formatCurrency(order.total_money)}</td>
+                                                <td className="p-4 font-bold text-orange-700">{formatCurrency(order.total_money)}</td>
                                                 <td className="p-4">
                                                     <span className={cn("px-3 py-1 text-xs rounded-full font-bold border", getStatusColor(order.order_status))}>
                                                         {order.order_status}
@@ -996,8 +996,8 @@ const StoreManager: React.FC = () => {
                 {activeSection === 'foods' && (
                     <div className="space-y-4 animate-in fade-in">
                         <div className="flex justify-between">
-                            <h2 className="text-2xl font-bold">Quản lý món ăn</h2>
-                            <Button onClick={() => setShowAddFoodModal(true)} className="bg-blue-600"><Plus size={18} className="mr-2"/> Thêm món</Button>
+                            <h2 className="text-2xl font-bold text-[#391713]">Quản lý món ăn</h2>
+                            <Button onClick={() => setShowAddFoodModal(true)} className="bg-orange-600 hover:bg-orange-700"><Plus size={18} className="mr-2"/> Thêm món</Button>
                         </div>
                         {/* Filter Bar */}
                         <div className="flex gap-2">
@@ -1009,16 +1009,16 @@ const StoreManager: React.FC = () => {
                              <Button onClick={() => loadFoods(1)} variant="secondary">Lọc</Button>
                         </div>
                         {/* Food Table */}
-                        <div className="bg-white rounded-lg border shadow-sm overflow-hidden">
+                        <div className="bg-white rounded-lg border border-orange-100 shadow-sm overflow-hidden">
                             <table className="w-full text-sm text-left">
-                                <thead className="bg-gray-50 border-b"><tr><th className="p-3">ID</th><th className="p-3">Ảnh</th><th className="p-3">Tên</th><th className="p-3">Giá</th><th className="p-3">TT</th><th className="p-3">Size</th><th className="p-3">Hành động</th></tr></thead>
+                                <thead className="bg-orange-50 border-b border-orange-100 text-orange-800 uppercase text-xs"><tr><th className="p-3">ID</th><th className="p-3">Ảnh</th><th className="p-3">Tên</th><th className="p-3">Giá</th><th className="p-3">TT</th><th className="p-3">Size</th><th className="p-3">Hành động</th></tr></thead>
                                 <tbody className="divide-y">
                                     {foods.map(f => (
-                                        <tr key={f.id} className="hover:bg-gray-50">
+                                        <tr key={f.id} className="hover:bg-orange-50/60">
                                             <td className="p-3 text-gray-500">{f.id}</td>
                                             <td className="p-3"><img src={getImageUrl(f.image_url)} className="w-10 h-10 rounded border object-cover"/></td>
                                             <td className="p-3 font-medium">{f.title}</td>
-                                            <td className="p-3 text-blue-600 font-bold">{formatCurrency(f.price)}</td>
+                                            <td className="p-3 text-orange-700 font-bold">{formatCurrency(f.price)}</td>
                                             <td className="p-3"><span className={`text-xs px-2 py-1 rounded ${f.availability==='Còn hàng'?'bg-green-100 text-green-700':'bg-red-100 text-red-700'}`}>{f.availability}</span></td>
                                             <td className="p-3"><Button size="sm" variant="ghost" className="h-7 text-xs border" onClick={()=>openManageSizes(f)}>Size</Button></td>
                                             <td className="p-3 flex gap-2">
@@ -1046,17 +1046,17 @@ const StoreManager: React.FC = () => {
                 {activeSection === 'promotions' && (
                     <div className="animate-in fade-in">
                          <div className="flex justify-between mb-4">
-                            <h2 className="text-2xl font-bold">Khuyến mãi</h2>
-                            <Button onClick={() => setShowAddPromoModal(true)} className="bg-blue-600"><Plus size={18} className="mr-2"/>Thêm khuyến mãi</Button>
+                            <h2 className="text-2xl font-bold text-[#391713]">Khuyến mãi</h2>
+                            <Button onClick={() => setShowAddPromoModal(true)} className="bg-orange-600 hover:bg-orange-700"><Plus size={18} className="mr-2"/>Thêm khuyến mãi</Button>
                         </div>
-                        <div className="bg-white rounded-lg border shadow-sm overflow-hidden">
+                        <div className="bg-white rounded-lg border border-orange-100 shadow-sm overflow-hidden">
                              <table className="w-full text-sm text-left">
-                                <thead className="bg-gray-50 border-b"><tr><th className="p-3">Tên</th><th className="p-3">Giảm</th><th className="p-3">Thời gian</th><th className="p-3">Trạng thái</th><th className="p-3 text-right">Hành động</th></tr></thead>
+                                <thead className="bg-orange-50 border-b border-orange-100 text-orange-800 uppercase text-xs"><tr><th className="p-3">Tên</th><th className="p-3">Giảm</th><th className="p-3">Thời gian</th><th className="p-3">Trạng thái</th><th className="p-3 text-right">Hành động</th></tr></thead>
                                 <tbody className="divide-y">
                                     {promotions.map(p => (
-                                        <tr key={p.id} className="hover:bg-gray-50">
+                                        <tr key={p.id} className="hover:bg-orange-50/60">
                                             <td className="p-3 font-medium">{p.name}</td>
-                                            <td className="p-3 font-bold text-blue-600">{p.discount_type === 'PERCENT' ? `${p.discount_value}%` : formatCurrency(p.discount_value)}</td>
+                                            <td className="p-3 font-bold text-orange-700">{p.discount_type === 'PERCENT' ? `${p.discount_value}%` : formatCurrency(p.discount_value)}</td>
                                             <td className="p-3 text-xs text-gray-500">{new Date(p.start_date).toLocaleDateString()} - {new Date(p.end_date).toLocaleDateString()}</td>
                                             <td className="p-3"><span className={`text-xs px-2 py-1 rounded ${p.is_active ? 'bg-green-100 text-green-700' : 'bg-gray-100'}`}>{p.is_active ? 'Active' : 'Paused'}</span></td>
                                             <td className="p-3 text-right flex justify-end gap-2">
@@ -1075,19 +1075,19 @@ const StoreManager: React.FC = () => {
                 {activeSection === 'my-store' && storeInfo && (
                      <div className="animate-in fade-in">
                         <div className="flex justify-between mb-6">
-                            <h2 className="text-2xl font-bold">Thông tin cửa hàng</h2>
-                            <Button onClick={() => { setEditableStoreInfo(storeInfo); setShowEditStoreModal(true); }} variant="outline"><Edit2 size={16} className="mr-2"/> Chỉnh sửa</Button>
+                            <h2 className="text-2xl font-bold text-[#391713]">Thông tin cửa hàng</h2>
+                            <Button onClick={() => { setEditableStoreInfo(storeInfo); setShowEditStoreModal(true); }} variant="outline" className="border-orange-300 text-orange-700 hover:bg-orange-50"><Edit2 size={16} className="mr-2"/> Chỉnh sửa</Button>
                         </div>
-                        <Card className="overflow-hidden border-0 shadow-md">
-                            <div className="h-32 bg-blue-600 relative"></div>
+                        <Card className="overflow-hidden border border-orange-100 shadow-md bg-white">
+                            <div className="h-32 bg-orange-500 relative"></div>
                             <CardContent className="p-8 relative pt-16">
                                 <img src={getImageUrl(storeInfo.image)} className="absolute -top-16 left-8 w-32 h-32 rounded-xl border-4 border-white shadow-md bg-white object-cover" />
-                                <h3 className="text-2xl font-bold mb-4">{storeInfo.store_name}</h3>
+                                <h3 className="text-2xl font-bold mb-4 text-[#391713]">{storeInfo.store_name}</h3>
                                 <div className="grid md:grid-cols-2 gap-8">
-                                    <div className="bg-gray-50 p-4 rounded-lg border"><p className="text-gray-600 whitespace-pre-line">{storeInfo.description}</p></div>
+                                    <div className="bg-orange-50 p-4 rounded-lg border border-orange-100"><p className="text-gray-700 whitespace-pre-line">{storeInfo.description}</p></div>
                                     <div className="space-y-3">
-                                        <div className="flex items-center gap-3 text-sm"><User className="text-blue-600" size={18}/><span className="font-medium">{storeInfo.manager?.fullname}</span></div>
-                                        <div className="flex items-center gap-3 text-sm"><Store className="text-blue-600" size={18}/><span className="font-mono">ID: #{storeInfo.id}</span></div>
+                                        <div className="flex items-center gap-3 text-sm"><User className="text-orange-600" size={18}/><span className="font-medium text-[#391713]">{storeInfo.manager?.fullname}</span></div>
+                                        <div className="flex items-center gap-3 text-sm"><Store className="text-orange-600" size={18}/><span className="font-mono text-[#391713]">ID: #{storeInfo.id}</span></div>
                                     </div>
                                 </div>
                             </CardContent>
@@ -1115,24 +1115,24 @@ const StoreManager: React.FC = () => {
                       <div className="grid md:grid-cols-2 gap-6">
                           <div>
                               <div className="flex items-start gap-3 mb-4">
-                                  <User className="text-gray-400 mt-1" size={18}/>
+                                  <User className="text-orange-500 mt-1" size={18}/>
                                   <div>
                                       <p className="text-xs font-bold text-gray-500 uppercase">Người nhận</p>
                                       <p className="font-medium text-lg">{selectedOrder.receiver_name}</p>
-                                      <p className="text-blue-600">{selectedOrder.phone_number}</p>
+                                      <p className="text-orange-600">{selectedOrder.phone_number}</p>
                                   </div>
                               </div>
                               <div className="flex items-start gap-3">
-                                  <MapPin className="text-gray-400 mt-1" size={18}/>
+                                  <MapPin className="text-orange-500 mt-1" size={18}/>
                                   <div>
                                       <p className="text-xs font-bold text-gray-500 uppercase">Địa chỉ</p>
-                                      <p className="text-gray-700 bg-gray-50 p-2 rounded text-sm border">{selectedOrder.ship_address}</p>
+                                      <p className="text-gray-700 bg-orange-50 p-2 rounded text-sm border border-orange-100">{selectedOrder.ship_address}</p>
                                   </div>
                               </div>
                           </div>
-                          <div className="bg-gray-50 p-4 rounded-xl border space-y-2">
+                          <div className="bg-orange-50 p-4 rounded-xl border border-orange-100 space-y-2">
                                <div className="flex justify-between text-sm"><span className="text-gray-500">Phí ship</span><span>{formatCurrency(selectedOrder.shipping_fee)}</span></div>
-                               <div className="flex justify-between text-lg font-bold pt-2 border-t"><span className="text-gray-800">Tổng cộng</span><span className="text-blue-600">{formatCurrency(selectedOrder.total_money)}</span></div>
+                                   <div className="flex justify-between text-lg font-bold pt-2 border-t border-orange-100"><span className="text-gray-800">Tổng cộng</span><span className="text-orange-700">{formatCurrency(selectedOrder.total_money)}</span></div>
                                <div className="text-xs text-gray-400 text-right mt-1">{formatDate(selectedOrder.created_date)}</div>
                                {hasRefundInfo(selectedOrder) && (
                                    <div className="mt-3 space-y-2 bg-amber-50 border border-amber-200 rounded-lg p-3">
@@ -1221,13 +1221,13 @@ const StoreManager: React.FC = () => {
                       </div>
                       
                       {/* Action */}
-                      <div className="bg-blue-50 p-4 rounded-xl border border-blue-100 flex flex-col sm:flex-row gap-4 items-center justify-between">
-                          <span className="font-medium text-blue-900 flex items-center gap-2"><CheckCircle size={18}/> Cập nhật trạng thái:</span>
+                      <div className="bg-orange-50 p-4 rounded-xl border border-orange-100 flex flex-col sm:flex-row gap-4 items-center justify-between">
+                          <span className="font-medium text-orange-900 flex items-center gap-2"><CheckCircle size={18}/> Cập nhật trạng thái:</span>
                           <div className="flex gap-2 w-full sm:w-auto">
                               <select
                                   id="status_select"
                                   defaultValue={selectedOrder.order_status}
-                                  className="border border-blue-300 rounded px-3 py-2 text-sm flex-1"
+                                  className="border border-orange-300 rounded px-3 py-2 text-sm flex-1"
                                   disabled={isFinalStatus(selectedOrder.order_status)}
                               >
                                   {ORDER_STATUSES.filter(s => s !== 'Tất cả').map(s => <option key={s} value={s}>{s}</option>)}
@@ -1237,7 +1237,7 @@ const StoreManager: React.FC = () => {
                                       const val = (document.getElementById('status_select') as HTMLSelectElement).value;
                                       updateOrderStatus(selectedOrder.id, val);
                                   }}
-                                  className="bg-blue-600 hover:bg-blue-700"
+                                  className="bg-orange-600 hover:bg-orange-700"
                                   disabled={isFinalStatus(selectedOrder.order_status)}
                               >
                                   Lưu
@@ -1255,9 +1255,9 @@ const StoreManager: React.FC = () => {
       {/* REFUND MODAL */}
       {showRefundModal && refundOrder && (
           <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-in fade-in">
-              <div className="bg-white rounded-xl shadow-2xl w-full max-w-md p-6 space-y-4">
+              <div className="bg-white rounded-xl shadow-2xl w-full max-w-md p-6 space-y-4 border border-orange-100">
                   <div className="flex items-center justify-between">
-                      <h3 className="text-lg font-bold text-gray-800">Thông tin tài khoản</h3>
+                      <h3 className="text-lg font-bold text-[#391713]">Thông tin tài khoản</h3>
                       <button onClick={() => {
                           setShowRefundModal(false);
                           setRefundOrder(null);
@@ -1284,9 +1284,9 @@ const StoreManager: React.FC = () => {
                               </Button>
                           </div>
                       </div>
-                      <div className="flex items-center gap-2 text-sm">
+                          <div className="flex items-center gap-2 text-sm">
                           <span className="text-gray-500">Trạng thái hoàn tiền:</span>
-                          <span className="px-2 py-1 rounded-full border border-amber-200 bg-amber-50 text-amber-700 text-xs">{refundOrder.refund_status || 'Chờ xử lý'}</span>
+                          <span className="px-2 py-1 rounded-full border border-orange-200 bg-orange-50 text-orange-700 text-xs">{refundOrder.refund_status || 'Chờ xử lý'}</span>
                       </div>
                       <div>
                           <p className="text-sm text-gray-500 mb-1">Hình ảnh minh chứng</p>
@@ -1333,7 +1333,7 @@ const StoreManager: React.FC = () => {
                           Huỷ
                       </Button>
                       <Button
-                          className="bg-amber-600 hover:bg-amber-700"
+                          className="bg-orange-600 hover:bg-orange-700"
                           disabled={processingRefund}
                           onClick={handleCompleteRefund}
                       >
@@ -1352,7 +1352,7 @@ const StoreManager: React.FC = () => {
                       <button onClick={() => setShowProofModal(false)} className="text-gray-500 hover:text-gray-700"><X size={20}/></button>
                   </div>
                   <div className="w-full">
-                      <img src={proofModalSrc} alt="Proof" className="w-full h-auto rounded-lg border" />
+                      <img src={proofModalSrc} alt="Proof" className="w-full h-auto rounded-lg border border-orange-100" />
                   </div>
               </div>
           </div>
@@ -1361,8 +1361,8 @@ const StoreManager: React.FC = () => {
       {/* ADD/EDIT FOOD MODALS (Simplified for brevity, similar structure to previous) */}
       {(showAddFoodModal || (showEditFoodModal && selectedFood)) && (
           <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-               <div className="bg-white rounded-xl shadow-lg w-full max-w-lg p-6 max-h-[90vh] overflow-y-auto">
-                   <h2 className="text-xl font-bold mb-4">{showAddFoodModal ? 'Thêm món mới' : 'Sửa món ăn'}</h2>
+               <div className="bg-white rounded-xl shadow-lg w-full max-w-lg p-6 max-h-[90vh] overflow-y-auto border border-orange-100">
+                   <h2 className="text-xl font-bold mb-4 text-[#391713]">{showAddFoodModal ? 'Thêm món mới' : 'Sửa món ăn'}</h2>
                    <form onSubmit={showAddFoodModal ? handleAddFood : updateFood} className="space-y-4">
                        <div><label className="block text-sm font-medium">Tên món</label><input required className="w-full border p-2 rounded" value={showAddFoodModal ? newFood.title : selectedFood!.title} onChange={e => showAddFoodModal ? setNewFood({...newFood, title: e.target.value}) : setSelectedFood({...selectedFood!, title: e.target.value})}/></div>
                        <div><label className="block text-sm font-medium">Giá</label><input type="number" required className="w-full border p-2 rounded" value={showAddFoodModal ? newFood.price : selectedFood!.price} onChange={e => showAddFoodModal ? setNewFood({...newFood, price: e.target.value}) : setSelectedFood({...selectedFood!, price: Number(e.target.value)})}/></div>
@@ -1374,7 +1374,7 @@ const StoreManager: React.FC = () => {
                        <div>
                            <label className="block text-sm font-medium mb-1">Hình ảnh</label>
                            <div className="flex items-center gap-3">
-                               <div className="w-24 h-24 rounded border bg-gray-50 flex items-center justify-center overflow-hidden">
+                               <div className="w-24 h-24 rounded border border-orange-100 bg-orange-50 flex items-center justify-center overflow-hidden">
                                    { (showAddFoodModal ? addFoodPreview : editFoodPreview) ? (
                                        <img src={(showAddFoodModal ? addFoodPreview : editFoodPreview) as string} alt="food" className="w-full h-full object-cover" />
                                    ) : (
@@ -1383,7 +1383,7 @@ const StoreManager: React.FC = () => {
                                </div>
                                <div className="flex flex-col gap-2">
                                    <input ref={showAddFoodModal ? addImageRef : editImageRef} type="file" accept="image/*" className="hidden" onChange={showAddFoodModal ? handleAddImageChange : handleEditImageChange} />
-                                   <Button type="button" variant="outline" onClick={() => (showAddFoodModal ? addImageRef : editImageRef).current?.click()} className="w-fit">
+                                   <Button type="button" variant="outline" onClick={() => (showAddFoodModal ? addImageRef : editImageRef).current?.click()} className="w-fit border-orange-200 text-orange-700 hover:bg-orange-50">
                                        <Upload size={16} className="mr-2"/> Chọn ảnh
                                    </Button>
                                    {(showAddFoodModal ? addFoodPreview : editFoodPreview) && (
@@ -1437,7 +1437,7 @@ const StoreManager: React.FC = () => {
                            </div>
                        )}
 
-                       <div className="flex justify-end gap-2 mt-4"><Button type="button" variant="ghost" onClick={closeFoodModals}>Hủy</Button><Button type="submit" className="bg-blue-600">Lưu</Button></div>
+                       <div className="flex justify-end gap-2 mt-4"><Button type="button" variant="ghost" onClick={closeFoodModals}>Hủy</Button><Button type="submit" className="bg-orange-600 hover:bg-orange-700">Lưu</Button></div>
                    </form>
                </div>
           </div>
@@ -1446,8 +1446,8 @@ const StoreManager: React.FC = () => {
       {/* ADD/EDIT PROMO MODAL */}
       {(showAddPromoModal || (showEditPromoModal && selectedPromo)) && (
           <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-              <div className="bg-white rounded-xl shadow-lg w-full max-w-lg p-6 max-h-[90vh] overflow-y-auto">
-                  <h2 className="text-xl font-bold mb-4">{showAddPromoModal ? 'Thêm khuyến mãi' : 'Sửa khuyến mãi'}</h2>
+              <div className="bg-white rounded-xl shadow-lg w-full max-w-lg p-6 max-h-[90vh] overflow-y-auto border border-orange-100">
+                  <h2 className="text-xl font-bold mb-4 text-[#391713]">{showAddPromoModal ? 'Thêm khuyến mãi' : 'Sửa khuyến mãi'}</h2>
                   <form className="space-y-4" onSubmit={(e)=>handlePromoSubmit(e, !!selectedPromo)}>
                       <div>
                           <label className="block text-sm font-medium">Tên khuyến mãi</label>
@@ -1524,7 +1524,7 @@ const StoreManager: React.FC = () => {
                       </div>
                       <div className="flex justify-end gap-2 mt-4">
                           <Button type="button" variant="ghost" onClick={closePromoModals}>Hủy</Button>
-                          <Button type="submit" className="bg-blue-600">Lưu</Button>
+                          <Button type="submit" className="bg-orange-600 hover:bg-orange-700">Lưu</Button>
                       </div>
                   </form>
               </div>
@@ -1534,8 +1534,8 @@ const StoreManager: React.FC = () => {
       {/* EDIT STORE INFO MODAL */}
       {showEditStoreModal && editableStoreInfo && (
           <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-              <div className="bg-white rounded-xl shadow-lg w-full max-w-lg p-6 max-h-[90vh] overflow-y-auto">
-                  <h2 className="text-xl font-bold mb-4">Chỉnh sửa thông tin cửa hàng</h2>
+              <div className="bg-white rounded-xl shadow-lg w-full max-w-lg p-6 max-h-[90vh] overflow-y-auto border border-orange-100">
+                  <h2 className="text-xl font-bold mb-4 text-[#391713]">Chỉnh sửa thông tin cửa hàng</h2>
                   <div className="space-y-4">
                       <div>
                           <label className="block text-sm font-medium">Tên cửa hàng</label>
@@ -1548,7 +1548,7 @@ const StoreManager: React.FC = () => {
                       <div>
                           <label className="block text-sm font-medium">Ảnh cửa hàng</label>
                           <div className="flex items-center gap-3">
-                              <div className="w-24 h-24 rounded border bg-gray-50 flex items-center justify-center overflow-hidden">
+                              <div className="w-24 h-24 rounded border border-orange-100 bg-orange-50 flex items-center justify-center overflow-hidden">
                                   {storeImagePreview || editableStoreInfo.image ? (
                                       <img src={storeImagePreview || getImageUrl(editableStoreInfo.image)} className="w-full h-full object-cover" />
                                   ) : (
@@ -1557,7 +1557,7 @@ const StoreManager: React.FC = () => {
                               </div>
                               <div className="flex flex-col gap-2">
                                   <input ref={storeImageRef} type="file" accept="image/*" className="hidden" onChange={handleStoreImageChange} />
-                                  <Button type="button" variant="outline" onClick={() => storeImageRef.current?.click()} className="w-fit">
+                                  <Button type="button" variant="outline" onClick={() => storeImageRef.current?.click()} className="w-fit border-orange-200 text-orange-700 hover:bg-orange-50">
                                       <Upload size={16} className="mr-2"/> Chọn ảnh
                                   </Button>
                                   {(storeImagePreview || editableStoreInfo.image) && (
@@ -1592,9 +1592,9 @@ const StoreManager: React.FC = () => {
                               <input type="number" className="w-full border p-2 rounded" value={(editableStoreInfo as any).longitude ?? ''} onChange={e=>handleStoreFieldChange('longitude' as any, e.target.value)} />
                           </div>
                       </div>
-                      <div className="flex justify-end gap-2 mt-2">
+                          <div className="flex justify-end gap-2 mt-2">
                           <Button variant="ghost" onClick={() => { setShowEditStoreModal(false); setEditableStoreInfo(storeInfo); setStoreImageFile(null); setStoreImagePreview(null); setShowAddressPicker(false); if (storeImageRef.current) storeImageRef.current.value = ''; }}>Hủy</Button>
-                          <Button className="bg-blue-600" onClick={saveStoreInfo}>Lưu</Button>
+                          <Button className="bg-orange-600 hover:bg-orange-700" onClick={saveStoreInfo}>Lưu</Button>
                       </div>
                   </div>
               </div>
@@ -1617,10 +1617,14 @@ const StoreManager: React.FC = () => {
       {/* MANAGE SIZE MODAL */}
       {showManageSizesModal && selectedFood && (
           <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-              <div className="bg-white rounded-xl shadow-lg w-full max-w-md p-6">
-                  <div className="flex justify-between mb-4"><h3 className="font-bold">Size món: {selectedFood.title}</h3><button onClick={()=>setShowManageSizesModal(false)}><X size={20}/></button></div>
-                  <form onSubmit={handleAddSize} className="flex gap-2 mb-4"><input className="border p-2 rounded flex-1 text-sm" placeholder="Tên size (VD: L)" value={newSize.size_name} onChange={e=>setNewSize({...newSize, size_name:e.target.value})} required/><input type="number" className="border p-2 rounded w-24 text-sm" placeholder="Giá thêm" value={newSize.price} onChange={e=>setNewSize({...newSize, price:e.target.value})} required/><Button type="submit" size="sm"><Plus size={16}/></Button></form>
-                  <div className="space-y-2 max-h-60 overflow-y-auto">{foodSizes.map(s=><div key={s.id} className="flex justify-between items-center p-2 border rounded bg-gray-50 text-sm"><span>{s.size_name} (+{formatCurrency(s.price)})</span><Button variant="ghost" size="sm" className="h-6 w-6 p-0 text-red-500" onClick={()=>deleteSize(s.id)}><Trash2 size={14}/></Button></div>)}</div>
+              <div className="bg-white rounded-xl shadow-lg w-full max-w-md p-6 border border-orange-100">
+                  <div className="flex justify-between mb-4"><h3 className="font-bold text-[#391713]">Size món: {selectedFood.title}</h3><button onClick={()=>setShowManageSizesModal(false)} className="text-gray-500 hover:text-gray-700"><X size={20}/></button></div>
+                  <form onSubmit={handleAddSize} className="flex gap-2 mb-4">
+                    <input className="border border-orange-200 p-2 rounded flex-1 text-sm" placeholder="Tên size (VD: L)" value={newSize.size_name} onChange={e=>setNewSize({...newSize, size_name:e.target.value})} required/>
+                    <input type="number" className="border border-orange-200 p-2 rounded w-28 text-sm" placeholder="Giá thêm" value={newSize.price} onChange={e=>setNewSize({...newSize, price:e.target.value})} required />
+                    <Button type="submit" size="sm" className="bg-orange-600 hover:bg-orange-700"><Plus size={16}/></Button>
+                  </form>
+                  <div className="space-y-2 max-h-60 overflow-y-auto">{foodSizes.map(s=><div key={s.id} className="flex justify-between items-center p-2 border border-orange-100 rounded bg-orange-50/60 text-sm"><span className="text-[#391713]">{s.size_name} (+{formatCurrency(s.price)})</span><Button variant="ghost" size="sm" className="h-6 w-6 p-0 text-red-500" onClick={()=>deleteSize(s.id)}><Trash2 size={14}/></Button></div>)}</div>
               </div>
           </div>
       )}

@@ -53,31 +53,34 @@ import {
 
 // --- INTERFACES ---
 interface RevenueReportData {
-    period: string;
+    summary: {
+        total_revenue: number;
+        total_orders: number;
+    };
+    chart_data: Array<{
+        date: string;
+        revenue: number;
+        orders?: number;
+    }>;
+    store_id?: number | null;
+    period?: string;
+}
+
+interface TopProductItem {
+    rank: number;
+    food_id?: number;
+    food_name: string;
+    image?: string;
+    price?: number;
+    total_sold: number;
+    revenue_contribution: number;
+}
+
+interface TopProductsReport {
+    results: TopProductItem[];
     start_date: string;
     end_date: string;
-    total_revenue: string;
-    total_orders: number;
-    data: Array<{
-        date: string;
-        revenue: string;
-        orders: number;
-    }>;
-}
-
-interface PopularFoodItem {
-    food_id: number;
-    food_name: string;
-    category: string;
-    store_name: string;
-    total_quantity: number;
-    total_revenue: string;
-    order_count: number;
-}
-
-interface PopularFoodsReport {
-    period: string;
-    foods: PopularFoodItem[];
+    store_id?: number | null;
 }
 
 interface StoreApplication {
@@ -206,7 +209,7 @@ const PaginationControl = ({
                 <ChevronLeft size={16} />
             </Button>
 
-            <div className="flex items-center gap-1 border rounded bg-white px-1 h-8">
+            <div className="flex items-center gap-1 border border-orange-200 rounded bg-white px-1 h-8">
                 <input
                     className="w-10 h-full text-center outline-none bg-transparent text-sm"
                     value={inputPage}
@@ -215,7 +218,7 @@ const PaginationControl = ({
                 />
                 <button
                     onClick={handleGo}
-                    className="text-xs font-bold text-blue-600 hover:text-blue-800 px-1 uppercase"
+                    className="text-xs font-bold text-orange-600 hover:text-orange-700 px-1 uppercase"
                 >
                     Go
                 </button>
@@ -232,6 +235,14 @@ const PaginationControl = ({
             </Button>
         </div>
     );
+};
+
+const getCurrentMonthRange = () => {
+    const now = new Date();
+    const start = new Date(now.getFullYear(), now.getMonth(), 1);
+    const end = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+    const format = (d: Date) => d.toISOString().slice(0, 10);
+    return { start: format(start), end: format(end) };
 };
 
 
@@ -340,11 +351,12 @@ const Admin: React.FC = () => {
     const [totalOrders, setTotalOrders] = useState(0);
 
     // Reports
+    const monthRange = getCurrentMonthRange();
     const [reportData, setReportData] = useState<RevenueReportData | null>(null);
-    const [reportFilters, setReportFilters] = useState({ start_date: '', end_date: '', period: 'daily', store_id: '', });
+    const [reportFilters, setReportFilters] = useState({ start_date: monthRange.start, end_date: monthRange.end, period: 'day', store_id: '', });
     const [reportLoading, setReportLoading] = useState(false);
-    const [popularFoodsData, setPopularFoodsData] = useState<PopularFoodsReport | null>(null);
-    const [popularFoodsFilters, setPopularFoodsFilters] = useState({ start_date: '', end_date: '', limit: '10', });
+    const [popularFoodsData, setPopularFoodsData] = useState<TopProductsReport | null>(null);
+    const [popularFoodsFilters, setPopularFoodsFilters] = useState({ start_date: monthRange.start, end_date: monthRange.end, limit: '10', });
     const [popularFoodsLoading, setPopularFoodsLoading] = useState(false);
 
     // Promotions
@@ -377,8 +389,8 @@ const Admin: React.FC = () => {
             case 'orders': loadOrders(1); break;
             case 'stores': setStoreViewMode('list'); loadStores(); break;
             case 'promotions': loadPromotions(); break;
-            case 'revenueReport': if (stores.length === 0) loadStores(); break;
-            case 'popularFoodsReport': break;
+            case 'revenueReport': if (stores.length === 0) loadStores(); loadRevenueReport(); break;
+            case 'popularFoodsReport': loadPopularFoodsReport(); break;
             default: loadDashboard();
         }
     }, [activeSection]);
@@ -780,64 +792,76 @@ const Admin: React.FC = () => {
     const deletePromo = async (id: number) => { if (!confirm('Xóa?')) return; await API.delete(`/promotions/admin/${id}/delete/`); loadPromotions(); };
 
     // Reports
-    const loadRevenueReport = async () => { setReportLoading(true); try { const res = await API.get(`/admin/reports/revenue/?start_date=${reportFilters.start_date}&end_date=${reportFilters.end_date}&period=${reportFilters.period}&store_id=${reportFilters.store_id}`); setReportData(res); } catch (e) { alert('Lỗi tải báo cáo'); } finally { setReportLoading(false); } };
-    const loadPopularFoodsReport = async () => { setPopularFoodsLoading(true); try { const res = await API.get(`/admin/reports/popular-foods/?start_date=${popularFoodsFilters.start_date}&end_date=${popularFoodsFilters.end_date}&limit=${popularFoodsFilters.limit}`); setPopularFoodsData(res); } catch (e) { alert('Lỗi tải báo cáo'); } finally { setPopularFoodsLoading(false); } };
+    const loadRevenueReport = async () => {
+        setReportLoading(true);
+        try {
+            const res = await API.get(`/admin/dashboard/stats/revenue/?start_date=${reportFilters.start_date}&end_date=${reportFilters.end_date}&period=${reportFilters.period}${reportFilters.store_id ? `&store_id=${reportFilters.store_id}` : ''}`);
+            setReportData(res);
+        } catch (e) { alert('Lỗi tải báo cáo'); } finally { setReportLoading(false); }
+    };
+    const loadPopularFoodsReport = async () => {
+        setPopularFoodsLoading(true);
+        try {
+            const res = await API.get(`/admin/dashboard/stats/top-products/?start_date=${popularFoodsFilters.start_date}&end_date=${popularFoodsFilters.end_date}&limit=${popularFoodsFilters.limit}${reportFilters.store_id ? `&store_id=${reportFilters.store_id}` : ''}`);
+            setPopularFoodsData(res);
+        } catch (e) { alert('Lỗi tải báo cáo'); } finally { setPopularFoodsLoading(false); }
+    };
 
     // Helpers
     const formatCurrency = (amount: any) => new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(Number(amount));
     const logout = () => { localStorage.clear(); navigate('/login'); };
 
     const heatColor = (count: number) => {
-        if (count === 0) return '#e5e7eb';
-        if (count < 3) return '#bae6fd';
-        if (count < 6) return '#7dd3fc';
-        if (count < 10) return '#38bdf8';
-        return '#0ea5e9';
+        if (count === 0) return '#f5f5f4';
+        if (count < 3) return '#fed7aa';
+        if (count < 6) return '#fdba74';
+        if (count < 10) return '#fb923c';
+        return '#ea580c';
     };
 
     const getStatusColor = (status: string) => {
         switch (status) {
-            case 'Chờ xác nhận': return 'bg-yellow-100 text-yellow-800 border-yellow-200';
-            case 'Đã xác nhận': return 'bg-blue-100 text-blue-800 border-blue-200';
-            case 'Đang chuẩn bị': return 'bg-indigo-100 text-indigo-800 border-indigo-200';
-            case 'Sẵn sàng': return 'bg-purple-100 text-purple-800 border-purple-200';
-            case 'Đang giao': return 'bg-cyan-100 text-cyan-800 border-cyan-200';
+            case 'Chờ xác nhận': return 'bg-amber-100 text-amber-800 border-amber-200';
+            case 'Đã xác nhận': return 'bg-orange-100 text-orange-800 border-orange-200';
+            case 'Đang chuẩn bị': return 'bg-orange-50 text-orange-700 border-orange-100';
+            case 'Sẵn sàng': return 'bg-amber-50 text-amber-700 border-amber-100';
+            case 'Đang giao': return 'bg-orange-200 text-orange-900 border-orange-300';
             case 'Đã giao': return 'bg-green-100 text-green-800 border-green-200';
             case 'Đã huỷ': return 'bg-red-100 text-red-800 border-red-200';
-            default: return 'bg-gray-100 text-gray-800 border-gray-200';
+            default: return 'bg-orange-50 text-amber-800 border-orange-100';
         }
     };
 
     const pieColors: Record<string, string> = {
-        'Đã giao': '#22c55e',
-        'Đang giao': '#06b6d4',
-        'Đã xác nhận': '#3b82f6',
-        'Chờ xác nhận': '#f59e0b',
+        'Đã giao': '#ea580c',
+        'Đang giao': '#fb923c',
+        'Đã xác nhận': '#fdba74',
+        'Chờ xác nhận': '#fef08a',
         'Đã huỷ': '#ef4444',
     };
 
     const SidebarItem = ({ id, label, icon: Icon }: any) => (
         <button onClick={() => { setActiveSection(id); }}
             className={cn("w-full flex items-center gap-3 px-4 py-3 text-sm font-medium rounded-lg transition-all",
-                activeSection === id ? "bg-blue-600 text-white shadow-md" : "text-gray-600 hover:bg-gray-100 hover:text-gray-900")}>
+                activeSection === id ? "bg-orange-600 text-white shadow-md" : "text-amber-800/80 hover:bg-orange-50 hover:text-orange-800")}>
             <Icon size={18} /> {label}
         </button>
     );
 
     // --- RENDER ---
     return (
-        <div className="flex h-screen bg-gray-50">
+        <div className="flex h-screen bg-[#fffaf3]">
             {/* SIDEBAR */}
-            <aside className="w-64 bg-white border-r shadow-sm hidden md:flex flex-col z-20">
-                <div className="p-6 border-b flex justify-center items-center gap-2">
-                    <div className="bg-blue-600 text-white p-1 rounded-lg"><LayoutDashboard size={20} /></div>
-                    <h1 className="text-xl font-bold text-gray-800">ADMIN PANEL</h1>
+            <aside className="w-64 bg-white border-r border-orange-100 shadow-sm hidden md:flex flex-col z-20">
+                <div className="p-6 border-b border-orange-100 flex justify-center items-center gap-2">
+                    <div className="bg-orange-600 text-white p-1 rounded-lg"><LayoutDashboard size={20} /></div>
+                    <h1 className="text-xl font-bold text-[#391713]">ADMIN PANEL</h1>
                 </div>
                 <nav className="flex-1 p-4 space-y-1 overflow-y-auto no-scrollbar">
-                    <p className="text-xs font-bold text-gray-400 uppercase px-4 mb-2 mt-2">Tổng quan</p>
+                    <p className="text-xs font-bold text-orange-700 uppercase px-4 mb-2 mt-2">Tổng quan</p>
                     <SidebarItem id="dashboard" label="Dashboard" icon={LayoutDashboard} />
 
-                    <p className="text-xs font-bold text-gray-400 uppercase px-4 mt-6 mb-2">Quản lý</p>
+                    <p className="text-xs font-bold text-orange-700 uppercase px-4 mt-6 mb-2">Quản lý</p>
                     <SidebarItem id="customers" label="Khách hàng" icon={Users} />
                     <SidebarItem id="stores" label="Cửa hàng" icon={StoreIcon} />
                     <SidebarItem id="shippers" label="Shipper" icon={Truck} />
@@ -845,13 +869,13 @@ const Admin: React.FC = () => {
                     <SidebarItem id="orders" label="Đơn hàng" icon={ShoppingBag} />
                     <SidebarItem id="promotions" label="Khuyến mãi" icon={TicketPercent} />
 
-                    <p className="text-xs font-bold text-gray-400 uppercase px-4 mt-6 mb-2">Báo cáo</p>
+                    <p className="text-xs font-bold text-orange-700 uppercase px-4 mt-6 mb-2">Báo cáo</p>
                     <SidebarItem id="revenueReport" label="Doanh thu" icon={BarChart3} />
                     <SidebarItem id="popularFoodsReport" label="Món bán chạy" icon={PieChartIcon} />
                 </nav>
                 <div className="p-4 border-t">
                     <div className="flex items-center gap-3">
-                        <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center text-blue-600 font-bold">A</div>
+                        <div className="w-8 h-8 rounded-full bg-orange-100 flex items-center justify-center text-orange-700 font-bold">A</div>
                         <div className="text-sm font-medium">Administrator</div>
                     </div>
                 </div>
@@ -860,67 +884,67 @@ const Admin: React.FC = () => {
             {/* MAIN CONTENT */}
             <div className="flex-1 flex flex-col overflow-hidden">
                 {/* HEADER */}
-                <header className="h-16 bg-white border-b shadow-sm flex items-center justify-between px-6 z-10">
-                    <h2 className="text-lg font-bold text-gray-800 capitalize">{activeSection.replace(/([A-Z])/g, ' $1').trim()}</h2>
+                <header className="h-16 bg-white border-b border-orange-100 shadow-sm flex items-center justify-between px-6 z-10">
+                    <h2 className="text-lg font-bold text-[#391713] capitalize">{activeSection.replace(/([A-Z])/g, ' $1').trim()}</h2>
                     <div className="flex gap-4">
-                        <Button variant="ghost" onClick={() => navigate('/')}><ExternalLink size={16} className="mr-2" /> Trang chủ</Button>
-                        <Button variant="ghost" className="text-red-500 hover:bg-red-50" onClick={logout}><LogOut size={16} className="mr-2" /> Đăng xuất</Button>
+                        <Button variant="ghost" className="text-orange-700 hover:bg-orange-50" onClick={() => navigate('/')}> <ExternalLink size={16} className="mr-2" /> Trang chủ</Button>
+                        <Button variant="ghost" className="text-orange-700 hover:bg-orange-100" onClick={logout}> <LogOut size={16} className="mr-2" /> Đăng xuất</Button>
                     </div>
                 </header>
 
-                <main className="flex-1 overflow-y-auto bg-gray-50/50 p-6">
+                <main className="flex-1 overflow-y-auto bg-[#fff7ec] p-6">
                     <div className="max-w-7xl mx-auto pb-10">
 
                         {/* 1. DASHBOARD */}
                         {activeSection === 'dashboard' && (
                             <div className="space-y-6 animate-in fade-in">
                                 <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                                    {[{ title: 'Tổng doanh thu', val: formatCurrency(stats.totalRevenue), color: 'emerald', icon: BarChart3 },
-                                    { title: 'Đơn hàng', val: stats.totalOrders, color: 'blue', icon: ShoppingBag },
-                                    { title: 'Cửa hàng', val: stats.totalStores, color: 'indigo', icon: StoreIcon },
-                                    { title: 'Khách hàng', val: stats.totalCustomers, color: 'orange', icon: Users }].map((s, i) => (
-                                        <Card key={i} className={`border-l-4 border-l-${s.color}-500 shadow-sm`}>
+                                    {[{ title: 'Tổng doanh thu', val: formatCurrency(stats.totalRevenue), icon: BarChart3, accentBg: 'bg-orange-100', accentText: 'text-orange-700' },
+                                    { title: 'Đơn hàng', val: stats.totalOrders, icon: ShoppingBag, accentBg: 'bg-orange-50', accentText: 'text-orange-700' },
+                                    { title: 'Cửa hàng', val: stats.totalStores, icon: StoreIcon, accentBg: 'bg-amber-100', accentText: 'text-amber-800' },
+                                    { title: 'Khách hàng', val: stats.totalCustomers, icon: Users, accentBg: 'bg-orange-100', accentText: 'text-orange-700' }].map((s, i) => (
+                                        <Card key={i} className="border border-orange-100 shadow-sm bg-white">
                                             <CardContent className="p-5 flex justify-between items-center">
                                                 <div>
-                                                    <p className="text-sm text-gray-500 uppercase font-medium">{s.title}</p>
-                                                    <p className="text-2xl font-bold text-gray-800 mt-2">{s.val}</p>
+                                                    <p className="text-xs font-semibold text-amber-700 uppercase tracking-wide">{s.title}</p>
+                                                    <p className="text-2xl font-bold text-[#391713] mt-2">{s.val}</p>
                                                 </div>
-                                                <div className={`p-3 rounded-full bg-${s.color}-50 text-${s.color}-600`}><s.icon size={22} /></div>
+                                                <div className={`p-3 rounded-full ${s.accentBg} ${s.accentText}`}><s.icon size={22} /></div>
                                             </CardContent>
                                         </Card>
                                     ))}
                                 </div>
 
                                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                                    <Card className="shadow-sm border-0">
+                                    <Card className="shadow-sm border border-orange-100 bg-white">
                                         <CardHeader>
-                                            <CardTitle className="text-sm text-gray-600">Biến động doanh thu 6 tháng</CardTitle>
+                                            <CardTitle className="text-sm text-amber-800">Biến động doanh thu 6 tháng</CardTitle>
                                         </CardHeader>
                                         <CardContent className="h-72">
                                             <ResponsiveContainer width="100%" height="100%">
                                                 <LineChart data={revenueSeries} margin={{ top: 10, right: 20, left: 0, bottom: 0 }}>
-                                                    <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
-                                                    <XAxis dataKey="label" tick={{ fontSize: 12 }} stroke="#9ca3af" />
-                                                    <YAxis tick={{ fontSize: 12 }} stroke="#9ca3af" tickFormatter={(v) => `${(v / 1000000).toFixed(0)}m`} />
+                                                    <CartesianGrid strokeDasharray="3 3" stroke="#fed7aa" />
+                                                    <XAxis dataKey="label" tick={{ fontSize: 12, fill: '#9a3412' }} stroke="#fb923c" />
+                                                    <YAxis tick={{ fontSize: 12, fill: '#9a3412' }} stroke="#fb923c" tickFormatter={(v) => `${(v / 1000000).toFixed(0)}m`} />
                                                     <Tooltip formatter={(value: any) => formatCurrency(value)} labelFormatter={(l) => `Tháng ${l}`} />
-                                                    <Line type="monotone" dataKey="revenue" stroke="#2563eb" strokeWidth={2} dot={{ r: 3 }} activeDot={{ r: 5 }} name="Doanh thu" />
+                                                    <Line type="monotone" dataKey="revenue" stroke="#e95322" strokeWidth={3} dot={{ r: 3, stroke: '#ea580c', fill: '#fff7ec' }} activeDot={{ r: 5, stroke: '#ea580c', fill: '#fff7ec' }} name="Doanh thu" />
                                                 </LineChart>
                                             </ResponsiveContainer>
                                         </CardContent>
                                     </Card>
 
-                                    <Card className="shadow-sm border-0">
+                                    <Card className="shadow-sm border border-orange-100 bg-white">
                                         <CardHeader>
-                                            <CardTitle className="text-sm text-gray-600">Top 5 cửa hàng doanh thu</CardTitle>
+                                            <CardTitle className="text-sm text-amber-800">Top 5 cửa hàng doanh thu</CardTitle>
                                         </CardHeader>
                                         <CardContent className="h-72">
                                             <ResponsiveContainer width="100%" height="100%">
                                                 <BarChart data={topStores} layout="vertical" margin={{ top: 10, right: 20, left: 20, bottom: 0 }}>
-                                                    <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
-                                                    <XAxis type="number" tickFormatter={(v) => `${(v / 1000000).toFixed(0)}m`} stroke="#9ca3af" />
-                                                    <YAxis dataKey="store_name" type="category" width={150} tick={{ fontSize: 12 }} stroke="#9ca3af" />
+                                                    <CartesianGrid strokeDasharray="3 3" stroke="#fed7aa" />
+                                                    <XAxis type="number" tickFormatter={(v) => `${(v / 1000000).toFixed(0)}m`} stroke="#fb923c" tick={{ fill: '#9a3412', fontSize: 12 }} />
+                                                    <YAxis dataKey="store_name" type="category" width={150} tick={{ fontSize: 12, fill: '#9a3412' }} stroke="#fb923c" />
                                                     <Tooltip formatter={(value: any) => formatCurrency(value)} />
-                                                    <Bar dataKey="revenue" fill="#10b981" radius={[4, 4, 0, 0]} />
+                                                    <Bar dataKey="revenue" fill="#f97316" radius={[4, 4, 0, 0]} />
                                                 </BarChart>
                                             </ResponsiveContainer>
                                         </CardContent>
@@ -928,9 +952,9 @@ const Admin: React.FC = () => {
                                 </div>
 
                                 <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
-                                    <Card className="shadow-sm border-0">
+                                    <Card className="shadow-sm border border-orange-100 bg-white">
                                         <CardHeader>
-                                            <CardTitle className="text-sm text-gray-600">Phễu chuyển đổi Cart → Order</CardTitle>
+                                            <CardTitle className="text-sm text-amber-800">Phễu chuyển đổi Cart → Order</CardTitle>
                                         </CardHeader>
                                         <CardContent className="h-72">
                                             <ResponsiveContainer width="100%" height="100%">
@@ -938,25 +962,25 @@ const Admin: React.FC = () => {
                                                     <Tooltip formatter={(v: any) => v} labelFormatter={(l) => l} />
                                                     <Funnel dataKey="value" data={funnelData} isAnimationActive={false}>
                                                         {funnelData.map((entry, idx) => (
-                                                            <Cell key={idx} fill={["#6366f1", "#22c55e", "#f59e0b", "#0ea5e9"][idx % 4]} />
+                                                            <Cell key={idx} fill={["#fed7aa", "#fdba74", "#fb923c", "#f97316", "#ea580c"][idx % 5]} />
                                                         ))}
-                                                        <LabelList position="right" dataKey={(d: any) => `${d.value} • ${d.conversion}%`} fill="#374151" />
+                                                        <LabelList position="right" dataKey={(d: any) => `${d.value} • ${d.conversion}%`} fill="#7c2d12" />
                                                     </Funnel>
                                                 </FunnelChart>
                                             </ResponsiveContainer>
                                         </CardContent>
                                     </Card>
 
-                                    <Card className="shadow-sm border-0 xl:col-span-2">
+                                    <Card className="shadow-sm border border-orange-100 bg-white xl:col-span-2">
                                         <CardHeader>
-                                            <CardTitle className="text-sm text-gray-600">Mật độ đơn hàng theo giờ</CardTitle>
+                                            <CardTitle className="text-sm text-amber-800">Mật độ đơn hàng theo giờ</CardTitle>
                                         </CardHeader>
                                         <CardContent className="h-72">
                                             <ResponsiveContainer width="100%" height="100%">
                                                 <BarChart data={heatmapData} margin={{ top: 10, right: 10, left: 0, bottom: 20 }}>
-                                                    <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
-                                                    <XAxis dataKey="hour" tickFormatter={(v) => `${v}h`} tick={{ fontSize: 12 }} stroke="#9ca3af" />
-                                                    <YAxis allowDecimals={false} tick={{ fontSize: 12 }} stroke="#9ca3af" />
+                                                    <CartesianGrid strokeDasharray="3 3" stroke="#fed7aa" />
+                                                    <XAxis dataKey="hour" tickFormatter={(v) => `${v}h`} tick={{ fontSize: 12, fill: '#9a3412' }} stroke="#fb923c" />
+                                                    <YAxis allowDecimals={false} tick={{ fontSize: 12, fill: '#9a3412' }} stroke="#fb923c" />
                                                     <Tooltip labelFormatter={(l: any) => `${l}h`} formatter={(v: any) => `${v} đơn`} />
                                                     <Bar dataKey="count">
                                                         {heatmapData.map((entry, index) => (
@@ -969,9 +993,9 @@ const Admin: React.FC = () => {
                                     </Card>
                                 </div>
 
-                                <Card className="shadow-sm border-0">
+                                <Card className="shadow-sm border border-orange-100 bg-white">
                                     <CardHeader>
-                                        <CardTitle className="text-sm text-gray-600">Tỷ lệ trạng thái đơn hàng</CardTitle>
+                                        <CardTitle className="text-sm text-amber-800">Tỷ lệ trạng thái đơn hàng</CardTitle>
                                     </CardHeader>
                                     <CardContent className="h-80">
                                         <ResponsiveContainer width="100%" height="100%">
@@ -980,7 +1004,7 @@ const Admin: React.FC = () => {
                                                     `${Math.round((percent ?? 0) * 100)}%`
                                                 }>
                                                     {orderStatusData.map((entry, index) => (
-                                                        <Cell key={`cell-${index}`} fill={pieColors[entry.status] || '#94a3b8'} />
+                                                        <Cell key={`cell-${index}`} fill={pieColors[entry.status] || '#f97316'} />
                                                     ))}
                                                 </Pie>
                                                 <Legend layout="vertical" verticalAlign="middle" align="right" formatter={(value) => value} />
@@ -990,13 +1014,13 @@ const Admin: React.FC = () => {
                                     </CardContent>
                                 </Card>
 
-                                <Card className="shadow-sm border-0">
+                                <Card className="shadow-sm border border-orange-100 bg-white">
                                     <CardHeader>
-                                        <CardTitle className="text-sm text-gray-600">Danh sách cửa hàng</CardTitle>
+                                        <CardTitle className="text-sm text-amber-800">Danh sách cửa hàng</CardTitle>
                                     </CardHeader>
                                     <CardContent className="overflow-x-auto">
                                         <table className="w-full text-sm">
-                                            <thead className="bg-gray-50 border-b text-xs uppercase text-gray-500">
+                                            <thead className="bg-orange-50 border-b border-orange-100 text-xs uppercase text-amber-700">
                                                 <tr>
                                                     <th className="p-3 text-left">ID</th>
                                                     <th className="p-3 text-left">Tên cửa hàng</th>
@@ -1006,21 +1030,21 @@ const Admin: React.FC = () => {
                                                     <th className="p-3 text-right">Chi tiết</th>
                                                 </tr>
                                             </thead>
-                                            <tbody className="divide-y">
+                                            <tbody className="divide-y divide-orange-50">
                                                 {storeRows.map((s) => (
-                                                    <tr key={s.store_id} className="hover:bg-gray-50">
-                                                        <td className="p-3 font-mono text-gray-600">{s.store_id}</td>
-                                                        <td className="p-3 font-semibold">{s.store_name}</td>
-                                                        <td className="p-3 text-gray-600">{s.address || '-'}</td>
-                                                        <td className="p-3">{s.total_orders}</td>
-                                                        <td className="p-3 font-bold text-blue-600">{formatCurrency(s.revenue)}</td>
+                                                    <tr key={s.store_id} className="hover:bg-orange-50/80">
+                                                        <td className="p-3 font-mono text-amber-800">{s.store_id}</td>
+                                                        <td className="p-3 font-semibold text-[#391713]">{s.store_name}</td>
+                                                        <td className="p-3 text-amber-900/80">{s.address || '-'}</td>
+                                                        <td className="p-3 text-[#391713]">{s.total_orders}</td>
+                                                        <td className="p-3 font-bold text-orange-700">{formatCurrency(s.revenue)}</td>
                                                         <td className="p-3 text-right">
-                                                            <Button size="sm" variant="outline" onClick={() => navigate(`/store/${s.store_id}/`)}>Xem chi tiết</Button>
+                                                            <Button size="sm" variant="outline" className="border-orange-200 text-orange-700" onClick={() => navigate(`/store/${s.store_id}/`)}>Xem chi tiết</Button>
                                                         </td>
                                                     </tr>
                                                 ))}
                                                 {storeRows.length === 0 && (
-                                                    <tr><td colSpan={6} className="p-6 text-center text-gray-500">Chưa có dữ liệu</td></tr>
+                                                    <tr><td colSpan={6} className="p-6 text-center text-amber-700">Chưa có dữ liệu</td></tr>
                                                 )}
                                             </tbody>
                                         </table>
@@ -1033,11 +1057,11 @@ const Admin: React.FC = () => {
                         {activeSection === 'stores' && (
                             <div className="animate-in fade-in space-y-4">
                                 <div className="flex justify-between items-center">
-                                    <div className="flex bg-gray-100 p-1 rounded-lg">
-                                        <button onClick={() => setStoreViewMode('list')} className={cn("px-4 py-1.5 rounded-md text-sm font-medium transition-all", storeViewMode === 'list' ? "bg-white shadow text-gray-900" : "text-gray-500")}>Danh sách</button>
-                                        <button onClick={() => { setStoreViewMode('applications'); loadStoreApplications(); }} className={cn("px-4 py-1.5 rounded-md text-sm font-medium transition-all", storeViewMode === 'applications' ? "bg-white shadow text-gray-900" : "text-gray-500")}>Đơn đăng ký</button>
+                                    <div className="flex bg-orange-50 p-1 rounded-lg border border-orange-100">
+                                        <button onClick={() => setStoreViewMode('list')} className={cn("px-4 py-1.5 rounded-md text-sm font-medium transition-all", storeViewMode === 'list' ? "bg-white shadow text-[#391713]" : "text-amber-700/80")}>Danh sách</button>
+                                        <button onClick={() => { setStoreViewMode('applications'); loadStoreApplications(); }} className={cn("px-4 py-1.5 rounded-md text-sm font-medium transition-all", storeViewMode === 'applications' ? "bg-white shadow text-[#391713]" : "text-amber-700/80")}>Đơn đăng ký</button>
                                     </div>
-                                    {storeViewMode === 'list' && <Button onClick={() => setShowAddStoreModal(true)} className="bg-blue-600"><Plus size={16} className="mr-2" /> Thêm Cửa hàng</Button>}
+                                    {storeViewMode === 'list' && <Button onClick={() => setShowAddStoreModal(true)} className="bg-orange-600 hover:bg-orange-700"><Plus size={16} className="mr-2" /> Thêm Cửa hàng</Button>}
                                 </div>
 
                                 {storeViewMode === 'list' ? (
@@ -1047,41 +1071,41 @@ const Admin: React.FC = () => {
                                                 <div className="relative flex-1">
                                                     <Search className="absolute left-2 top-2.5 text-gray-400" size={16} />
                                                     <input
-                                                        className="pl-8 border p-2 rounded-lg w-full text-sm"
+                                                        className="pl-8 border border-orange-200 p-2 rounded-lg w-full text-sm bg-white"
                                                         placeholder="Tìm kiếm cửa hàng..."
                                                         value={storeSearch}
                                                         onChange={e => setStoreSearch(e.target.value)}
                                                     />
                                                 </div>
-                                                <Button onClick={() => loadStores(1, storeSearch)}>Tìm</Button>
+                                                <Button className="bg-orange-600 hover:bg-orange-700" onClick={() => loadStores(1, storeSearch)}>Tìm</Button>
                                             </div>
-                                            <div className="text-sm text-gray-500">Tổng: {totalStoresCount} cửa hàng</div>
+                                            <div className="text-sm text-amber-700">Tổng: {totalStoresCount} cửa hàng</div>
                                         </div>
 
-                                        <Card className="border-0 shadow-sm overflow-hidden mt-3">
+                                        <Card className="border border-orange-100 shadow-sm overflow-hidden mt-3 bg-white">
                                             <CardContent className="p-0">
                                                 <table className="w-full text-sm text-left">
-                                                    <thead className="bg-gray-50 border-b uppercase text-xs text-gray-500"><tr><th className="p-4">ID</th><th className="p-4">Ảnh</th><th className="p-4">Tên cửa hàng</th><th className="p-4">Mô tả</th><th className="p-4">Quản lý (ID)</th><th className="p-4">Trạng thái</th><th className="p-4 text-right">Thao tác</th></tr></thead>
-                                                    <tbody className="divide-y">
+                                                    <thead className="bg-orange-50 border-b border-orange-100 uppercase text-xs text-amber-700"><tr><th className="p-4">ID</th><th className="p-4">Ảnh</th><th className="p-4">Tên cửa hàng</th><th className="p-4">Mô tả</th><th className="p-4">Quản lý (ID)</th><th className="p-4">Trạng thái</th><th className="p-4 text-right">Thao tác</th></tr></thead>
+                                                    <tbody className="divide-y divide-orange-50">
                                                         {stores.map(s => {
                                                             const active = s.is_active !== false;
                                                             return (
-                                                                <tr key={s.id} className="hover:bg-gray-50">
-                                                                    <td className="p-4 font-mono">{s.id}</td>
-                                                                    <td className="p-4"><img src={getImageUrl(s.image)} className="w-10 h-10 rounded border object-cover" /></td>
-                                                                    <td className="p-4 font-medium">{s.store_name}</td>
-                                                                    <td className="p-4 max-w-xs truncate">{s.description}</td>
-                                                                    <td className="p-4">{s.manager}</td>
+                                                                <tr key={s.id} className="hover:bg-orange-50">
+                                                                    <td className="p-4 font-mono text-amber-800">{s.id}</td>
+                                                                    <td className="p-4"><img src={getImageUrl(s.image)} className="w-10 h-10 rounded border border-orange-100 object-cover" /></td>
+                                                                    <td className="p-4 font-medium text-[#391713]">{s.store_name}</td>
+                                                                    <td className="p-4 max-w-xs truncate text-amber-900/80">{s.description}</td>
+                                                                    <td className="p-4 text-amber-900/80">{s.manager}</td>
                                                                     <td className="p-4">
                                                                         <span className={`text-xs px-2 py-1 rounded ${active ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
                                                                             {active ? 'Hoạt động' : 'Đã khóa'}
                                                                         </span>
                                                                     </td>
                                                                     <td className="p-4 flex justify-end gap-2">
-                                                                        <Button size="sm" variant="ghost" className="h-8 w-8 p-0" onClick={() => openStoreDetail(s.id)}><Eye size={14} /></Button>
-                                                                        <Button size="sm" variant="outline" onClick={() => viewStoreDetail(s.id)}><Edit2 size={14} /></Button>
+                                                                        <Button size="sm" variant="ghost" className="h-8 w-8 p-0 text-orange-700 hover:bg-orange-50" onClick={() => openStoreDetail(s.id)}><Eye size={14} /></Button>
+                                                                        <Button size="sm" variant="outline" className="border-orange-200 text-orange-700" onClick={() => viewStoreDetail(s.id)}><Edit2 size={14} /></Button>
                                                                         <Button size="sm" variant="destructive" onClick={() => deleteStore(s.id)}><Trash2 size={14} /></Button>
-                                                                        <Button size="sm" variant="secondary" disabled={storeStatusUpdating === s.id} onClick={() => toggleStoreManagerStatus(s)}>
+                                                                        <Button size="sm" variant="secondary" className="bg-orange-100 text-orange-800 border border-orange-200" disabled={storeStatusUpdating === s.id} onClick={() => toggleStoreManagerStatus(s)}>
                                                                             {storeStatusUpdating === s.id ? 'Đang xử lý...' : (active ? 'Khóa' : 'Mở')}
                                                                         </Button>
                                                                     </td>
@@ -1096,20 +1120,20 @@ const Admin: React.FC = () => {
                                     </>
                                 ) : (
                                     <div className="space-y-4">
-                                        <div className="flex gap-2"><div className="relative flex-1"><Search className="absolute left-2 top-2.5 text-gray-400" size={16} /><input className="pl-8 border p-2 rounded-lg w-full text-sm" placeholder="Tìm kiếm đơn..." value={applicationsSearch} onChange={e => setApplicationsSearch(e.target.value)} /></div><Button onClick={() => loadStoreApplications(1, applicationsSearch)}>Tìm</Button></div>
-                                        <Card className="border-0 shadow-sm overflow-hidden"><CardContent className="p-0">
+                                        <div className="flex gap-2"><div className="relative flex-1"><Search className="absolute left-2 top-2.5 text-gray-400" size={16} /><input className="pl-8 border border-orange-200 p-2 rounded-lg w-full text-sm bg-white" placeholder="Tìm kiếm đơn..." value={applicationsSearch} onChange={e => setApplicationsSearch(e.target.value)} /></div><Button className="bg-orange-600 hover:bg-orange-700" onClick={() => loadStoreApplications(1, applicationsSearch)}>Tìm</Button></div>
+                                        <Card className="border border-orange-100 shadow-sm overflow-hidden bg-white"><CardContent className="p-0">
                                             <table className="w-full text-sm text-left">
-                                                <thead className="bg-gray-50 border-b uppercase text-xs text-gray-500"><tr><th className="p-4">User</th><th className="p-4">Họ tên</th><th className="p-4">Email/SĐT</th><th className="p-4">Địa chỉ</th><th className="p-4">Ngày ĐK</th><th className="p-4 text-right">Thao tác</th></tr></thead>
-                                                <tbody className="divide-y">
+                                                <thead className="bg-orange-50 border-b border-orange-100 uppercase text-xs text-amber-700"><tr><th className="p-4">User</th><th className="p-4">Họ tên</th><th className="p-4">Email/SĐT</th><th className="p-4">Địa chỉ</th><th className="p-4">Ngày ĐK</th><th className="p-4 text-right">Thao tác</th></tr></thead>
+                                                <tbody className="divide-y divide-orange-50">
                                                     {applications.map(app => (
-                                                        <tr key={app.id} className="hover:bg-gray-50">
+                                                        <tr key={app.id} className="hover:bg-orange-50">
                                                             <td className="p-4"><div className="font-bold">{app.username}</div><div className="text-xs text-gray-400">ID: {app.id}</div></td>
                                                             <td className="p-4 font-medium">{app.fullname}</td>
                                                             <td className="p-4"><div>{app.email}</div><div className="text-xs text-gray-500">{app.phone_number}</div></td>
                                                             <td className="p-4 max-w-xs truncate">{app.address}</td>
                                                             <td className="p-4 text-xs text-gray-500">{new Date(app.created_date).toLocaleDateString()}</td>
                                                             <td className="p-4 flex justify-end gap-2">
-                                                                <Button size="sm" className="bg-green-600 hover:bg-green-700" onClick={() => handleApproveApplication(app.id)}><CheckCircle size={14} className="mr-1" /> Duyệt</Button>
+                                                                <Button size="sm" className="bg-orange-600 hover:bg-orange-700" onClick={() => handleApproveApplication(app.id)}><CheckCircle size={14} className="mr-1" /> Duyệt</Button>
                                                                 <Button size="sm" variant="destructive" onClick={() => handleRejectApplication(app.id)}><X size={14} className="mr-1" /> Từ chối</Button>
                                                             </td>
                                                         </tr>
@@ -1128,38 +1152,38 @@ const Admin: React.FC = () => {
                         {activeSection === 'shippers' && (
                             <div className="animate-in fade-in space-y-4">
                                 <div className="flex justify-between items-center">
-                                    <div className="flex bg-gray-100 p-1 rounded-lg">
-                                        <button onClick={() => { setShipperViewMode('list'); loadShippers(1, shipperSearch); }} className={cn("px-4 py-1.5 rounded-md text-sm font-medium transition-all", shipperViewMode === 'list' ? "bg-white shadow text-gray-900" : "text-gray-500")}>Danh sách</button>
-                                        <button onClick={() => { setShipperViewMode('applications'); loadShipperApplications(1, shipperAppSearch); }} className={cn("px-4 py-1.5 rounded-md text-sm font-medium transition-all", shipperViewMode === 'applications' ? "bg-white shadow text-gray-900" : "text-gray-500")}>Đơn đăng ký</button>
+                                    <div className="flex bg-orange-50 p-1 rounded-lg border border-orange-100">
+                                        <button onClick={() => { setShipperViewMode('list'); loadShippers(1, shipperSearch); }} className={cn("px-4 py-1.5 rounded-md text-sm font-medium transition-all", shipperViewMode === 'list' ? "bg-white shadow text-[#391713]" : "text-amber-700/80")}>Danh sách</button>
+                                        <button onClick={() => { setShipperViewMode('applications'); loadShipperApplications(1, shipperAppSearch); }} className={cn("px-4 py-1.5 rounded-md text-sm font-medium transition-all", shipperViewMode === 'applications' ? "bg-white shadow text-[#391713]" : "text-amber-700/80")}>Đơn đăng ký</button>
                                     </div>
                                     {shipperViewMode === 'list' ? (
                                         <div className="flex gap-2 items-center">
                                             <div className="relative">
                                                 <Search className="absolute left-2 top-2.5 text-gray-400" size={16} />
-                                                <input className="pl-8 border p-2 rounded-lg w-64 text-sm" placeholder="Tìm shipper..." value={shipperSearch} onChange={e => setShipperSearch(e.target.value)} />
+                                                <input className="pl-8 border border-orange-200 p-2 rounded-lg w-64 text-sm bg-white" placeholder="Tìm shipper..." value={shipperSearch} onChange={e => setShipperSearch(e.target.value)} />
                                             </div>
-                                            <Button onClick={() => loadShippers(1, shipperSearch)}>Tìm</Button>
+                                            <Button className="bg-orange-600 hover:bg-orange-700" onClick={() => loadShippers(1, shipperSearch)}>Tìm</Button>
                                         </div>
                                     ) : (
                                         <div className="flex gap-2 items-center w-full max-w-md">
                                             <div className="relative flex-1">
                                                 <Search className="absolute left-2 top-2.5 text-gray-400" size={16} />
-                                                <input className="pl-8 border p-2 rounded-lg w-full text-sm" placeholder="Tìm đơn đăng ký..." value={shipperAppSearch} onChange={e => setShipperAppSearch(e.target.value)} />
+                                                <input className="pl-8 border border-orange-200 p-2 rounded-lg w-full text-sm bg-white" placeholder="Tìm đơn đăng ký..." value={shipperAppSearch} onChange={e => setShipperAppSearch(e.target.value)} />
                                             </div>
-                                            <Button onClick={() => loadShipperApplications(1, shipperAppSearch)}>Tìm</Button>
+                                            <Button className="bg-orange-600 hover:bg-orange-700" onClick={() => loadShipperApplications(1, shipperAppSearch)}>Tìm</Button>
                                         </div>
                                     )}
                                 </div>
 
                                 {shipperViewMode === 'list' ? (
                                     <>
-                                        <Card className="border-0 shadow-sm overflow-hidden"><CardContent className="p-0">
+                                        <Card className="border border-orange-100 shadow-sm overflow-hidden bg-white"><CardContent className="p-0">
                                             <table className="w-full text-sm text-left">
-                                                <thead className="bg-gray-50 border-b uppercase text-xs text-gray-500"><tr><th className="p-4">ID</th><th className="p-4">Username</th><th className="p-4">Họ tên</th><th className="p-4">Email</th><th className="p-4">SĐT</th><th className="p-4">Trạng thái</th><th className="p-4">Ngày tạo</th><th className="p-4 text-right">Hành động</th></tr></thead>
-                                                <tbody className="divide-y">
+                                                <thead className="bg-orange-50 border-b border-orange-100 uppercase text-xs text-amber-700"><tr><th className="p-4">ID</th><th className="p-4">Username</th><th className="p-4">Họ tên</th><th className="p-4">Email</th><th className="p-4">SĐT</th><th className="p-4">Trạng thái</th><th className="p-4">Ngày tạo</th><th className="p-4 text-right">Hành động</th></tr></thead>
+                                                <tbody className="divide-y divide-orange-50">
                                                     {shippers.map(shipper => (
-                                                        <tr key={`${shipper.user_id || shipper.id}`} className="hover:bg-gray-50">
-                                                            <td className="p-4 font-mono">{shipper.id}</td>
+                                                        <tr key={`${shipper.user_id || shipper.id}`} className="hover:bg-orange-50">
+                                                            <td className="p-4 font-mono text-amber-800">{shipper.id}</td>
                                                             <td className="p-4 font-medium">{shipper.username || shipper.email || '-'}</td>
                                                             <td className="p-4">{shipper.fullname || '-'}</td>
                                                             <td className="p-4">{shipper.email || '-'}</td>
@@ -1171,32 +1195,32 @@ const Admin: React.FC = () => {
                                                             </td>
                                                             <td className="p-4 text-xs text-gray-500">{shipper.created_date ? new Date(shipper.created_date).toLocaleDateString() : '-'}</td>
                                                             <td className="p-4 text-right">
-                                                                <Button size="sm" variant="outline" disabled={shipperStatusUpdating === (shipper.user_id || shipper.id)} onClick={() => handleToggleShipperStatus(shipper.user_id || shipper.id)}>
+                                                                <Button size="sm" variant="outline" className="border-orange-200 text-orange-700" disabled={shipperStatusUpdating === (shipper.user_id || shipper.id)} onClick={() => handleToggleShipperStatus(shipper.user_id || shipper.id)}>
                                                                     {shipperStatusUpdating === (shipper.user_id || shipper.id) ? 'Đang xử lý...' : shipper.is_active ? 'Khóa' : 'Mở khóa'}
                                                                 </Button>
                                                             </td>
                                                         </tr>
                                                     ))}
                                                     {shippers.length === 0 && (
-                                                        <tr><td colSpan={8} className="p-8 text-center text-gray-500">{shipperListLoading ? 'Đang tải...' : 'Chưa có shipper nào.'}</td></tr>
+                                                        <tr><td colSpan={8} className="p-8 text-center text-amber-700">{shipperListLoading ? 'Đang tải...' : 'Chưa có shipper nào.'}</td></tr>
                                                     )}
                                                 </tbody>
                                             </table>
                                         </CardContent></Card>
                                         <div className="flex justify-between items-center">
-                                            <div className="text-sm text-gray-500">Tổng: {totalShippers} shipper</div>
+                                            <div className="text-sm text-amber-700">Tổng: {totalShippers} shipper</div>
                                             <PaginationControl page={shipperListPage} totalPages={totalShipperListPages} onPageChange={(p) => loadShippers(p, shipperSearch)} />
                                         </div>
                                     </>
                                 ) : (
                                     <div className="space-y-3">
-                                        <Card className="border-0 shadow-sm overflow-hidden"><CardContent className="p-0">
+                                        <Card className="border border-orange-100 shadow-sm overflow-hidden bg-white"><CardContent className="p-0">
                                             <table className="w-full text-sm text-left">
-                                                <thead className="bg-gray-50 border-b uppercase text-xs text-gray-500"><tr><th className="p-4">ID</th><th className="p-4">Username</th><th className="p-4">Họ tên</th><th className="p-4">Email</th><th className="p-4">SĐT</th><th className="p-4">Địa chỉ</th><th className="p-4">Ngày đăng ký</th><th className="p-4 text-right">Hành động</th></tr></thead>
-                                                <tbody className="divide-y">
+                                                <thead className="bg-orange-50 border-b border-orange-100 uppercase text-xs text-amber-700"><tr><th className="p-4">ID</th><th className="p-4">Username</th><th className="p-4">Họ tên</th><th className="p-4">Email</th><th className="p-4">SĐT</th><th className="p-4">Địa chỉ</th><th className="p-4">Ngày đăng ký</th><th className="p-4 text-right">Hành động</th></tr></thead>
+                                                <tbody className="divide-y divide-orange-50">
                                                     {shipperApps.map(app => (
-                                                        <tr key={app.id} className="hover:bg-gray-50">
-                                                            <td className="p-4 font-mono">{app.id}</td>
+                                                        <tr key={app.id} className="hover:bg-orange-50">
+                                                            <td className="p-4 font-mono text-amber-800">{app.id}</td>
                                                             <td className="p-4 font-medium">{app.username}</td>
                                                             <td className="p-4">{app.fullname}</td>
                                                             <td className="p-4">{app.email || '-'}</td>
@@ -1204,12 +1228,12 @@ const Admin: React.FC = () => {
                                                             <td className="p-4 max-w-xs truncate">{(app as any).address || '-'}</td>
                                                             <td className="p-4 text-xs text-gray-500">{(app as any).created_date ? new Date((app as any).created_date).toLocaleDateString() : '-'}</td>
                                                             <td className="p-4 flex justify-end gap-2">
-                                                                <Button size="sm" className="bg-green-600 hover:bg-green-700" onClick={() => handleApproveShipper(app.id)}>Duyệt</Button>
+                                                                <Button size="sm" className="bg-orange-600 hover:bg-orange-700" onClick={() => handleApproveShipper(app.id)}>Duyệt</Button>
                                                                 <Button size="sm" variant="destructive" onClick={() => handleRejectShipper(app.id)}>Từ chối</Button>
                                                             </td>
                                                         </tr>
                                                     ))}
-                                                    {shipperApps.length === 0 && <tr><td colSpan={8} className="p-8 text-center text-gray-500">{shipperLoading ? 'Đang tải...' : 'Không có đơn nào.'}</td></tr>}
+                                                    {shipperApps.length === 0 && <tr><td colSpan={8} className="p-8 text-center text-amber-700">{shipperLoading ? 'Đang tải...' : 'Không có đơn nào.'}</td></tr>}
                                                 </tbody>
                                             </table>
                                         </CardContent></Card>
@@ -1223,28 +1247,28 @@ const Admin: React.FC = () => {
                         {/* 4. CUSTOMERS */}
                         {activeSection === 'customers' && (
                             <div className="animate-in fade-in space-y-4">
-                                <div className="flex justify-between items-center"><h2 className="text-xl font-bold">Danh sách Khách hàng</h2><div className="flex gap-2"><input className="border p-2 rounded-lg text-sm" placeholder="Tìm khách..." value={search} onChange={e => setSearch(e.target.value)} /><Button onClick={() => loadCustomers(1, search)}>Tìm</Button></div></div>
-                                <Card className="border-0 shadow-sm overflow-hidden"><CardContent className="p-0">
+                                <div className="flex justify-between items-center"><h2 className="text-xl font-bold text-[#391713]">Danh sách Khách hàng</h2><div className="flex gap-2"><input className="border border-orange-200 p-2 rounded-lg text-sm bg-white" placeholder="Tìm khách..." value={search} onChange={e => setSearch(e.target.value)} /><Button className="bg-orange-600 hover:bg-orange-700" onClick={() => loadCustomers(1, search)}>Tìm</Button></div></div>
+                                <Card className="border border-orange-100 shadow-sm overflow-hidden bg-white"><CardContent className="p-0">
                                     <table className="w-full text-sm text-left">
-                                        <thead className="bg-gray-50 border-b uppercase text-xs text-gray-500"><tr><th className="p-4">ID</th><th className="p-4">Họ tên</th><th className="p-4">Email</th><th className="p-4">SĐT</th><th className="p-4">Vai trò</th><th className="p-4">Trạng thái</th><th className="p-4 text-right">Hành động</th></tr></thead>
-                                        <tbody className="divide-y">
+                                        <thead className="bg-orange-50 border-b border-orange-100 uppercase text-xs text-amber-700"><tr><th className="p-4">ID</th><th className="p-4">Họ tên</th><th className="p-4">Email</th><th className="p-4">SĐT</th><th className="p-4">Vai trò</th><th className="p-4">Trạng thái</th><th className="p-4 text-right">Hành động</th></tr></thead>
+                                        <tbody className="divide-y divide-orange-50">
                                             {customers.map(c => {
                                                 const active = c.is_active !== false;
                                                 return (
-                                                    <tr key={c.id} className="hover:bg-gray-50">
-                                                        <td className="p-4 text-gray-500">{c.id}</td>
-                                                        <td className="p-4 font-medium">{c.fullname}</td>
+                                                    <tr key={c.id} className="hover:bg-orange-50">
+                                                        <td className="p-4 text-amber-800 font-mono">{c.id}</td>
+                                                        <td className="p-4 font-medium text-[#391713]">{c.fullname}</td>
                                                         <td className="p-4">{c.email}</td>
                                                         <td className="p-4">{c.phone_number}</td>
-                                                        <td className="p-4"><span className="bg-gray-100 text-xs px-2 py-1 rounded">{c.role}</span></td>
+                                                        <td className="p-4"><span className="bg-orange-50 text-orange-800 text-xs px-2 py-1 rounded border border-orange-100">{c.role}</span></td>
                                                         <td className="p-4">
                                                             <span className={`text-xs px-2 py-1 rounded ${active ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
                                                                 {active ? 'Hoạt động' : 'Đã khóa'}
                                                             </span>
                                                         </td>
                                                         <td className="p-4 text-right flex justify-end gap-2">
-                                                            <Button size="sm" variant="ghost" onClick={() => viewCustomerDetail(c.id)}><Eye size={16} /></Button>
-                                                            <Button size="sm" variant="outline" disabled={customerStatusUpdating === c.id} onClick={() => toggleCustomerStatus(c.id)}>
+                                                            <Button size="sm" variant="ghost" className="text-orange-700 hover:bg-orange-50" onClick={() => viewCustomerDetail(c.id)}><Eye size={16} /></Button>
+                                                            <Button size="sm" variant="outline" className="border-orange-200 text-orange-700" disabled={customerStatusUpdating === c.id} onClick={() => toggleCustomerStatus(c.id)}>
                                                                 {customerStatusUpdating === c.id ? 'Đang xử lý...' : (active ? 'Khóa' : 'Mở')}
                                                             </Button>
                                                         </td>
@@ -1256,7 +1280,7 @@ const Admin: React.FC = () => {
                                 </CardContent></Card>
                                 {/* PAGINATION FOR CUSTOMERS */}
                                 <div className="flex justify-between items-center mt-2">
-                                    <div className="text-sm text-gray-500">Tổng: {totalCustomers} khách hàng</div>
+                                    <div className="text-sm text-amber-700">Tổng: {totalCustomers} khách hàng</div>
                                     <div className="flex-1">
                                         <PaginationControl page={currentPage} totalPages={totalPages} onPageChange={(p) => loadCustomers(p, search)} />
                                     </div>
@@ -1267,31 +1291,31 @@ const Admin: React.FC = () => {
                         {/* 5. FOODS */}
                         {activeSection === 'foods' && (
                             <div className="animate-in fade-in space-y-4">
-                                <div className="flex justify-between items-center"><h2 className="text-xl font-bold">Quản lý Món ăn hệ thống</h2><Button onClick={() => setShowAddFoodModal(true)} className="bg-blue-600"><Plus size={16} className="mr-2" /> Thêm món</Button></div>
+                                <div className="flex justify-between items-center"><h2 className="text-xl font-bold text-[#391713]">Quản lý Món ăn hệ thống</h2><Button onClick={() => setShowAddFoodModal(true)} className="bg-orange-600 hover:bg-orange-700"><Plus size={16} className="mr-2" /> Thêm món</Button></div>
 
                                 {/* Filters */}
-                                <div className="bg-white p-3 rounded-xl border shadow-sm flex flex-wrap gap-3">
-                                    <input className="border p-2 rounded-lg text-sm flex-1" placeholder="Tìm tên món..." value={foodSearch} onChange={e => setFoodSearch(e.target.value)} />
-                                    <select className="border p-2 rounded-lg text-sm" value={categoryFilter} onChange={e => setCategoryFilter(e.target.value)}><option value="">Tất cả danh mục</option>{categories.map(c => <option key={c.id} value={c.id}>{c.cate_name}</option>)}</select>
-                                    <select className="border p-2 rounded-lg text-sm" value={storeFilter} onChange={e => setStoreFilter(e.target.value)}><option value="">Tất cả cửa hàng</option>{stores.map(s => <option key={s.id} value={s.id}>{s.store_name}</option>)}</select>
-                                    <Button onClick={() => loadFoods(1)}>Lọc</Button>
+                                <div className="bg-white p-3 rounded-xl border border-orange-100 shadow-sm flex flex-wrap gap-3">
+                                    <input className="border border-orange-200 p-2 rounded-lg text-sm flex-1 bg-white" placeholder="Tìm tên món..." value={foodSearch} onChange={e => setFoodSearch(e.target.value)} />
+                                    <select className="border border-orange-200 p-2 rounded-lg text-sm bg-white" value={categoryFilter} onChange={e => setCategoryFilter(e.target.value)}><option value="">Tất cả danh mục</option>{categories.map(c => <option key={c.id} value={c.id}>{c.cate_name}</option>)}</select>
+                                    <select className="border border-orange-200 p-2 rounded-lg text-sm bg-white" value={storeFilter} onChange={e => setStoreFilter(e.target.value)}><option value="">Tất cả cửa hàng</option>{stores.map(s => <option key={s.id} value={s.id}>{s.store_name}</option>)}</select>
+                                    <Button className="bg-orange-600 hover:bg-orange-700" onClick={() => loadFoods(1)}>Lọc</Button>
                                 </div>
 
-                                <Card className="border-0 shadow-sm overflow-hidden"><CardContent className="p-0">
+                                <Card className="border border-orange-100 shadow-sm overflow-hidden bg-white"><CardContent className="p-0">
                                     <table className="w-full text-sm text-left">
-                                        <thead className="bg-gray-50 border-b uppercase text-xs text-gray-500"><tr><th className="p-4">ID</th><th className="p-4">Ảnh</th><th className="p-4">Tên</th><th className="p-4">Giá</th><th className="p-4">Cửa hàng</th><th className="p-4">TT</th><th className="p-4 text-center">Size</th><th className="p-4 text-right">Hành động</th></tr></thead>
-                                        <tbody className="divide-y">
+                                        <thead className="bg-orange-50 border-b border-orange-100 uppercase text-xs text-amber-700"><tr><th className="p-4">ID</th><th className="p-4">Ảnh</th><th className="p-4">Tên</th><th className="p-4">Giá</th><th className="p-4">Cửa hàng</th><th className="p-4">TT</th><th className="p-4 text-center">Size</th><th className="p-4 text-right">Hành động</th></tr></thead>
+                                        <tbody className="divide-y divide-orange-50">
                                             {foods.map(f => (
-                                                <tr key={f.id} className="hover:bg-gray-50">
-                                                    <td className="p-4 text-gray-500">{f.id}</td>
-                                                    <td className="p-4"><img src={getImageUrl(f.image)} className="w-10 h-10 rounded border object-cover" /></td>
-                                                    <td className="p-4 font-medium">{f.title}</td>
-                                                    <td className="p-4 text-blue-600 font-bold">{formatCurrency(f.price)}</td>
-                                                    <td className="p-4 text-xs">{f.store?.store_name}</td>
+                                                <tr key={f.id} className="hover:bg-orange-50">
+                                                    <td className="p-4 text-amber-800 font-mono">{f.id}</td>
+                                                    <td className="p-4"><img src={getImageUrl(f.image)} className="w-10 h-10 rounded border border-orange-100 object-cover" /></td>
+                                                    <td className="p-4 font-medium text-[#391713]">{f.title}</td>
+                                                    <td className="p-4 text-orange-700 font-bold">{formatCurrency(f.price)}</td>
+                                                    <td className="p-4 text-xs text-amber-900/80">{f.store?.store_name}</td>
                                                     <td className="p-4"><span className={`text-xs px-2 py-1 rounded ${f.availability === 'Còn hàng' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>{f.availability}</span></td>
-                                                    <td className="p-4 text-center"><Button size="sm" variant="ghost" className="h-7 text-xs border" onClick={() => openManageSizesModal(f)}>Size</Button></td>
+                                                    <td className="p-4 text-center"><Button size="sm" variant="ghost" className="h-7 text-xs border border-orange-200 text-orange-700 hover:bg-orange-50" onClick={() => openManageSizesModal(f)}>Size</Button></td>
                                                     <td className="p-4 flex justify-end gap-2">
-                                                        <Button size="sm" variant="outline" className="h-8 w-8 p-0" onClick={() => viewFoodDetail(f.id)}><Edit2 size={14} /></Button>
+                                                        <Button size="sm" variant="outline" className="h-8 w-8 p-0 border-orange-200 text-orange-700" onClick={() => viewFoodDetail(f.id)}><Edit2 size={14} /></Button>
                                                         <Button size="sm" variant="destructive" className="h-8 w-8 p-0" onClick={() => deleteFood(f.id)}><Trash2 size={14} /></Button>
                                                     </td>
                                                 </tr>
@@ -1307,24 +1331,24 @@ const Admin: React.FC = () => {
                         {/* 6. ORDERS */}
                         {activeSection === 'orders' && (
                             <div className="animate-in fade-in space-y-4">
-                                <h2 className="text-xl font-bold">Quản lý Đơn hàng toàn hệ thống</h2>
-                                <div className="bg-white p-3 rounded-xl border shadow-sm flex gap-3">
-                                    <input className="border p-2 rounded-lg text-sm flex-1" placeholder="Mã đơn / Tên khách..." value={orderSearch} onChange={e => setOrderSearch(e.target.value)} />
-                                    <select className="border p-2 rounded-lg text-sm" value={orderStatus} onChange={e => setOrderStatus(e.target.value)}><option value="">Tất cả trạng thái</option><option value="Chờ xác nhận">Chờ xác nhận</option><option value="Đã xác nhận">Đã xác nhận</option><option value="Đang giao">Đang giao</option><option value="Đã giao">Đã giao</option></select>
-                                    <Button onClick={() => loadOrders(1)}>Lọc</Button>
+                                <h2 className="text-xl font-bold text-[#391713]">Quản lý Đơn hàng toàn hệ thống</h2>
+                                <div className="bg-white p-3 rounded-xl border border-orange-100 shadow-sm flex gap-3">
+                                    <input className="border border-orange-200 p-2 rounded-lg text-sm flex-1 bg-white" placeholder="Mã đơn / Tên khách..." value={orderSearch} onChange={e => setOrderSearch(e.target.value)} />
+                                    <select className="border border-orange-200 p-2 rounded-lg text-sm bg-white" value={orderStatus} onChange={e => setOrderStatus(e.target.value)}><option value="">Tất cả trạng thái</option><option value="Chờ xác nhận">Chờ xác nhận</option><option value="Đã xác nhận">Đã xác nhận</option><option value="Đang giao">Đang giao</option><option value="Đã giao">Đã giao</option></select>
+                                    <Button className="bg-orange-600 hover:bg-orange-700" onClick={() => loadOrders(1)}>Lọc</Button>
                                 </div>
-                                <Card className="border-0 shadow-sm overflow-hidden"><CardContent className="p-0">
+                                <Card className="border border-orange-100 shadow-sm overflow-hidden bg-white"><CardContent className="p-0">
                                     <table className="w-full text-sm text-left">
-                                        <thead className="bg-gray-50 border-b uppercase text-xs text-gray-500"><tr><th className="p-4">ID</th><th className="p-4">Khách hàng</th><th className="p-4">Tổng tiền</th><th className="p-4">Trạng thái</th><th className="p-4">Ngày tạo</th><th className="p-4 text-right">Chi tiết</th></tr></thead>
-                                        <tbody className="divide-y">
+                                        <thead className="bg-orange-50 border-b border-orange-100 uppercase text-xs text-amber-700"><tr><th className="p-4">ID</th><th className="p-4">Khách hàng</th><th className="p-4">Tổng tiền</th><th className="p-4">Trạng thái</th><th className="p-4">Ngày tạo</th><th className="p-4 text-right">Chi tiết</th></tr></thead>
+                                        <tbody className="divide-y divide-orange-50">
                                             {orders.map(o => (
-                                                <tr key={o.id} className="hover:bg-gray-50">
-                                                    <td className="p-4 font-mono font-bold text-blue-600">#{o.id}</td>
-                                                    <td className="p-4 font-medium">{o.user.fullname}</td>
-                                                    <td className="p-4 font-bold">{formatCurrency(o.total_money)}</td>
+                                                <tr key={o.id} className="hover:bg-orange-50">
+                                                    <td className="p-4 font-mono font-bold text-orange-700">#{o.id}</td>
+                                                    <td className="p-4 font-medium text-[#391713]">{o.user.fullname}</td>
+                                                    <td className="p-4 font-bold text-orange-700">{formatCurrency(o.total_money)}</td>
                                                     <td className="p-4"><span className={cn("px-2 py-1 text-xs rounded-full border", getStatusColor(o.order_status))}>{o.order_status}</span></td>
                                                     <td className="p-4 text-xs text-gray-500">{new Date(o.created_date).toLocaleDateString()}</td>
-                                                    <td className="p-4 text-right"><Button size="sm" variant="outline" onClick={() => viewOrderDetail(o.id)}>Xem</Button></td>
+                                                    <td className="p-4 text-right"><Button size="sm" variant="outline" className="border-orange-200 text-orange-700" onClick={() => viewOrderDetail(o.id)}>Xem</Button></td>
                                                 </tr>
                                             ))}
                                         </tbody>
@@ -1338,22 +1362,22 @@ const Admin: React.FC = () => {
                         {/* 7. PROMOTIONS */}
                         {activeSection === 'promotions' && (
                             <div className="animate-in fade-in space-y-4">
-                                <div className="flex justify-between items-center"><h2 className="text-xl font-bold">Khuyến mãi Hệ thống</h2><Button onClick={() => setShowAddPromoModal(true)} className="bg-blue-600"><Plus size={16} className="mr-2" /> Tạo KM</Button></div>
-                                <Card className="border-0 shadow-sm overflow-hidden"><CardContent className="p-0">
+                                <div className="flex justify-between items-center"><h2 className="text-xl font-bold text-[#391713]">Khuyến mãi Hệ thống</h2><Button onClick={() => setShowAddPromoModal(true)} className="bg-orange-600 hover:bg-orange-700"><Plus size={16} className="mr-2" /> Tạo KM</Button></div>
+                                <Card className="border border-orange-100 shadow-sm overflow-hidden bg-white"><CardContent className="p-0">
                                     <table className="w-full text-sm text-left">
-                                        <thead className="bg-gray-50 border-b uppercase text-xs text-gray-500"><tr><th className="p-4">ID</th><th className="p-4">Tên</th><th className="p-4">Loại</th><th className="p-4">Giá trị</th><th className="p-4">Hiệu lực</th><th className="p-4">Trạng thái</th><th className="p-4 text-right">Hành động</th></tr></thead>
-                                        <tbody className="divide-y">
+                                        <thead className="bg-orange-50 border-b border-orange-100 uppercase text-xs text-amber-700"><tr><th className="p-4">ID</th><th className="p-4">Tên</th><th className="p-4">Loại</th><th className="p-4">Giá trị</th><th className="p-4">Hiệu lực</th><th className="p-4">Trạng thái</th><th className="p-4 text-right">Hành động</th></tr></thead>
+                                        <tbody className="divide-y divide-orange-50">
                                             {promotions.map(p => (
-                                                <tr key={p.id} className="hover:bg-gray-50">
-                                                    <td className="p-4">{p.id}</td>
-                                                    <td className="p-4 font-medium">{p.name}</td>
+                                                <tr key={p.id} className="hover:bg-orange-50">
+                                                    <td className="p-4 text-amber-800 font-mono">{p.id}</td>
+                                                    <td className="p-4 font-medium text-[#391713]">{p.name}</td>
                                                     <td className="p-4 text-xs">{p.discount_type}</td>
-                                                    <td className="p-4 font-bold text-blue-600">{p.discount_type === 'PERCENT' ? `${p.discount_value}%` : formatCurrency(p.discount_value)}</td>
+                                                    <td className="p-4 font-bold text-orange-700">{p.discount_type === 'PERCENT' ? `${p.discount_value}%` : formatCurrency(p.discount_value)}</td>
                                                     <td className="p-4 text-xs">{new Date(p.start_date).toLocaleDateString()} - {new Date(p.end_date).toLocaleDateString()}</td>
                                                     <td className="p-4"><span className={`text-xs px-2 py-1 rounded ${p.is_active ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>{p.is_active ? 'Active' : 'Paused'}</span></td>
                                                     <td className="p-4 flex justify-end gap-2">
-                                                        <Button size="sm" variant="ghost" onClick={() => openEditPromoModal(p)}><Edit2 size={14} /></Button>
-                                                        <Button size="sm" variant="ghost" className="text-red-500" onClick={() => deletePromo(p.id)}><Trash2 size={14} /></Button>
+                                                        <Button size="sm" variant="ghost" className="text-orange-700 hover:bg-orange-50" onClick={() => openEditPromoModal(p)}><Edit2 size={14} /></Button>
+                                                        <Button size="sm" variant="ghost" className="text-red-500 hover:bg-red-50" onClick={() => deletePromo(p.id)}><Trash2 size={14} /></Button>
                                                     </td>
                                                 </tr>
                                             ))}
@@ -1366,21 +1390,21 @@ const Admin: React.FC = () => {
                         {/* 8. REPORTS */}
                         {(activeSection === 'revenueReport' || activeSection === 'popularFoodsReport') && (
                             <div className="animate-in fade-in space-y-4">
-                                <h2 className="text-xl font-bold">{activeSection === 'revenueReport' ? 'Báo cáo Doanh thu' : 'Báo cáo Món bán chạy'}</h2>
-                                <Card className="border shadow-sm"><CardContent className="p-4 flex flex-wrap gap-4 items-end">
+                                <h2 className="text-xl font-bold text-[#391713]">{activeSection === 'revenueReport' ? 'Báo cáo Doanh thu' : 'Báo cáo Món bán chạy'}</h2>
+                                <Card className="border border-orange-100 shadow-sm bg-white"><CardContent className="p-4 flex flex-wrap gap-4 items-end">
                                     {activeSection === 'revenueReport' ? (
                                         <>
-                                            <div className="flex-1 min-w-[150px]"><label className="text-xs text-gray-500 block mb-1">Từ ngày</label><input type="date" value={reportFilters.start_date} onChange={e => setReportFilters({ ...reportFilters, start_date: e.target.value })} className="w-full border p-2 rounded text-sm" /></div>
-                                            <div className="flex-1 min-w-[150px]"><label className="text-xs text-gray-500 block mb-1">Đến ngày</label><input type="date" value={reportFilters.end_date} onChange={e => setReportFilters({ ...reportFilters, end_date: e.target.value })} className="w-full border p-2 rounded text-sm" /></div>
-                                            <div className="flex-1 min-w-[150px]"><label className="text-xs text-gray-500 block mb-1">Loại</label><select value={reportFilters.period} onChange={e => setReportFilters({ ...reportFilters, period: e.target.value })} className="w-full border p-2 rounded text-sm"><option value="daily">Ngày</option><option value="monthly">Tháng</option></select></div>
-                                            <Button onClick={loadRevenueReport}>Xem Báo Cáo</Button>
+                                            <div className="flex-1 min-w-[150px]"><label className="text-xs text-amber-700 block mb-1">Từ ngày</label><input type="date" value={reportFilters.start_date} onChange={e => setReportFilters({ ...reportFilters, start_date: e.target.value })} className="w-full border border-orange-200 p-2 rounded text-sm bg-white" /></div>
+                                            <div className="flex-1 min-w-[150px]"><label className="text-xs text-amber-700 block mb-1">Đến ngày</label><input type="date" value={reportFilters.end_date} onChange={e => setReportFilters({ ...reportFilters, end_date: e.target.value })} className="w-full border border-orange-200 p-2 rounded text-sm bg-white" /></div>
+                                            <div className="flex-1 min-w-[150px]"><label className="text-xs text-amber-700 block mb-1">Loại</label><select value={reportFilters.period} onChange={e => setReportFilters({ ...reportFilters, period: e.target.value })} className="w-full border border-orange-200 p-2 rounded text-sm bg-white"><option value="day">Ngày</option><option value="month">Tháng</option></select></div>
+                                            <Button className="bg-orange-600 hover:bg-orange-700" onClick={loadRevenueReport}>Xem Báo Cáo</Button>
                                         </>
                                     ) : (
                                         <>
-                                            <div className="flex-1 min-w-[150px]"><label className="text-xs text-gray-500 block mb-1">Từ ngày</label><input type="date" value={popularFoodsFilters.start_date} onChange={e => setPopularFoodsFilters({ ...popularFoodsFilters, start_date: e.target.value })} className="w-full border p-2 rounded text-sm" /></div>
-                                            <div className="flex-1 min-w-[150px]"><label className="text-xs text-gray-500 block mb-1">Đến ngày</label><input type="date" value={popularFoodsFilters.end_date} onChange={e => setPopularFoodsFilters({ ...popularFoodsFilters, end_date: e.target.value })} className="w-full border p-2 rounded text-sm" /></div>
-                                            <div className="w-24"><label className="text-xs text-gray-500 block mb-1">Top</label><input type="number" value={popularFoodsFilters.limit} onChange={e => setPopularFoodsFilters({ ...popularFoodsFilters, limit: e.target.value })} className="w-full border p-2 rounded text-sm" /></div>
-                                            <Button onClick={loadPopularFoodsReport}>Xem</Button>
+                                            <div className="flex-1 min-w-[150px]"><label className="text-xs text-amber-700 block mb-1">Từ ngày</label><input type="date" value={popularFoodsFilters.start_date} onChange={e => setPopularFoodsFilters({ ...popularFoodsFilters, start_date: e.target.value })} className="w-full border border-orange-200 p-2 rounded text-sm bg-white" /></div>
+                                            <div className="flex-1 min-w-[150px]"><label className="text-xs text-amber-700 block mb-1">Đến ngày</label><input type="date" value={popularFoodsFilters.end_date} onChange={e => setPopularFoodsFilters({ ...popularFoodsFilters, end_date: e.target.value })} className="w-full border border-orange-200 p-2 rounded text-sm bg-white" /></div>
+                                            <div className="w-24"><label className="text-xs text-amber-700 block mb-1">Top</label><input type="number" value={popularFoodsFilters.limit} onChange={e => setPopularFoodsFilters({ ...popularFoodsFilters, limit: e.target.value })} className="w-full border border-orange-200 p-2 rounded text-sm bg-white" /></div>
+                                            <Button className="bg-orange-600 hover:bg-orange-700" onClick={loadPopularFoodsReport}>Xem</Button>
                                         </>
                                     )}
                                 </CardContent></Card>
@@ -1389,20 +1413,30 @@ const Admin: React.FC = () => {
                                 {activeSection === 'revenueReport' && reportData && (
                                     <div className="space-y-4">
                                         <div className="grid grid-cols-2 gap-4">
-                                            <Card className="bg-blue-50 border-blue-200"><CardContent className="p-6 text-center"><p className="text-gray-500 uppercase text-xs">Tổng doanh thu</p><p className="text-2xl font-bold text-blue-700">{formatCurrency(reportData.total_revenue)}</p></CardContent></Card>
-                                            <Card className="bg-green-50 border-green-200"><CardContent className="p-6 text-center"><p className="text-gray-500 uppercase text-xs">Tổng đơn</p><p className="text-2xl font-bold text-green-700">{reportData.total_orders}</p></CardContent></Card>
+                                            <Card className="bg-orange-50 border border-orange-200"><CardContent className="p-6 text-center"><p className="text-amber-700 uppercase text-xs">Tổng doanh thu</p><p className="text-2xl font-bold text-orange-700">{formatCurrency(reportData.summary.total_revenue)}</p></CardContent></Card>
+                                            <Card className="bg-amber-50 border border-orange-200"><CardContent className="p-6 text-center"><p className="text-amber-700 uppercase text-xs">Tổng đơn</p><p className="text-2xl font-bold text-orange-700">{reportData.summary.total_orders}</p></CardContent></Card>
                                         </div>
-                                        <Card className="border-0 shadow-sm overflow-hidden"><CardContent className="p-0">
-                                            <table className="w-full text-sm text-left"><thead className="bg-gray-50 border-b"><tr><th className="p-4">Thời gian</th><th className="p-4">Doanh thu</th><th className="p-4">Đơn hàng</th></tr></thead><tbody>
-                                                {reportData.data.map((d, i) => <tr key={i} className="border-b"><td className="p-4">{new Date(d.date).toLocaleDateString()}</td><td className="p-4 font-bold">{formatCurrency(d.revenue)}</td><td className="p-4">{d.orders}</td></tr>)}
+                                        <Card className="border border-orange-100 shadow-sm overflow-hidden bg-white"><CardContent className="p-0">
+                                            <table className="w-full text-sm text-left"><thead className="bg-orange-50 border-b border-orange-100 text-amber-700"><tr><th className="p-4">Thời gian</th><th className="p-4">Doanh thu</th></tr></thead><tbody>
+                                                {reportData.chart_data.map((d, i) => <tr key={i} className="border-b border-orange-50"><td className="p-4">{new Date(d.date).toLocaleDateString()}</td><td className="p-4 font-bold text-orange-700">{formatCurrency(d.revenue)}</td></tr>)}
                                             </tbody></table>
                                         </CardContent></Card>
                                     </div>
                                 )}
                                 {activeSection === 'popularFoodsReport' && popularFoodsData && (
-                                    <Card className="border-0 shadow-sm overflow-hidden"><CardContent className="p-0">
-                                        <table className="w-full text-sm text-left"><thead className="bg-gray-50 border-b"><tr><th className="p-4">Món</th><th className="p-4">Cửa hàng</th><th className="p-4">SL Bán</th><th className="p-4">Doanh thu</th></tr></thead><tbody>
-                                            {popularFoodsData.foods.map((f, i) => <tr key={i} className="border-b"><td className="p-4 font-medium">{f.food_name}</td><td className="p-4">{f.store_name}</td><td className="p-4">{f.total_quantity}</td><td className="p-4 font-bold">{formatCurrency(f.total_revenue)}</td></tr>)}
+                                    <Card className="border border-orange-100 shadow-sm overflow-hidden bg-white"><CardContent className="p-0">
+                                        <table className="w-full text-sm text-left"><thead className="bg-orange-50 border-b border-orange-100 text-amber-700"><tr><th className="p-4">#</th><th className="p-4">Món</th><th className="p-4">SL Bán</th><th className="p-4">Doanh thu</th></tr></thead><tbody>
+                                            {popularFoodsData.results.map((f) => (
+                                                <tr key={f.rank} className="border-b border-orange-50">
+                                                    <td className="p-4 font-mono text-amber-800">{f.rank}</td>
+                                                    <td className="p-4 flex items-center gap-3">
+                                                        <img src={getImageUrl(f.image || '')} className="w-10 h-10 rounded border border-orange-100 object-cover" />
+                                                        <span className="font-medium text-[#391713]">{f.food_name}</span>
+                                                    </td>
+                                                    <td className="p-4 font-semibold text-orange-700">{f.total_sold}</td>
+                                                    <td className="p-4 font-bold text-orange-700">{formatCurrency(f.revenue_contribution)}</td>
+                                                </tr>
+                                            ))}
                                         </tbody></table>
                                     </CardContent></Card>
                                 )}
@@ -1451,7 +1485,7 @@ const Admin: React.FC = () => {
                                         }, {
                                             label: 'Tổng số đánh giá',
                                             value: storeDetailStats.total_ratings || (storeDetailInfo as any).total_ratings || 0,
-                                            icon: <Users size={16} className="text-blue-500" />,
+                                            icon: <Users size={16} className="text-orange-500" />,
                                         }, {
                                             label: 'Số món',
                                             value: storeDetailStats.food_count || storeDetailFoods.length,
@@ -1476,7 +1510,7 @@ const Admin: React.FC = () => {
                                             <p className="text-sm font-semibold text-gray-700">Danh mục đang bán</p>
                                             <div className="flex flex-wrap gap-2">
                                                 {storeDetailCategories.map((cate) => (
-                                                    <span key={cate} className="px-3 py-1 bg-blue-50 text-blue-700 text-xs rounded-full border border-blue-100">{cate}</span>
+                                                    <span key={cate} className="px-3 py-1 bg-orange-50 text-orange-700 text-xs rounded-full border border-orange-100">{cate}</span>
                                                 ))}
                                             </div>
                                         </div>
@@ -1497,7 +1531,7 @@ const Admin: React.FC = () => {
                                                     <img src={getImageUrl((food as any).image || (food as any).image_url)} alt={food.title} className="w-16 h-16 rounded object-cover border" />
                                                     <div className="flex-1 min-w-0">
                                                         <p className="font-semibold text-gray-800 truncate">{food.title}</p>
-                                                        <p className="text-sm text-blue-600 font-bold">{formatCurrency(food.price)}</p>
+                                                        <p className="text-sm text-orange-700 font-bold">{formatCurrency(food.price)}</p>
                                                         <p className="text-xs text-gray-500 truncate">{(food as any).category?.cate_name || (food as any).category}</p>
                                                     </div>
                                                 </button>
@@ -1519,24 +1553,24 @@ const Admin: React.FC = () => {
             {/* FOOD DETAIL MODAL */}
             {foodDetailModalOpen && foodDetail && (
                 <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-                    <div className="bg-white rounded-xl shadow-lg w-full max-w-3xl max-h-[90vh] overflow-hidden flex flex-col">
-                        <div className="flex items-start justify-between p-4 border-b">
+                    <div className="bg-white rounded-xl shadow-lg w-full max-w-3xl max-h-[90vh] overflow-hidden flex flex-col border border-orange-100">
+                        <div className="flex items-start justify-between p-4 border-b border-orange-100 bg-orange-50">
                             <div>
-                                <p className="text-xs text-gray-500">Món ăn #{foodDetail.id}</p>
-                                <h3 className="text-xl font-bold text-gray-800">{foodDetail.title}</h3>
-                                <p className="text-sm text-gray-600 line-clamp-2">{foodDetail.description}</p>
+                                <p className="text-xs text-amber-700">Món ăn #{foodDetail.id}</p>
+                                <h3 className="text-xl font-bold text-[#391713]">{foodDetail.title}</h3>
+                                <p className="text-sm text-amber-900/80 line-clamp-2">{foodDetail.description}</p>
                             </div>
-                            <button onClick={closeFoodDetailModal} className="p-2 hover:bg-gray-100 rounded-full"><X size={20} /></button>
+                            <button onClick={closeFoodDetailModal} className="p-2 hover:bg-orange-100 rounded-full"><X size={20} /></button>
                         </div>
                         <div className="p-4 overflow-y-auto space-y-4">
                             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                                 <div className="md:col-span-1">
-                                    <img src={getImageUrl((foodDetail as any).image || (foodDetail as any).image_url)} alt={foodDetail.title} className="w-full aspect-square object-cover rounded-lg border" />
+                                    <img src={getImageUrl((foodDetail as any).image || (foodDetail as any).image_url)} alt={foodDetail.title} className="w-full aspect-square object-cover rounded-lg border border-orange-100" />
                                 </div>
                                 <div className="md:col-span-2 space-y-3">
                                     <div className="flex items-center gap-3">
-                                        <span className="text-2xl font-bold text-blue-700">{formatCurrency(foodDetail.price)}</span>
-                                        <span className="text-xs px-2 py-1 rounded-full bg-gray-100 text-gray-700">{foodDetail.availability}</span>
+                                        <span className="text-2xl font-bold text-orange-700">{formatCurrency(foodDetail.price)}</span>
+                                        <span className="text-xs px-2 py-1 rounded-full bg-orange-50 text-orange-800 border border-orange-100">{foodDetail.availability}</span>
                                     </div>
                                     <div className="flex items-center gap-2 text-amber-500">
                                         <Star size={16} />
@@ -1560,13 +1594,13 @@ const Admin: React.FC = () => {
                                 ) : (
                                     <div className="space-y-2 max-h-60 overflow-y-auto">
                                         {foodDetailRatings.map((rating, idx) => (
-                                            <div key={idx} className="border rounded-lg p-3 bg-gray-50">
-                                                <div className="flex justify-between text-sm font-semibold text-gray-800">
+                                            <div key={idx} className="border border-orange-100 rounded-lg p-3 bg-orange-50">
+                                                <div className="flex justify-between text-sm font-semibold text-[#391713]">
                                                     <span>{rating.username || 'Ẩn danh'}</span>
                                                     <span className="flex items-center gap-1 text-amber-500"><Star size={14} /> {rating.rating}</span>
                                                 </div>
-                                                <p className="text-sm text-gray-700 mt-1 whitespace-pre-line">{rating.content}</p>
-                                                {rating.created_date && <p className="text-xs text-gray-500 mt-1">{formatDate(rating.created_date)}</p>}
+                                                <p className="text-sm text-amber-900 mt-1 whitespace-pre-line">{rating.content}</p>
+                                                {rating.created_date && <p className="text-xs text-amber-700 mt-1">{formatDate(rating.created_date)}</p>}
                                             </div>
                                         ))}
                                     </div>
@@ -1580,29 +1614,29 @@ const Admin: React.FC = () => {
             {/* EDIT STORE MODAL */}
             {showEditStoreModal && selectedStore && (
                 <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-in fade-in">
-                    <div className="bg-white rounded-xl shadow-lg w-full max-w-lg p-6">
-                        <h2 className="text-xl font-bold mb-4">Sửa Cửa hàng</h2>
+                    <div className="bg-white rounded-xl shadow-lg w-full max-w-lg p-6 border border-orange-100">
+                        <h2 className="text-xl font-bold mb-4 text-[#391713]">Sửa Cửa hàng</h2>
                         <div className="space-y-3">
-                            <input className="w-full border p-2 rounded" value={selectedStore.store_name} onChange={e => setSelectedStore({ ...selectedStore, store_name: e.target.value })} placeholder="Tên" />
-                            <input className="w-full border p-2 rounded" value={selectedStore.image} onChange={e => setSelectedStore({ ...selectedStore, image: e.target.value })} placeholder="URL Ảnh" />
-                            <textarea className="w-full border p-2 rounded" value={selectedStore.description} onChange={e => setSelectedStore({ ...selectedStore, description: e.target.value })} placeholder="Mô tả" />
-                            <input className="w-full border p-2 rounded" value={selectedStore.manager} onChange={e => setSelectedStore({ ...selectedStore, manager: Number(e.target.value) })} placeholder="ID Quản lý" />
+                            <input className="w-full border border-orange-200 p-2 rounded" value={selectedStore.store_name} onChange={e => setSelectedStore({ ...selectedStore, store_name: e.target.value })} placeholder="Tên" />
+                            <input className="w-full border border-orange-200 p-2 rounded" value={selectedStore.image} onChange={e => setSelectedStore({ ...selectedStore, image: e.target.value })} placeholder="URL Ảnh" />
+                            <textarea className="w-full border border-orange-200 p-2 rounded" value={selectedStore.description} onChange={e => setSelectedStore({ ...selectedStore, description: e.target.value })} placeholder="Mô tả" />
+                            <input className="w-full border border-orange-200 p-2 rounded" value={selectedStore.manager} onChange={e => setSelectedStore({ ...selectedStore, manager: Number(e.target.value) })} placeholder="ID Quản lý" />
                         </div>
-                        <div className="flex justify-end gap-2 mt-4"><Button variant="outline" onClick={() => setShowEditStoreModal(false)}>Hủy</Button><Button onClick={updateStore}>Lưu</Button></div>
+                        <div className="flex justify-end gap-2 mt-4"><Button variant="outline" className="border-orange-200 text-orange-700" onClick={() => setShowEditStoreModal(false)}>Hủy</Button><Button className="bg-orange-600 hover:bg-orange-700" onClick={updateStore}>Lưu</Button></div>
                     </div>
                 </div>
             )}
             {showAddStoreModal && (
                 <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-                    <div className="bg-white rounded-xl shadow-lg w-full max-w-lg p-6">
-                        <h2 className="text-xl font-bold mb-4">Thêm Cửa hàng</h2>
+                    <div className="bg-white rounded-xl shadow-lg w-full max-w-lg p-6 border border-orange-100">
+                        <h2 className="text-xl font-bold mb-4 text-[#391713]">Thêm Cửa hàng</h2>
                         <div className="space-y-3">
-                            <input className="w-full border p-2 rounded" value={newStore.store_name} onChange={e => setNewStore({ ...newStore, store_name: e.target.value })} placeholder="Tên" />
-                            <input className="w-full border p-2 rounded" value={newStore.image} onChange={e => setNewStore({ ...newStore, image: e.target.value })} placeholder="URL Ảnh" />
-                            <textarea className="w-full border p-2 rounded" value={newStore.description} onChange={e => setNewStore({ ...newStore, description: e.target.value })} placeholder="Mô tả" />
-                            <input className="w-full border p-2 rounded" value={newStore.manager} onChange={e => setNewStore({ ...newStore, manager: e.target.value })} placeholder="ID Quản lý" />
+                            <input className="w-full border border-orange-200 p-2 rounded" value={newStore.store_name} onChange={e => setNewStore({ ...newStore, store_name: e.target.value })} placeholder="Tên" />
+                            <input className="w-full border border-orange-200 p-2 rounded" value={newStore.image} onChange={e => setNewStore({ ...newStore, image: e.target.value })} placeholder="URL Ảnh" />
+                            <textarea className="w-full border border-orange-200 p-2 rounded" value={newStore.description} onChange={e => setNewStore({ ...newStore, description: e.target.value })} placeholder="Mô tả" />
+                            <input className="w-full border border-orange-200 p-2 rounded" value={newStore.manager} onChange={e => setNewStore({ ...newStore, manager: e.target.value })} placeholder="ID Quản lý" />
                         </div>
-                        <div className="flex justify-end gap-2 mt-4"><Button variant="outline" onClick={() => setShowAddStoreModal(false)}>Hủy</Button><Button onClick={handleAddStore}>Thêm</Button></div>
+                        <div className="flex justify-end gap-2 mt-4"><Button variant="outline" className="border-orange-200 text-orange-700" onClick={() => setShowAddStoreModal(false)}>Hủy</Button><Button className="bg-orange-600 hover:bg-orange-700" onClick={handleAddStore}>Thêm</Button></div>
                     </div>
                 </div>
             )}
@@ -1610,14 +1644,14 @@ const Admin: React.FC = () => {
             {/* CUSTOMER MODAL */}
             {showCustomerModal && selectedCustomer && (
                 <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-                    <div className="bg-white rounded-xl shadow-lg w-full max-w-md p-6">
-                        <h2 className="text-xl font-bold mb-4">Thông tin khách hàng</h2>
+                    <div className="bg-white rounded-xl shadow-lg w-full max-w-md p-6 border border-orange-100">
+                        <h2 className="text-xl font-bold mb-4 text-[#391713]">Thông tin khách hàng</h2>
                         <div className="space-y-3">
-                            <div><label className="text-xs text-gray-500">Họ tên</label><input className="w-full border p-2 rounded" value={selectedCustomer.fullname} onChange={e => setSelectedCustomer({ ...selectedCustomer, fullname: e.target.value })} /></div>
-                            <div><label className="text-xs text-gray-500">SĐT</label><input className="w-full border p-2 rounded" value={selectedCustomer.phone_number || ''} onChange={e => setSelectedCustomer({ ...selectedCustomer, phone_number: e.target.value })} /></div>
-                            <div><label className="text-xs text-gray-500">Địa chỉ</label><input className="w-full border p-2 rounded" value={selectedCustomer.address || ''} onChange={e => setSelectedCustomer({ ...selectedCustomer, address: e.target.value })} /></div>
+                            <div><label className="text-xs text-amber-700">Họ tên</label><input className="w-full border border-orange-200 p-2 rounded" value={selectedCustomer.fullname} onChange={e => setSelectedCustomer({ ...selectedCustomer, fullname: e.target.value })} /></div>
+                            <div><label className="text-xs text-amber-700">SĐT</label><input className="w-full border border-orange-200 p-2 rounded" value={selectedCustomer.phone_number || ''} onChange={e => setSelectedCustomer({ ...selectedCustomer, phone_number: e.target.value })} /></div>
+                            <div><label className="text-xs text-amber-700">Địa chỉ</label><input className="w-full border border-orange-200 p-2 rounded" value={selectedCustomer.address || ''} onChange={e => setSelectedCustomer({ ...selectedCustomer, address: e.target.value })} /></div>
                         </div>
-                        <div className="flex justify-end gap-2 mt-4"><Button variant="outline" onClick={() => setShowCustomerModal(false)}>Hủy</Button><Button onClick={updateCustomer}>Lưu</Button></div>
+                        <div className="flex justify-end gap-2 mt-4"><Button variant="outline" className="border-orange-200 text-orange-700" onClick={() => setShowCustomerModal(false)}>Hủy</Button><Button className="bg-orange-600 hover:bg-orange-700" onClick={updateCustomer}>Lưu</Button></div>
                     </div>
                 </div>
             )}
@@ -1625,17 +1659,17 @@ const Admin: React.FC = () => {
             {/* ADD/EDIT FOOD MODAL */}
             {(showAddFoodModal || (showEditFoodModal && selectedFood)) && (
                 <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-                    <div className="bg-white rounded-xl shadow-lg w-full max-w-lg p-6 max-h-[90vh] overflow-y-auto">
-                        <h2 className="text-xl font-bold mb-4">{showAddFoodModal ? 'Thêm Món' : 'Sửa Món'}</h2>
+                    <div className="bg-white rounded-xl shadow-lg w-full max-w-lg p-6 max-h-[90vh] overflow-y-auto border border-orange-100">
+                        <h2 className="text-xl font-bold mb-4 text-[#391713]">{showAddFoodModal ? 'Thêm Món' : 'Sửa Món'}</h2>
                         <div className="space-y-3">
-                            <input className="w-full border p-2 rounded" value={showAddFoodModal ? newFood.title : selectedFood!.title} onChange={e => showAddFoodModal ? setNewFood({ ...newFood, title: e.target.value }) : setSelectedFood({ ...selectedFood!, title: e.target.value })} placeholder="Tên món" />
+                            <input className="w-full border border-orange-200 p-2 rounded" value={showAddFoodModal ? newFood.title : selectedFood!.title} onChange={e => showAddFoodModal ? setNewFood({ ...newFood, title: e.target.value }) : setSelectedFood({ ...selectedFood!, title: e.target.value })} placeholder="Tên món" />
                             <div className="grid grid-cols-2 gap-2">
-                                <input type="number" className="w-full border p-2 rounded" value={showAddFoodModal ? newFood.price : selectedFood!.price} onChange={e => showAddFoodModal ? setNewFood({ ...newFood, price: e.target.value }) : setSelectedFood({ ...selectedFood!, price: Number(e.target.value) })} placeholder="Giá" />
-                                <select className="border p-2 rounded" value={showAddFoodModal ? newFood.availability : selectedFood!.availability} onChange={e => showAddFoodModal ? setNewFood({ ...newFood, availability: e.target.value }) : setSelectedFood({ ...selectedFood!, availability: e.target.value })}><option value="Còn hàng">Còn hàng</option><option value="Hết hàng">Hết hàng</option></select>
+                                <input type="number" className="w-full border border-orange-200 p-2 rounded" value={showAddFoodModal ? newFood.price : selectedFood!.price} onChange={e => showAddFoodModal ? setNewFood({ ...newFood, price: e.target.value }) : setSelectedFood({ ...selectedFood!, price: Number(e.target.value) })} placeholder="Giá" />
+                                <select className="border border-orange-200 p-2 rounded bg-white" value={showAddFoodModal ? newFood.availability : selectedFood!.availability} onChange={e => showAddFoodModal ? setNewFood({ ...newFood, availability: e.target.value }) : setSelectedFood({ ...selectedFood!, availability: e.target.value })}><option value="Còn hàng">Còn hàng</option><option value="Hết hàng">Hết hàng</option></select>
                             </div>
 
                             <select
-                                className="w-full border p-2 rounded"
+                                className="w-full border border-orange-200 p-2 rounded bg-white"
                                 value={showAddFoodModal ? newFood.category_id : selectedFood!.category?.id}
                                 onChange={e => {
                                     const val = e.target.value;
@@ -1659,7 +1693,7 @@ const Admin: React.FC = () => {
                             </select>
 
                             <select
-                                className="w-full border p-2 rounded"
+                                className="w-full border border-orange-200 p-2 rounded bg-white"
                                 value={showAddFoodModal ? newFood.store_id : selectedFood!.store?.id}
                                 onChange={e => {
                                     const val = e.target.value;
@@ -1681,19 +1715,19 @@ const Admin: React.FC = () => {
                                 <option value="">Chọn cửa hàng</option>
                                 {stores.map(s => <option key={s.id} value={s.id}>{s.store_name}</option>)}
                             </select>
-                            <textarea className="w-full border p-2 rounded" rows={2} value={showAddFoodModal ? newFood.description : selectedFood!.description} onChange={e => showAddFoodModal ? setNewFood({ ...newFood, description: e.target.value }) : setSelectedFood({ ...selectedFood!, description: e.target.value })} placeholder="Mô tả" />
+                            <textarea className="w-full border border-orange-200 p-2 rounded" rows={2} value={showAddFoodModal ? newFood.description : selectedFood!.description} onChange={e => showAddFoodModal ? setNewFood({ ...newFood, description: e.target.value }) : setSelectedFood({ ...selectedFood!, description: e.target.value })} placeholder="Mô tả" />
                         </div>
 
                         {!showAddFoodModal && (
-                            <div className="mt-4 pt-4 border-t">
-                                <h3 className="text-sm font-bold mb-2">Đánh giá ({foodRatings.length})</h3>
-                                <div className="bg-gray-50 rounded p-2 max-h-40 overflow-y-auto space-y-2">
-                                    {ratingsLoading ? <div className="text-center text-xs">Đang tải...</div> : foodRatings.length === 0 ? <div className="text-center text-xs text-gray-400">Chưa có đánh giá</div> : foodRatings.map((r, i) => (<div key={i} className="bg-white p-2 rounded border text-sm"><div className="font-bold flex justify-between"><span>{r.username}</span><span className="text-yellow-500">{r.rating}★</span></div><div className="text-gray-600">{r.content}</div></div>))}
+                            <div className="mt-4 pt-4 border-t border-orange-100">
+                                <h3 className="text-sm font-bold mb-2 text-[#391713]">Đánh giá ({foodRatings.length})</h3>
+                                <div className="bg-orange-50 rounded p-2 max-h-40 overflow-y-auto space-y-2">
+                                    {ratingsLoading ? <div className="text-center text-xs text-amber-700">Đang tải...</div> : foodRatings.length === 0 ? <div className="text-center text-xs text-amber-700">Chưa có đánh giá</div> : foodRatings.map((r, i) => (<div key={i} className="bg-white p-2 rounded border border-orange-100 text-sm"><div className="font-bold flex justify-between text-[#391713]"><span>{r.username}</span><span className="text-orange-600">{r.rating}★</span></div><div className="text-amber-900/80">{r.content}</div></div>))}
                                 </div>
                             </div>
                         )}
 
-                        <div className="flex justify-end gap-2 mt-4"><Button variant="outline" onClick={() => { setShowAddFoodModal(false); setShowEditFoodModal(false); }}>Hủy</Button><Button onClick={showAddFoodModal ? handleAddFood : updateFood}>Lưu</Button></div>
+                        <div className="flex justify-end gap-2 mt-4"><Button variant="outline" className="border-orange-200 text-orange-700" onClick={() => { setShowAddFoodModal(false); setShowEditFoodModal(false); }}>Hủy</Button><Button className="bg-orange-600 hover:bg-orange-700" onClick={showAddFoodModal ? handleAddFood : updateFood}>Lưu</Button></div>
                     </div>
                 </div>
             )}
@@ -1701,20 +1735,20 @@ const Admin: React.FC = () => {
             {/* MANAGE SIZE MODAL */}
             {showManageSizesModal && selectedFood && (
                 <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-                    <div className="bg-white rounded-xl shadow-lg w-full max-w-md p-6">
-                        <div className="flex justify-between mb-4"><h3 className="font-bold">Size món: {selectedFood.title}</h3><button onClick={() => setShowManageSizesModal(false)}><X size={20} /></button></div>
-                        <form onSubmit={handleAddSize} className="flex gap-2 mb-4"><input className="border p-2 rounded flex-1 text-sm" placeholder="Tên size (VD: L)" value={newSize.size_name} onChange={e => setNewSize({ ...newSize, size_name: e.target.value })} required /><input type="number" className="border p-2 rounded w-24 text-sm" placeholder="Giá thêm" value={newSize.price} onChange={e => setNewSize({ ...newSize, price: e.target.value })} required /><Button type="submit" size="sm"><Plus size={16} /></Button></form>
+                    <div className="bg-white rounded-xl shadow-lg w-full max-w-md p-6 border border-orange-100">
+                        <div className="flex justify-between mb-4"><h3 className="font-bold text-[#391713]">Size món: {selectedFood.title}</h3><button onClick={() => setShowManageSizesModal(false)} className="text-orange-700"><X size={20} /></button></div>
+                        <form onSubmit={handleAddSize} className="flex gap-2 mb-4"><input className="border border-orange-200 p-2 rounded flex-1 text-sm" placeholder="Tên size (VD: L)" value={newSize.size_name} onChange={e => setNewSize({ ...newSize, size_name: e.target.value })} required /><input type="number" className="border border-orange-200 p-2 rounded w-24 text-sm" placeholder="Giá thêm" value={newSize.price} onChange={e => setNewSize({ ...newSize, price: e.target.value })} required /><Button type="submit" size="sm" className="bg-orange-600 hover:bg-orange-700"><Plus size={16} /></Button></form>
                         <div className="space-y-2 max-h-60 overflow-y-auto">
                             {foodSizes.map(s => (
-                                <div key={s.id} className="flex justify-between items-center p-2 border rounded bg-gray-50 text-sm">
+                                <div key={s.id} className="flex justify-between items-center p-2 border border-orange-100 rounded bg-orange-50 text-sm">
                                     {editingSizeId === s.id ? (
-                                        <div className="flex gap-1 w-full"><input className="flex-1 p-1 border rounded" value={editingSizeData.size_name} onChange={e => setEditingSizeData({ ...editingSizeData, size_name: e.target.value })} /><input className="w-20 p-1 border rounded" value={editingSizeData.price} onChange={e => setEditingSizeData({ ...editingSizeData, price: e.target.value })} /><Button size="sm" onClick={() => handleUpdateSize(s.id)}>Lưu</Button></div>
+                                        <div className="flex gap-1 w-full"><input className="flex-1 p-1 border border-orange-200 rounded" value={editingSizeData.size_name} onChange={e => setEditingSizeData({ ...editingSizeData, size_name: e.target.value })} /><input className="w-20 p-1 border border-orange-200 rounded" value={editingSizeData.price} onChange={e => setEditingSizeData({ ...editingSizeData, price: e.target.value })} /><Button size="sm" className="bg-orange-600 hover:bg-orange-700" onClick={() => handleUpdateSize(s.id)}>Lưu</Button></div>
                                     ) : (
-                                        <><span>{s.size_name} (+{formatCurrency(s.price)})</span><div className="flex gap-1"><Button variant="ghost" size="sm" className="h-6 w-6 p-0" onClick={() => { setEditingSizeId(s.id); setEditingSizeData({ size_name: s.size_name, price: s.price }) }}><Edit2 size={12} /></Button><Button variant="ghost" size="sm" className="h-6 w-6 p-0 text-red-500" onClick={() => deleteSize(s.id)}><Trash2 size={12} /></Button></div></>
+                                        <><span className="text-[#391713]">{s.size_name} (+{formatCurrency(s.price)})</span><div className="flex gap-1"><Button variant="ghost" size="sm" className="h-6 w-6 p-0 text-orange-700 hover:bg-orange-100" onClick={() => { setEditingSizeId(s.id); setEditingSizeData({ size_name: s.size_name, price: s.price }) }}><Edit2 size={12} /></Button><Button variant="ghost" size="sm" className="h-6 w-6 p-0 text-red-500 hover:bg-red-50" onClick={() => deleteSize(s.id)}><Trash2 size={12} /></Button></div></>
                                     )}
                                 </div>
                             ))}
-                            {foodSizes.length === 0 && <p className="text-center text-xs text-gray-400">Chưa có size nào</p>}
+                            {foodSizes.length === 0 && <p className="text-center text-xs text-amber-700">Chưa có size nào</p>}
                         </div>
                     </div>
                 </div>
@@ -1723,29 +1757,29 @@ const Admin: React.FC = () => {
             {/* ORDER DETAIL MODAL */}
             {showOrderModal && selectedOrder && (
                 <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-                    <div className="bg-white rounded-xl shadow-lg w-full max-w-3xl max-h-[90vh] flex flex-col">
-                        <div className="flex justify-between items-center p-6 border-b"><h2 className="text-xl font-bold">Chi tiết đơn #{selectedOrder.id}</h2><button onClick={() => setShowOrderModal(false)}><X /></button></div>
+                    <div className="bg-white rounded-xl shadow-lg w-full max-w-3xl max-h-[90vh] flex flex-col border border-orange-100">
+                        <div className="flex justify-between items-center p-6 border-b border-orange-100 bg-orange-50"><h2 className="text-xl font-bold text-[#391713]">Chi tiết đơn #{selectedOrder.id}</h2><button onClick={() => setShowOrderModal(false)} className="text-orange-700"><X /></button></div>
                         <div className="p-6 overflow-y-auto space-y-6">
                             <div className="grid md:grid-cols-2 gap-6">
                                 <div className="space-y-2">
-                                    <p className="font-bold text-gray-700">Khách hàng</p>
-                                    <div className="bg-gray-50 p-3 rounded border text-sm"><p>{selectedOrder.receiver_name}</p><p>{selectedOrder.phone_number}</p><p className="text-gray-500">{selectedOrder.ship_address}</p></div>
+                                    <p className="font-bold text-[#391713]">Khách hàng</p>
+                                    <div className="bg-orange-50 p-3 rounded border border-orange-100 text-sm"><p className="text-[#391713]">{selectedOrder.receiver_name}</p><p className="text-[#391713]">{selectedOrder.phone_number}</p><p className="text-amber-800/80">{selectedOrder.ship_address}</p></div>
                                 </div>
                                 <div className="space-y-2">
-                                    <p className="font-bold text-gray-700">Thông tin đơn</p>
-                                    <div className="bg-gray-50 p-3 rounded border text-sm"><div className="flex justify-between"><span>Tổng tiền:</span><span className="font-bold text-blue-600">{formatCurrency(selectedOrder.total_money)}</span></div><div className="flex justify-between mt-1"><span>Thanh toán:</span><span>{selectedOrder.payment_method}</span></div><div className="flex justify-between mt-1"><span>Ngày:</span><span>{new Date(selectedOrder.created_date).toLocaleString()}</span></div></div>
+                                    <p className="font-bold text-[#391713]">Thông tin đơn</p>
+                                    <div className="bg-orange-50 p-3 rounded border border-orange-100 text-sm"><div className="flex justify-between text-[#391713]"><span>Tổng tiền:</span><span className="font-bold text-orange-700">{formatCurrency(selectedOrder.total_money)}</span></div><div className="flex justify-between mt-1 text-[#391713]"><span>Thanh toán:</span><span>{selectedOrder.payment_method}</span></div><div className="flex justify-between mt-1 text-[#391713]"><span>Ngày:</span><span>{new Date(selectedOrder.created_date).toLocaleString()}</span></div></div>
                                 </div>
                             </div>
                             <div>
-                                <p className="font-bold text-gray-700 mb-2">Danh sách món</p>
-                                <table className="w-full text-sm border rounded overflow-hidden"><thead className="bg-gray-100"><tr><th className="p-2 text-left">Món</th><th className="p-2 text-center">SL</th><th className="p-2 text-right">Giá</th></tr></thead><tbody>
-                                    {(selectedOrder.items || []).map((it: any, idx: number) => (<tr key={idx} className="border-t"><td className="p-2">{it.food.title}</td><td className="p-2 text-center">x{it.quantity}</td><td className="p-2 text-right">{formatCurrency(it.food.price)}</td></tr>))}
+                                <p className="font-bold text-[#391713] mb-2">Danh sách món</p>
+                                <table className="w-full text-sm border border-orange-100 rounded overflow-hidden"><thead className="bg-orange-50 text-amber-700"><tr><th className="p-2 text-left">Món</th><th className="p-2 text-center">SL</th><th className="p-2 text-right">Giá</th></tr></thead><tbody>
+                                    {(selectedOrder.items || []).map((it: any, idx: number) => (<tr key={idx} className="border-t border-orange-50"><td className="p-2 text-[#391713]">{it.food.title}</td><td className="p-2 text-center text-[#391713]">x{it.quantity}</td><td className="p-2 text-right text-orange-700">{formatCurrency(it.food.price)}</td></tr>))}
                                 </tbody></table>
                             </div>
-                            <div className="flex items-center gap-4 bg-blue-50 p-4 rounded border border-blue-100">
-                                <span className="font-medium text-blue-800">Cập nhật trạng thái:</span>
-                                <select id="status_select" className="border rounded p-1 text-sm flex-1" defaultValue={selectedOrder.order_status}>{['Chờ xác nhận', 'Đã xác nhận', 'Đang chuẩn bị', 'Đang giao', 'Đã giao', 'Đã huỷ'].map(s => <option key={s} value={s}>{s}</option>)}</select>
-                                <Button onClick={() => { const v = (document.getElementById('status_select') as HTMLSelectElement).value; updateOrderStatus(selectedOrder.id, v) }}>Lưu</Button>
+                            <div className="flex items-center gap-4 bg-orange-50 p-4 rounded border border-orange-100">
+                                <span className="font-medium text-[#391713]">Cập nhật trạng thái:</span>
+                                <select id="status_select" className="border border-orange-200 rounded p-1 text-sm flex-1 bg-white" defaultValue={selectedOrder.order_status}>{['Chờ xác nhận', 'Đã xác nhận', 'Đang chuẩn bị', 'Đang giao', 'Đã giao', 'Đã huỷ'].map(s => <option key={s} value={s}>{s}</option>)}</select>
+                                <Button className="bg-orange-600 hover:bg-orange-700" onClick={() => { const v = (document.getElementById('status_select') as HTMLSelectElement).value; updateOrderStatus(selectedOrder.id, v) }}>Lưu</Button>
                             </div>
                         </div>
                     </div>
@@ -1755,13 +1789,13 @@ const Admin: React.FC = () => {
             {/* ADD/EDIT PROMOTION MODAL */}
             {(showAddPromoModal || (showEditPromoModal && selectedPromo)) && (
                 <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-                    <div className="bg-white rounded-xl shadow-lg w-full max-w-lg p-6 max-h-[90vh] overflow-y-auto">
-                        <h2 className="text-xl font-bold mb-4">{showAddPromoModal ? 'Thêm KM' : 'Sửa KM'}</h2>
+                    <div className="bg-white rounded-xl shadow-lg w-full max-w-lg p-6 max-h-[90vh] overflow-y-auto border border-orange-100">
+                        <h2 className="text-xl font-bold mb-4 text-[#391713]">{showAddPromoModal ? 'Thêm KM' : 'Sửa KM'}</h2>
                         <form onSubmit={showAddPromoModal ? handleAddPromo : handleUpdatePromo} className="space-y-4">
                             {/* Tên khuyến mãi */}
                             <div>
-                                <label className="text-xs text-gray-500 font-bold">Tên chương trình</label>
-                                <input required className="w-full border p-2 rounded mt-1"
+                                <label className="text-xs text-amber-700 font-bold">Tên chương trình</label>
+                                <input required className="w-full border border-orange-200 p-2 rounded mt-1"
                                     value={showAddPromoModal ? newPromo.name : selectedPromo!.name}
                                     onChange={e => { const v = e.target.value; showAddPromoModal ? setNewPromo({ ...newPromo, name: v }) : setSelectedPromo({ ...selectedPromo!, name: v }) }}
                                 />
@@ -1770,8 +1804,8 @@ const Admin: React.FC = () => {
                             {/* Loại và Giá trị giảm */}
                             <div className="grid grid-cols-2 gap-4">
                                 <div>
-                                    <label className="text-xs text-gray-500 font-bold">Loại giảm giá</label>
-                                    <select className="w-full border p-2 rounded mt-1"
+                                    <label className="text-xs text-amber-700 font-bold">Loại giảm giá</label>
+                                    <select className="w-full border border-orange-200 p-2 rounded mt-1 bg-white"
                                         value={showAddPromoModal ? newPromo.discount_type : selectedPromo!.discount_type}
                                         onChange={e => { const v = e.target.value as any; showAddPromoModal ? setNewPromo({ ...newPromo, discount_type: v }) : setSelectedPromo({ ...selectedPromo!, discount_type: v }) }}
                                     >
@@ -1780,8 +1814,8 @@ const Admin: React.FC = () => {
                                     </select>
                                 </div>
                                 <div>
-                                    <label className="text-xs text-gray-500 font-bold">Giá trị giảm</label>
-                                    <input required type="number" className="w-full border p-2 rounded mt-1"
+                                    <label className="text-xs text-amber-700 font-bold">Giá trị giảm</label>
+                                    <input required type="number" className="w-full border border-orange-200 p-2 rounded mt-1"
                                         value={showAddPromoModal ? newPromo.discount_value : selectedPromo!.discount_value}
                                         onChange={e => { const v = e.target.value; showAddPromoModal ? setNewPromo({ ...newPromo, discount_value: v }) : setSelectedPromo({ ...selectedPromo!, discount_value: v }) }}
                                         placeholder="VD: 10 hoặc 50000"
@@ -1790,10 +1824,10 @@ const Admin: React.FC = () => {
                             </div>
 
                             {/* --- PHẦN BỔ SUNG: Đơn tối thiểu & Giảm tối đa --- */}
-                            <div className="grid grid-cols-2 gap-4 bg-gray-50 p-3 rounded border">
+                            <div className="grid grid-cols-2 gap-4 bg-orange-50 p-3 rounded border border-orange-100">
                                 <div>
-                                    <label className="text-xs text-gray-500 font-bold">Đơn tối thiểu</label>
-                                    <input type="number" className="w-full border p-2 rounded mt-1 bg-white"
+                                    <label className="text-xs text-amber-700 font-bold">Đơn tối thiểu</label>
+                                    <input type="number" className="w-full border border-orange-200 p-2 rounded mt-1 bg-white"
                                         // SỬA LỖI Ở ĐÂY: Dùng ?? '' để chuyển null thành chuỗi rỗng
                                         value={(showAddPromoModal ? newPromo.minimum_pay : selectedPromo!.minimum_pay) ?? ''}
                                         onChange={e => { const v = e.target.value; showAddPromoModal ? setNewPromo({ ...newPromo, minimum_pay: v }) : setSelectedPromo({ ...selectedPromo!, minimum_pay: v }) }}
@@ -1801,8 +1835,8 @@ const Admin: React.FC = () => {
                                     />
                                 </div>
                                 <div>
-                                    <label className="text-xs text-gray-500 font-bold">Giảm tối đa (Nếu là %)</label>
-                                    <input type="number" className="w-full border p-2 rounded mt-1 bg-white"
+                                    <label className="text-xs text-amber-700 font-bold">Giảm tối đa (Nếu là %)</label>
+                                    <input type="number" className="w-full border border-orange-200 p-2 rounded mt-1 bg-white"
                                         // SỬA LỖI Ở ĐÂY: Dùng ?? '' để chuyển null thành chuỗi rỗng
                                         value={(showAddPromoModal ? newPromo.max_discount_amount : selectedPromo!.max_discount_amount) ?? ''}
                                         onChange={e => { const v = e.target.value; showAddPromoModal ? setNewPromo({ ...newPromo, max_discount_amount: v }) : setSelectedPromo({ ...selectedPromo!, max_discount_amount: v }) }}
@@ -1814,15 +1848,15 @@ const Admin: React.FC = () => {
                             {/* Ngày hiệu lực */}
                             <div className="grid grid-cols-2 gap-4">
                                 <div>
-                                    <label className="text-xs text-gray-500 font-bold">Ngày bắt đầu</label>
-                                    <input required type="date" className="w-full border p-2 rounded mt-1"
+                                    <label className="text-xs text-amber-700 font-bold">Ngày bắt đầu</label>
+                                    <input required type="date" className="w-full border border-orange-200 p-2 rounded mt-1 bg-white"
                                         value={showAddPromoModal ? newPromo.start_date : selectedPromo!.start_date}
                                         onChange={e => { const v = e.target.value; showAddPromoModal ? setNewPromo({ ...newPromo, start_date: v }) : setSelectedPromo({ ...selectedPromo!, start_date: v }) }}
                                     />
                                 </div>
                                 <div>
-                                    <label className="text-xs text-gray-500 font-bold">Ngày kết thúc</label>
-                                    <input required type="date" className="w-full border p-2 rounded mt-1"
+                                    <label className="text-xs text-amber-700 font-bold">Ngày kết thúc</label>
+                                    <input required type="date" className="w-full border border-orange-200 p-2 rounded mt-1 bg-white"
                                         value={showAddPromoModal ? newPromo.end_date : selectedPromo!.end_date}
                                         onChange={e => { const v = e.target.value; showAddPromoModal ? setNewPromo({ ...newPromo, end_date: v }) : setSelectedPromo({ ...selectedPromo!, end_date: v }) }}
                                     />
@@ -1834,12 +1868,12 @@ const Admin: React.FC = () => {
                                     checked={showAddPromoModal ? newPromo.is_active : selectedPromo!.is_active}
                                     onChange={e => { const v = e.target.checked; showAddPromoModal ? setNewPromo({ ...newPromo, is_active: v }) : setSelectedPromo({ ...selectedPromo!, is_active: v }) }}
                                 />
-                                <label htmlFor="isActiveCheck" className="text-sm font-medium text-gray-700">Kích hoạt ngay</label>
+                                <label htmlFor="isActiveCheck" className="text-sm font-medium text-[#391713]">Kích hoạt ngay</label>
                             </div>
 
-                            <div className="flex justify-end gap-2 mt-6 pt-4 border-t">
-                                <Button type="button" variant="outline" onClick={() => { setShowAddPromoModal(false); setShowEditPromoModal(false) }}>Hủy</Button>
-                                <Button type="submit">Lưu khuyến mãi</Button>
+                            <div className="flex justify-end gap-2 mt-6 pt-4 border-t border-orange-100">
+                                <Button type="button" variant="outline" className="border-orange-200 text-orange-700" onClick={() => { setShowAddPromoModal(false); setShowEditPromoModal(false) }}>Hủy</Button>
+                                <Button type="submit" className="bg-orange-600 hover:bg-orange-700">Lưu khuyến mãi</Button>
                             </div>
                         </form>
                     </div>

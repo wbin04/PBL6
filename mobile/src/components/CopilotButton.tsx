@@ -1,7 +1,7 @@
 import React from 'react';
 import { TouchableOpacity, StyleSheet, ViewStyle, GestureResponderEvent } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
-import { COLORS, SPACING, BORDER_RADIUS } from '@/constants';
+import { MessageCircle } from 'lucide-react-native';
+import { COLORS, BORDER_RADIUS } from '@/constants';
 
 type Props = {
   onPress?: (e: GestureResponderEvent) => void;
@@ -18,7 +18,7 @@ const CopilotButton: React.FC<Props> = ({ onPress, style, testID }) => {
       testID={testID}
       style={[styles.button, style]}
     >
-      <Ionicons name="chatbubbles" size={22} color={COLORS.white} />
+      <MessageCircle width={22} height={22} color={COLORS.white} strokeWidth={2} />
     </TouchableOpacity>
   );
 };

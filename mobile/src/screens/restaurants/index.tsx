@@ -14,7 +14,7 @@ import {
   RefreshControl,
   Image,
 } from "react-native";
-import { ArrowLeft, Search, ShoppingCart, User } from "lucide-react-native";
+import { ArrowLeft, Search, ShoppingCart, User, MessageCircle } from "lucide-react-native";
 import { useDispatch, useSelector } from 'react-redux';
 
 // Import StoreCard component thay vì RestaurantCard1
@@ -23,7 +23,6 @@ import { Fonts } from "@/constants/Fonts";
 import { RootState, AppDispatch } from '@/store';
 import { fetchStoresWithStats } from '@/store/slices/storesSlice';
 import { Store } from '@/types';
-const CopilotIcon = require('@/assets/images/copilot-logo.png');
 const TABS = ["Tất cả", "Burger", "Pizza", "Lành mạnh"] as const;
 
 const CONTENT_PADDING = 16;
@@ -204,11 +203,7 @@ export default function RestaurantsIndex() {
         activeOpacity={0.85}
         style={styles.copilotButton}
       >
-        <Image
-          source={CopilotIcon}
-          style={{ width: 28, height: 28, tintColor: '#ffffff' }}
-          resizeMode="contain"
-        />
+        <MessageCircle width={28} height={28} color="#ffffff" strokeWidth={2.2} />
       </TouchableOpacity>
     </SafeAreaView>
   );

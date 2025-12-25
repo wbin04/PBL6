@@ -184,7 +184,7 @@ def admin_customers_list(request):
         return Response({'error': 'Admin access required'}, status=status.HTTP_403_FORBIDDEN)
     
     # Get all admin-manageable users (roles 2, 3, 4) and apply search filter if provided
-    customers = User.objects.filter(role_id__in=[2, 3, 4])
+    customers = User.objects.filter(role_id__in=[1, 3, 4])
     search = request.GET.get('search')
     if search:
         customers = customers.filter(

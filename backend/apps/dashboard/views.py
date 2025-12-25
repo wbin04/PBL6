@@ -1,4 +1,4 @@
-from datetime import timedelta
+from datetime import timedelta, datetime, date
 from decimal import Decimal
 
 from django.db.models import Avg, Count, DecimalField, F, OuterRef, Subquery, Sum, Value, ExpressionWrapper
@@ -21,6 +21,7 @@ from apps.stores.models import Store
 CANCELLED_STATUSES = ['Đã hủy', 'Đã huỷ']
 DELIVERY_CANCELLED_STATUSES = ['Đã huỷ', 'Đã hủy']
 PROCESSING_STATUSES = ['Chờ xác nhận', 'Đã xác nhận', 'Đang chuẩn bị', 'Sẵn sàng', 'Đang giao']
+SUCCESS_STATUSES = ['Đã giao', 'DELIVERED']
 
 
 class IsAdminOrStoreManager(BasePermission):
@@ -454,7 +455,7 @@ class DashboardOverviewAPIView(APIView):
 
         total_orders = orders_qs.count()
         if store_id is None:
-            total_customers = User.objects.filter(role_id=1).count()
+            total_customers = User.objects.filter(role_id__in=[1, 2, 3, 4]).count()
             total_stores = Store.objects.count()
             total_foods = Food.objects.count()
         else:
@@ -528,7 +529,7 @@ class TopStoresAPIView(APIView):
                 ),
                 orders=Count('id'),
             )
-            .order_by('-revenue')
+            .order_by('store_id')
         )
 
         if store_id is None:
@@ -644,7 +645,7 @@ class StoresTableAPIView(APIView):
                     Value(0, output_field=DecimalField(max_digits=14, decimal_places=2)),
                 ),
             )
-            .order_by('-revenue')
+            .order_by('store_id')
         )
 
         stores = [
@@ -672,3 +673,155 @@ class StoresTableAPIView(APIView):
             })
 
         return Response({'store_id': store_id, 'results': stores})
+
+
+class RevenueStatsAPIView(APIView):
+    permission_classes = [IsAdminOrStoreManager]
+
+    def get(self, request):
+        orders_qs, store_id = _get_orders_queryset_for_user(request)
+        tz = timezone.get_current_timezone()
+
+        start_date_str = request.query_params.get('start_date')
+        end_date_str = request.query_params.get('end_date')
+        period = request.query_params.get('period', 'day').lower()
+
+        if not start_date_str or not end_date_str:
+            return Response({'detail': 'start_date và end_date là bắt buộc (YYYY-MM-DD)'}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            start_date = datetime.strptime(start_date_str, '%Y-%m-%d').date()
+            end_date = datetime.strptime(end_date_str, '%Y-%m-%d').date()
+        except ValueError:
+            return Response({'detail': 'Định dạng ngày không hợp lệ. Dùng YYYY-MM-DD.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        if start_date > end_date:
+            return Response({'detail': 'start_date phải nhỏ hơn hoặc bằng end_date'}, status=status.HTTP_400_BAD_REQUEST)
+
+        start_dt = timezone.make_aware(datetime.combine(start_date, datetime.min.time()), tz)
+        end_dt = timezone.make_aware(datetime.combine(end_date, datetime.max.time()), tz)
+
+        filtered_orders = orders_qs.filter(
+            delivery_status__in=SUCCESS_STATUSES,
+            created_date__range=(start_dt, end_dt),
+        )
+
+        effective_total = _effective_total_expression()
+
+        if period == 'month':
+            trunc_fn = TruncMonth
+            step = 'month'
+            date_format = '%Y-%m'
+        else:
+            trunc_fn = TruncDay
+            step = 'day'
+            date_format = '%Y-%m-%d'
+
+        aggregated = (
+            filtered_orders
+            .annotate(period=trunc_fn('created_date'))
+            .values('period')
+            .annotate(revenue=Coalesce(Sum(effective_total), Value(0, output_field=DecimalField(max_digits=14, decimal_places=2))))
+        )
+
+        revenue_map = {entry['period'].date(): float(entry['revenue'] or 0) for entry in aggregated if entry['period']}
+
+        def month_add(d: date) -> date:
+            return (d.replace(day=1) + timedelta(days=32)).replace(day=1)
+
+        chart_data = []
+        cursor = start_date.replace(day=1) if step == 'month' else start_date
+        while cursor <= end_date:
+            key_date = cursor if step == 'day' else cursor.replace(day=1)
+            value = revenue_map.get(key_date, 0.0)
+            chart_data.append({
+                'date': key_date.strftime(date_format),
+                'revenue': value,
+            })
+            cursor = cursor + timedelta(days=1) if step == 'day' else month_add(cursor)
+
+        summary = filtered_orders.aggregate(
+            total_revenue=Coalesce(Sum(effective_total), Value(0, output_field=DecimalField(max_digits=14, decimal_places=2))),
+            total_orders=Count('id'),
+        )
+
+        return Response({
+            'summary': {
+                'total_revenue': float(summary['total_revenue'] or 0),
+                'total_orders': summary['total_orders'] or 0,
+            },
+            'chart_data': chart_data,
+            'store_id': store_id,
+            'period': period,
+        })
+
+
+class TopProductsStatsAPIView(APIView):
+    permission_classes = [IsAdminOrStoreManager]
+
+    def get(self, request):
+        orders_qs, store_id = _get_orders_queryset_for_user(request)
+        tz = timezone.get_current_timezone()
+
+        start_date_str = request.query_params.get('start_date')
+        end_date_str = request.query_params.get('end_date')
+        try:
+            limit = int(request.query_params.get('limit', 10))
+        except (TypeError, ValueError):
+            limit = 10
+        limit = max(1, min(limit, 100))
+
+        if not start_date_str or not end_date_str:
+            return Response({'detail': 'start_date và end_date là bắt buộc (YYYY-MM-DD)'}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            start_date = datetime.strptime(start_date_str, '%Y-%m-%d').date()
+            end_date = datetime.strptime(end_date_str, '%Y-%m-%d').date()
+        except ValueError:
+            return Response({'detail': 'Định dạng ngày không hợp lệ. Dùng YYYY-MM-DD.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        if start_date > end_date:
+            return Response({'detail': 'start_date phải nhỏ hơn hoặc bằng end_date'}, status=status.HTTP_400_BAD_REQUEST)
+
+        start_dt = timezone.make_aware(datetime.combine(start_date, datetime.min.time()), tz)
+        end_dt = timezone.make_aware(datetime.combine(end_date, datetime.max.time()), tz)
+
+        filtered_orders = orders_qs.filter(
+            delivery_status__in=SUCCESS_STATUSES,
+            created_date__range=(start_dt, end_dt),
+        )
+
+        effective_price = ExpressionWrapper(
+            (F('food_price') + Coalesce(F('food_option_price'), Value(0, output_field=DecimalField(max_digits=10, decimal_places=2)))) * F('quantity'),
+            output_field=DecimalField(max_digits=14, decimal_places=2),
+        )
+
+        queryset = (
+            OrderDetail.objects
+            .filter(order__in=filtered_orders)
+            .values('food_id', 'food__title', 'food__image', 'food__price')
+            .annotate(
+                total_sold=Coalesce(Sum('quantity'), Value(0)),
+                revenue_contribution=Coalesce(Sum(effective_price), Value(0, output_field=DecimalField(max_digits=14, decimal_places=2)))
+            )
+            .order_by('-total_sold')[:limit]
+        )
+
+        results = []
+        for idx, entry in enumerate(queryset, start=1):
+            results.append({
+                'rank': idx,
+                'food_id': entry['food_id'],
+                'food_name': entry['food__title'],
+                'image': entry['food__image'],
+                'price': float(entry['food__price'] or 0),
+                'total_sold': entry['total_sold'] or 0,
+                'revenue_contribution': float(entry['revenue_contribution'] or 0),
+            })
+
+        return Response({
+            'store_id': store_id,
+            'start_date': start_date_str,
+            'end_date': end_date_str,
+            'results': results,
+        })

@@ -8,6 +8,8 @@ from .views import (
     FunnelConversionAPIView,
     OrderHeatmapAPIView,
     StoresTableAPIView,
+    RevenueStatsAPIView,
+    TopProductsStatsAPIView,
 )
 
 urlpatterns = [
@@ -18,4 +20,6 @@ urlpatterns = [
     path('funnel/', FunnelConversionAPIView.as_view(), name='dashboard_funnel'),
     path('order-heatmap/', OrderHeatmapAPIView.as_view(), name='dashboard_order_heatmap'),
     path('stores-table/', StoresTableAPIView.as_view(), name='dashboard_stores_table'),
+    path('stats/revenue/', RevenueStatsAPIView.as_view(), name='dashboard_stats_revenue'),
+    path('stats/top-products/', TopProductsStatsAPIView.as_view(), name='dashboard_stats_top_products'),
 ]
