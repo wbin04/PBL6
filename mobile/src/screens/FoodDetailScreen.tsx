@@ -7,9 +7,9 @@ import {
   Image,
   TouchableOpacity,
   ActivityIndicator,
-  SafeAreaView,
   Alert,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRoute, useNavigation, RouteProp } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { Ionicons } from '@expo/vector-icons';
@@ -20,6 +20,7 @@ import { addToCart } from '@/store/slices/cartSlice';
 import { menuService, cartService } from '@/services';
 import { FoodDetail, RootStackParamList } from '@/types';
 import { COLORS, SPACING, BORDER_RADIUS, SHADOWS, API_CONFIG, STORAGE_KEYS } from '@/constants';
+import { getImageSource } from '@/utils/imageUtils';
 
 type FoodDetailRouteProp = RouteProp<RootStackParamList, 'FoodDetail'>;
 type FoodDetailNavigationProp = NativeStackNavigationProp<RootStackParamList, 'FoodDetail'>;
@@ -134,10 +135,8 @@ const FoodDetailScreen: React.FC = () => {
     }).format(parseInt(price));
   };
 
-  const getImageUri = (imageUrl: string) => {
-    return imageUrl.startsWith('http')
-      ? imageUrl
-      : `${API_CONFIG.BASE_URL.replace(/\/api$/, '')}/media/${imageUrl}`;
+  const getImageUri = (imageUrl?: string | null) => {
+    return getImageSource(imageUrl as any);
   };
 
   if (loading) {
@@ -164,7 +163,7 @@ const FoodDetailScreen: React.FC = () => {
   }
 
   return (
-    <View style={styles.container}>
+    <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
       {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity style={styles.backIcon} onPress={() => navigation.goBack()}>
@@ -180,7 +179,7 @@ const FoodDetailScreen: React.FC = () => {
         {/* Food Image */}
         <View style={styles.imageContainer}>
           <Image
-            source={{ uri: getImageUri(foodDetail.image) }}
+            source={getImageUri(foodDetail.image)}
             style={styles.foodImage}
             resizeMode="cover"
           />
@@ -296,7 +295,7 @@ const FoodDetailScreen: React.FC = () => {
           </View>
         )}
       </View>
-    </View>
+    </SafeAreaView>
   );
 };
 

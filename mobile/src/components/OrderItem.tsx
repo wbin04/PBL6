@@ -75,9 +75,7 @@ const OrderItem: React.FC<OrderItemProps> = ({
         <View style={styles.orderInfo}>
           <Text style={styles.orderId}>Đơn hàng #{order.id}</Text>
           <Text style={styles.orderDate}>
-            {order.created_date_display 
-              ? order.created_date_display 
-              : formatDate(order.created_date)}
+            {formatDate(order.created_date)}
           </Text>
         </View>
         <View style={[styles.statusBadge, { backgroundColor: getStatusColor(order.order_status) }]}>

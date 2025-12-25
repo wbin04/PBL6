@@ -22,20 +22,29 @@ import { logout } from "@/store/slices/authSlice";
 import { authApi } from "@/services/api";
 import { Alert } from "react-native";
 
-type Role = "customer" | "shipper";
+type Role = "customer" | "shipper" | "seller" | "admin";
+
+type MenuItem = {
+  title: string;
+  icon: any;
+  section: string;
+};
 
 interface SidebarProps {
   isOpen: boolean;
   onClose: () => void;
   currentRole?: Role;
   onSwitchRole?: (next: Role) => void;
+  menuItems?: MenuItem[];
+  onMenuItemPress?: (section: string) => void;
+  hitSlop?: { top?: number; bottom?: number; left?: number; right?: number };
 }
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
 const PANEL_WIDTH = Math.min(320, Math.round(SCREEN_WIDTH * 0.82));
 const APP_ORANGE = "#e95322";
 
-export default function Sidebar({ isOpen, onClose, currentRole, onSwitchRole }: SidebarProps) {
+export default function Sidebar({ isOpen, onClose, currentRole, onSwitchRole, menuItems, onMenuItemPress, hitSlop }: SidebarProps) {
   const translateX = useRef(new Animated.Value(-PANEL_WIDTH)).current;
   const navigation = useNavigation<any>();
   const dispatch = useDispatch<AppDispatch>();
@@ -55,8 +64,14 @@ export default function Sidebar({ isOpen, onClose, currentRole, onSwitchRole }: 
   // Determine if user can access shipper features
   const canAccessShipper = useMemo(() => {
     if (!user) return false;
-    // Only "Người vận chuyển" can access both customer and shipper features
-    return user.role === 'Người vận chuyển';
+    // Check both role name and role_id (4 = Người vận chuyển)
+    return user.role === 'Người vận chuyển' || user.role_id === 4;
+  }, [user]);
+
+  const canAccessSeller = useMemo(() => {
+    if (!user) return false;
+    // Check both role name and role_id (3 = Chủ cửa hàng)
+    return user.role === 'Chủ cửa hàng' || user.role_id === 3;
   }, [user]);
 
   useEffect(() => {
@@ -66,7 +81,25 @@ export default function Sidebar({ isOpen, onClose, currentRole, onSwitchRole }: 
         return;
       }
       const v = await AsyncStorage.getItem("activeRole");
-      setRoleState(v === "shipper" ? "shipper" : "customer");
+      if (v === "shipper" || v === "seller" || v === "customer" || v === "admin") {
+        setRoleState(v as Role);
+        return;
+      }
+      
+      // Check both role name and role_id
+      if (user?.role === 'Chủ cửa hàng' || user?.role_id === 3) {
+        setRoleState("seller");
+        return;
+      }
+      if (user?.role === 'Người vận chuyển' || user?.role_id === 4) {
+        setRoleState("shipper");
+        return;
+      }
+      if (user?.role === 'Quản lý' || user?.role_id === 2) {
+        setRoleState("admin");
+        return;
+      }
+      setRoleState("customer");
     };
     
     const loadRegistrationStatus = async () => {
@@ -93,14 +126,15 @@ export default function Sidebar({ isOpen, onClose, currentRole, onSwitchRole }: 
     }).start();
   }, [isOpen, translateX]);
 
-  const setRoleAndGo = async (next: Role, to: string) => {
+  const setRoleAndGo = async (next: Role) => {
     console.log('Sidebar - switching to role:', next);
     setRoleState(next);
     onSwitchRole?.(next);
     await AsyncStorage.setItem("activeRole", next);
     onClose();
     
-    // Add a small delay to ensure AsyncStorage is updated before navigation
+    // Navigate to MainTabs for all roles
+    // MainTabs will handle showing the correct bottom bar based on activeRole
     setTimeout(() => {
       navigation.reset({ index: 0, routes: [{ name: "MainTabs" }] });
     }, 100);
@@ -113,18 +147,13 @@ export default function Sidebar({ isOpen, onClose, currentRole, onSwitchRole }: 
       await AsyncStorage.removeItem("token");
       
       // Dispatch logout action to Redux
+      // App.tsx will automatically handle navigation to Login screen
       dispatch(logout());
       
-      // Close sidebar and navigate to login
+      // Close sidebar
       onClose();
       
-      // Reset navigation stack to login screen
-      setTimeout(() => {
-        navigation.reset({
-          index: 0,
-          routes: [{ name: "Login" }],
-        });
-      }, 100);
+      console.log('Logout successful, App.tsx will handle navigation');
     } catch (error) {
       console.error('Logout error:', error);
     }
@@ -218,6 +247,8 @@ export default function Sidebar({ isOpen, onClose, currentRole, onSwitchRole }: 
 
   const isShipper = useMemo(() => roleState === "shipper", [roleState]);
   const isCustomer = useMemo(() => roleState === "customer", [roleState]);
+  const isSeller = useMemo(() => roleState === "seller", [roleState]);
+  const isAdmin = useMemo(() => roleState === "admin", [roleState]);
 
   if (!isOpen) return null;
 
@@ -229,63 +260,47 @@ export default function Sidebar({ isOpen, onClose, currentRole, onSwitchRole }: 
           <SafeAreaView style={{ flex: 1 }}>
             <View style={styles.header}>
               <Text style={styles.title}>Menu</Text>
-              <TouchableOpacity onPress={onClose} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+              <TouchableOpacity onPress={onClose} hitSlop={hitSlop || { top: 50, bottom: 10, left: 10, right: 10 }}>
                 <X size={22} color="#fff" />
               </TouchableOpacity>
             </View>
 
-            {/* Admin Dashboard Option - Only show if user is admin */}
-            {user?.role === 'Quản lý' && (
+            {/* Admin */}
+            {(user?.role === 'Quản lý' || user?.role_id === 2) && (
               <TouchableOpacity
-                style={[styles.card, styles.cardInactive]}
+                style={[styles.card, isAdmin ? styles.cardActive : styles.cardInactive]}
                 activeOpacity={0.9}
-                onPress={() => {
-                  onClose();
-                  setTimeout(() => {
-                    navigation.reset({ 
-                      index: 0, 
-                      routes: [{ name: "AdminDashboard" }] 
-                    });
-                  }, 100);
-                }}
+                onPress={() => setRoleAndGo("admin")}
               >
                 <View style={styles.cardIconWrap}>
                   <User size={20} color={APP_ORANGE} />
                 </View>
                 <View style={styles.cardTextWrap}>
                   <Text style={styles.cardTitle}>Quản lý</Text>
-                  <Text style={styles.cardDesc}>Chuyển về trang quản lý</Text>
+                  <Text style={styles.cardDesc}>{isAdmin ? "Đang sử dụng" : "Chuyển về trang quản lý"}</Text>
                 </View>
               </TouchableOpacity>
             )}
 
-            {/* Store Management Dashboard - Only show if user is store manager */}
-            {user?.role === 'Chủ cửa hàng' && (
+            {/* Seller */}
+            {canAccessSeller && (
               <TouchableOpacity
-                style={[styles.card, styles.cardInactive]}
+                style={[styles.card, isSeller ? styles.cardActive : styles.cardInactive]}
                 activeOpacity={0.9}
-                onPress={() => {
-                  onClose();
-                  setTimeout(() => {
-                    navigation.reset({ 
-                      index: 0, 
-                      routes: [{ name: "SellerDashboard" }] 
-                    });
-                  }, 100);
-                }}
+                onPress={() => setRoleAndGo("seller")}
               >
                 <View style={styles.cardIconWrap}>
                   <Store size={20} color={APP_ORANGE} />
                 </View>
                 <View style={styles.cardTextWrap}>
                   <Text style={styles.cardTitle}>Quản lý cửa hàng</Text>
-                  <Text style={styles.cardDesc}>Chuyển về trang quản lý cửa hàng</Text>
+                  <Text style={styles.cardDesc}>{isSeller ? "Đang sử dụng" : "Chuyển về trang quản lý cửa hàng"}</Text>
                 </View>
               </TouchableOpacity>
             )}
 
             {/* Registration Options - Only show if user is customer */}
-            {user?.role === 'Khách hàng' && (
+            {(user?.role === 'Khách hàng' || user?.role_id === 1) && (
               <>
                 {/* Shipper Registration */}
                 <TouchableOpacity
@@ -357,12 +372,12 @@ export default function Sidebar({ isOpen, onClose, currentRole, onSwitchRole }: 
               </>
             )}
 
-            {/* Shipper Option - Only show if user role is "Người vận chuyển" */}
+            {/* Shipper */}
             {canAccessShipper && (
               <TouchableOpacity
                 style={[styles.card, isShipper ? styles.cardActive : styles.cardInactive]}
                 activeOpacity={0.9}
-                onPress={() => setRoleAndGo("shipper", "/shipper")}
+                onPress={() => setRoleAndGo("shipper")}
               >
                 <View style={styles.cardIconWrap}>
                   <Truck size={20} color={APP_ORANGE} />
@@ -374,11 +389,11 @@ export default function Sidebar({ isOpen, onClose, currentRole, onSwitchRole }: 
               </TouchableOpacity>
             )}
 
-            {/* Customer Option - Always show */}
+            {/* Customer - Always show */}
             <TouchableOpacity
               style={[styles.card, isCustomer ? styles.cardActive : styles.cardInactive]}
               activeOpacity={0.9}
-              onPress={() => setRoleAndGo("customer", "/")}
+              onPress={() => setRoleAndGo("customer")}
             >
               <View style={styles.cardIconWrap}>
                 <ShoppingBag size={20} color={APP_ORANGE} />
@@ -392,13 +407,15 @@ export default function Sidebar({ isOpen, onClose, currentRole, onSwitchRole }: 
             <View style={styles.footerWrap}>
               <View style={styles.footerLine} />
               <Text style={styles.footerText}>
-                {user?.role === 'Người vận chuyển' 
-                  ? (isCustomer ? "Khách hàng" : "Shipper") + " - Chọn chế độ phù hợp"
-                  : "Khách hàng"
-                }
+                {(user?.role === 'Quản lý' || user?.role_id === 2)
+                  ? 'Bạn đang ở chế độ Quản lý'
+                  : (user?.role === 'Chủ cửa hàng' || user?.role_id === 3)
+                  ? (isCustomer ? 'Đang mua hàng như khách' : 'Đang quản lý cửa hàng')
+                  : (user?.role === 'Người vận chuyển' || user?.role_id === 4)
+                  ? (isCustomer ? 'Đang mua hàng như khách' : 'Đang giao hàng')
+                  : 'Bạn đang ở chế độ Khách hàng'}
               </Text>
               
-              {/* Logout Button */}
               <TouchableOpacity
                 style={[styles.card, styles.logoutCard]}
                 activeOpacity={0.9}
@@ -523,5 +540,43 @@ const styles = StyleSheet.create({
   },
   logoutDesc: {
     color: "rgba(255,255,255,0.7)",
+  },
+  menuSection: {
+    marginBottom: 8,
+  },
+  menuSectionTitle: {
+    fontSize: 14,
+    color: "rgba(255,255,255,0.8)",
+    fontFamily: Fonts.LeagueSpartanBold,
+    marginBottom: 8,
+    marginLeft: 4,
+  },
+  menuItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    borderRadius: 12,
+    paddingVertical: 12,
+    paddingHorizontal: 12,
+    marginBottom: 6,
+    backgroundColor: "rgba(255,255,255,0.1)",
+  },
+  menuItemIconWrap: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: "rgba(255,255,255,0.95)",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  menuItemText: {
+    fontSize: 15,
+    color: "#fff",
+    fontFamily: Fonts.LeagueSpartanSemiBold,
+  },
+  divider: {
+    height: 1,
+    backgroundColor: "rgba(255,255,255,0.2)",
+    marginVertical: 12,
   },
 });

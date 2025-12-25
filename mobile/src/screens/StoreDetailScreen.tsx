@@ -1,9 +1,8 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   View,
   Text,
   StyleSheet,
-  ScrollView,
   FlatList,
   TouchableOpacity,
   StatusBar,
@@ -11,18 +10,23 @@ import {
   Dimensions,
   Image,
   Alert,
+  Modal,
+  Pressable,
 } from 'react-native';
-import { useNavigation, useRoute, useFocusEffect, RouteProp } from '@react-navigation/native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import { RootStackParamList, Category, Food, Store } from '@/types';
+import { RootStackParamList, Category, Food } from '@/types';
 import { useDispatch, useSelector } from 'react-redux';
 import { RootState, AppDispatch } from '@/store';
 import { fetchStoreDetail } from '@/store/slices/storesSlice';
 import { fetchCategories } from '@/store/slices/menuSlice';
-import { FoodCard, CategoryCard } from '@/components';
+import { FoodCard } from '@/components';
 import { Ionicons } from '@expo/vector-icons';
+import { MoreHorizontal, Home as HomeIcon } from 'lucide-react-native';
 import { COLORS, SPACING, BORDER_RADIUS, SHADOWS, API_CONFIG } from '@/constants';
-import { storesService, menuService } from '@/services';
+import { storesService } from '@/services';
+import { Fonts } from '@/constants/Fonts';
 
 interface StoreStats {
   total_foods: number;
@@ -52,25 +56,26 @@ export const StoreDetailScreen: React.FC<StoreDetailProps> = () => {
   const { currentStore, loading } = useSelector((state: RootState) => state.stores);
   const { categories } = useSelector((state: RootState) => state.menu);
   
+  // Popup menu state
+  const [menuVisible, setMenuVisible] = useState(false);
+  const goHome = () => {
+    setMenuVisible(false);
+    navigation.navigate('MainTabs');
+  };
+
   const [refreshing, setRefreshing] = useState(false);
   const [storeFoods, setStoreFoods] = useState<Food[]>([]);
   const [selectedCategory, setSelectedCategory] = useState<number | null>(null);
   const [foodsLoading, setFoodsLoading] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
   const [hasMoreFoods, setHasMoreFoods] = useState(true);
-  const [storeStats, setStoreStats] = useState<{
-    total_foods: number;
-    total_orders: number;
-    total_revenue: number;
-    average_rating: number;
-    total_ratings: number;
-  } | null>(null);
+  const [storeStats, setStoreStats] = useState<StoreStats | null>(null);
 
   // Fetch store detail when component mounts
   useEffect(() => {
     if (storeId) {
       dispatch(fetchStoreDetail(storeId));
-      dispatch(fetchCategories()); // Also fetch categories
+      dispatch(fetchCategories());
       fetchStoreFoods();
       fetchStoreStats();
     }
@@ -199,10 +204,12 @@ export const StoreDetailScreen: React.FC<StoreDetailProps> = () => {
         ]}
         onPress={() => handleCategoryPress(item.id)}
       >
-        <Text style={[
-          styles.categoryChipText,
-          isSelected && styles.categoryChipTextSelected
-        ]}>
+        <Text
+          style={[
+            styles.categoryChipText,
+            isSelected && styles.categoryChipTextSelected
+          ]}
+        >
           {item.cate_name}
         </Text>
       </TouchableOpacity>
@@ -210,13 +217,12 @@ export const StoreDetailScreen: React.FC<StoreDetailProps> = () => {
   };
 
   const renderFood = ({ item }: { item: Food }) => (
-    <View style={styles.foodCard}>
-      <FoodCard
-        food={item}
-        onPress={() => handleFoodPress(item.id)}
-        onAddToCart={() => handleAddToCart(item.id)}
-      />
-    </View>
+    <FoodCard
+      food={item}
+      onPress={() => handleFoodPress(item.id)}
+      onAddToCart={() => handleAddToCart(item.id)}
+      style={styles.foodCard}
+    />
   );
 
   if (loading && !currentStore) {
@@ -244,26 +250,22 @@ export const StoreDetailScreen: React.FC<StoreDetailProps> = () => {
   }
 
   return (
-    <View style={styles.container}>
-      <StatusBar barStyle="light-content" backgroundColor={COLORS.primary} />
-      
-      {/* Header */}
-      <View style={styles.header}>
-        <TouchableOpacity
-          style={styles.backButton}
-          onPress={() => navigation.goBack()}
-        >
-          <Ionicons name="arrow-back" size={24} color={COLORS.white} />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle} numberOfLines={1}>
-          {currentStore.store_name}
-        </Text>
-        <View style={styles.headerRight} />
-      </View>
+    <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
+      <StatusBar
+        barStyle="light-content"
+        backgroundColor="transparent"
+        translucent
+      />
 
-      <ScrollView
-        style={styles.content}
-        showsVerticalScrollIndicator={false}
+      <FlatList
+        data={storeFoods || []}
+        renderItem={renderFood}
+        keyExtractor={(item) => item.id.toString()}
+        numColumns={2}
+        columnWrapperStyle={styles.foodsRow}
+        contentContainerStyle={styles.listContent}
+        onEndReached={handleLoadMore}
+        onEndReachedThreshold={0.1}
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
@@ -272,243 +274,303 @@ export const StoreDetailScreen: React.FC<StoreDetailProps> = () => {
             tintColor={COLORS.primary}
           />
         }
-      >
-        {/* Store Info */}
-        <View style={styles.storeInfoSection}>
-          <Image
-            source={getImageSource(currentStore.image)}
-            style={styles.storeImage}
-            resizeMode="cover"
-            onError={(error) => {
-              console.log('StoreDetailScreen - Image load error:', error.nativeEvent.error);
-            }}
-            defaultSource={require('@/assets/images/placeholder.png')}
-          />
-          
-          <View style={styles.storeDetails}>
-            <Text style={styles.storeName}>{currentStore.store_name}</Text>
-            <Text style={styles.storeDescription}>
-              {currentStore.description || 'Cửa hàng thực phẩm chất lượng cao'}
-            </Text>
-            
-            <View style={styles.storeStats}>
-              <View style={styles.statItem}>
-                <Ionicons name="star" size={16} color="#FFB800" />
-                <Text style={styles.statText}>
-                  {storeStats?.average_rating || '0.0'}
-                </Text>
-                <Text style={styles.statLabel}>
-                  ({storeStats?.total_ratings || 0} đánh giá)
-                </Text>
-              </View>
-              
-              <View style={styles.statItem}>
-                <Ionicons name="restaurant-outline" size={16} color={COLORS.gray500} />
-                <Text style={styles.statText}>
-                  {storeStats?.total_foods || 0}
-                </Text>
-                <Text style={styles.statLabel}>món ăn</Text>
-              </View>
-              
-              <View style={styles.statItem}>
-                <Ionicons name="receipt-outline" size={16} color={COLORS.gray500} />
-                <Text style={styles.statText}>
-                  {storeStats?.total_orders || 0}
-                </Text>
-                <Text style={styles.statLabel}>đơn hàng</Text>
-              </View>
-            </View>
-          </View>
-        </View>
-
-        {/* Categories Filter */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Danh mục món ăn</Text>
-          
-          <FlatList
-            data={categories || []}
-            renderItem={renderCategory}
-            keyExtractor={(item) => item.id.toString()}
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.categoriesContainer}
-          />
-        </View>
-
-        {/* Foods List */}
-        <View style={styles.section}>
-          <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>
-              {selectedCategory 
-                ? `Món ${(categories || []).find(c => c.id === selectedCategory)?.cate_name || ''} (${(storeFoods || []).length})`
-                : `Tất cả món ăn (${storeStats ? storeStats.total_foods : (storeFoods || []).length})`
-              }
-            </Text>
-            
-            {selectedCategory && (
-              <TouchableOpacity
-                onPress={() => {
-                  setSelectedCategory(null);
-                  fetchStoreFoods(1, undefined, true);
+        ListHeaderComponent={
+          <>
+            {/* Cover image + back button giống layout RestaurantDetail */}
+            <View style={styles.coverWrap}>
+              <Image
+                source={getImageSource(currentStore.image)}
+                style={styles.coverImage}
+                resizeMode="cover"
+                onError={(error) => {
+                  console.log(
+                    'StoreDetailScreen - Image load error:',
+                    error.nativeEvent.error
+                  );
                 }}
-                style={styles.clearFilterButton}
-              >
-                <Text style={styles.clearFilterText}>Xóa bộ lọc</Text>
-              </TouchableOpacity>
-            )}
-          </View>
-          
-          <FlatList
-            data={storeFoods || []}
-            renderItem={renderFood}
-            keyExtractor={(item) => item.id.toString()}
-            numColumns={2}
-            scrollEnabled={false}
-            contentContainerStyle={styles.foodsGrid}
-            columnWrapperStyle={styles.foodsRow}
-            onEndReached={handleLoadMore}
-            onEndReachedThreshold={0.1}
-            ListEmptyComponent={
-              foodsLoading ? (
-                <View style={styles.emptyState}>
-                  <Text>Đang tải danh sách món ăn...</Text>
+                defaultSource={require('@/assets/images/placeholder.png')}
+              />
+
+              <View style={styles.topBar}>
+                <TouchableOpacity
+                  style={styles.topBtn}
+                  onPress={() => navigation.goBack()}
+                  activeOpacity={0.8}
+                >
+                  <Ionicons name="arrow-back" size={18} color={COLORS.text} />
+                </TouchableOpacity>
+                <Pressable
+                  style={styles.topBtn}
+                  onPress={() => setMenuVisible(true)}
+                >
+                  <MoreHorizontal size={20} color={COLORS.text} />
+                </Pressable>
+              </View>
+                  {/* ===== MENU POPUP ===== */}
+                  <Modal transparent visible={menuVisible} animationType="fade">
+                    <Pressable
+                      style={styles.menuOverlay}
+                      onPress={() => setMenuVisible(false)}
+                    >
+                      <View style={styles.menuBox}>
+                        <Pressable style={styles.menuItem} onPress={goHome}>
+                          <HomeIcon size={18} color={COLORS.text} />
+                          <Text style={styles.menuText}>Về trang chủ</Text>
+                        </Pressable>
+                      </View>
+                    </Pressable>
+                  </Modal>
+            </View>
+
+            {/* Thông tin cửa hàng + stats */}
+            <View style={styles.storeDetailsCard}>
+              <View style={styles.inlineMeta}>
+                <View style={styles.metaItem}>
+                  <Ionicons name="star" size={16} color="#F59E0B" />
+                  <Text style={styles.metaBold}>
+                    {storeStats?.average_rating
+                      ? Number(storeStats.average_rating).toFixed(1)
+                      : '0.0'}
+                  </Text>
+                  <Text style={styles.metaGray}>
+                    ({storeStats?.total_ratings || 0} đánh giá)
+                  </Text>
                 </View>
-              ) : (
-                <View style={styles.emptyState}>
-                  <Text>Không có món ăn nào</Text>
+
+                <View style={styles.metaItem}>
+                  <Ionicons
+                    name="restaurant-outline"
+                    size={16}
+                    color={COLORS.gray500}
+                  />
+                  <Text style={styles.metaGray}>
+                    {storeStats?.total_foods || storeFoods.length} món
+                  </Text>
                 </View>
-              )
-            }
-            ListFooterComponent={
-              foodsLoading && (storeFoods || []).length > 0 ? (
-                <View style={styles.loadingFooter}>
-                  <Text>Đang tải thêm...</Text>
+
+                <View style={styles.metaItem}>
+                  <Ionicons
+                    name="receipt-outline"
+                    size={16}
+                    color={COLORS.gray500}
+                  />
+                  <Text style={styles.metaGray}>
+                    {storeStats?.total_orders || 0} đơn
+                  </Text>
                 </View>
-              ) : null
-            }
-          />
-        </View>
-      </ScrollView>
-    </View>
+              </View>
+
+              <Text style={styles.storeName}>{currentStore.store_name}</Text>
+              <Text style={styles.storeDescription}>
+                {currentStore.description || 'Cửa hàng thực phẩm chất lượng cao'}
+              </Text>
+            </View>
+
+            {/* Danh mục món ăn (tabs) */}
+            <View style={styles.categoriesSection}>
+              <Text style={styles.sectionTitle}>Danh mục món ăn</Text>
+
+              <FlatList
+                data={categories || []}
+                renderItem={renderCategory}
+                keyExtractor={(item) => item.id.toString()}
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={styles.categoriesContainer}
+              />
+            </View>
+
+            {/* Title list món ăn + nút xoá bộ lọc */}
+            <View style={styles.foodHeaderRow}>
+              <Text style={styles.sectionTitle}>
+                {selectedCategory
+                  ? `Món ${
+                      (categories || []).find(
+                        (c) => c.id === selectedCategory
+                      )?.cate_name || ''
+                    } (${(storeFoods || []).length})`
+                  : `Tất cả món ăn (${
+                      storeStats ? storeStats.total_foods : (storeFoods || []).length
+                    })`}
+              </Text>
+
+              {selectedCategory && (
+                <TouchableOpacity
+                  onPress={() => {
+                    setSelectedCategory(null);
+                    fetchStoreFoods(1, undefined, true);
+                  }}
+                  style={styles.clearFilterButton}
+                >
+                  <Text style={styles.clearFilterText}>Xóa bộ lọc</Text>
+                </TouchableOpacity>
+              )}
+            </View>
+          </>
+        }
+        ListEmptyComponent={
+          foodsLoading ? (
+            <View style={styles.emptyState}>
+              <Text>Đang tải danh sách món ăn...</Text>
+            </View>
+          ) : (
+            <View style={styles.emptyState}>
+              <Text>Không có món ăn nào</Text>
+            </View>
+          )
+        }
+        ListFooterComponent={
+          foodsLoading && (storeFoods || []).length > 0 ? (
+            <View style={styles.loadingFooter}>
+              <Text>Đang tải thêm...</Text>
+            </View>
+          ) : null
+        }
+      />
+    </SafeAreaView>
   );
 };
+
+const R = 24;
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: COLORS.background,
   },
-  
+
+  /* ===== MENU POPUP ===== */
+  menuOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.15)',
+    justifyContent: 'flex-start',
+    paddingTop: 90,
+    paddingRight: 16,
+    alignItems: 'flex-end',
+  },
+  menuBox: {
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    width: 180,
+    paddingVertical: 8,
+    elevation: 4,
+    shadowColor: '#000',
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    shadowOffset: { width: 1, height: 2 },
+  },
+  menuItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+  },
+  menuText: {
+    fontFamily: Fonts.LeagueSpartanMedium,
+    fontSize: 14,
+    color: COLORS.text,
+  },
+
   centerContent: {
     justifyContent: 'center',
     alignItems: 'center',
   },
-  
-  header: {
-    backgroundColor: COLORS.primary,
-    paddingTop: 50,
-    paddingHorizontal: SPACING.lg,
-    paddingBottom: SPACING.md,
+
+  // === Cover + top bar ===
+  coverWrap: {
+    width: '100%',
+    height: 260,
+    borderBottomLeftRadius: R,
+    borderBottomRightRadius: R,
+    overflow: 'hidden',
+    backgroundColor: COLORS.gray100,
+  },
+  coverImage: {
+    width: '100%',
+    height: '100%',
+  },
+  topBar: {
+    position: 'absolute',
+    top: 40,
+    left: 16,
+    right: 16,
     flexDirection: 'row',
-    alignItems: 'center',
     justifyContent: 'space-between',
+  },
+  topBtn: {
+    backgroundColor: COLORS.white,
+    padding: 8,
+    borderRadius: 999,
     ...SHADOWS.sm,
   },
-  
-  backButton: {
-    padding: SPACING.xs,
-  },
-  
-  headerTitle: {
-    flex: 1,
-    color: COLORS.white,
-    fontSize: 18,
-    fontWeight: 'bold',
-    textAlign: 'center',
-    marginHorizontal: SPACING.sm,
-  },
-  
-  headerRight: {
-    width: 32, // Same as back button to center title
-  },
-  
-  content: {
-    flex: 1,
-  },
-  
-  storeInfoSection: {
+
+  // === Store details ===
+  storeDetailsCard: {
     backgroundColor: COLORS.white,
-    marginBottom: SPACING.sm,
+    paddingHorizontal: SPACING.lg,
+    paddingTop: SPACING.lg,
+    paddingBottom: SPACING.md,
+    gap: 8,
   },
-  
-  storeImage: {
-    width: '100%',
-    height: 200,
+
+  inlineMeta: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 16,
   },
-  
-  storeDetails: {
-    padding: SPACING.lg,
+  metaItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
   },
-  
+  metaBold: {
+    color: COLORS.text,
+    fontFamily: Fonts.LeagueSpartanBold,
+    fontSize: 14,
+  },
+  metaGray: {
+    color: COLORS.gray500,
+    fontFamily: Fonts.LeagueSpartanRegular,
+    fontSize: 13,
+  },
+
   storeName: {
     fontSize: 24,
     fontWeight: 'bold',
     color: COLORS.text,
+    marginTop: 4,
+    fontFamily: Fonts.LeagueSpartanBold,
+  },
+
+  storeDescription: {
+    fontSize: 15,
+    color: COLORS.textSecondary,
+    lineHeight: 22,
+    marginTop: 4,
+    fontFamily: Fonts.LeagueSpartanRegular,
+  },
+
+  // === Categories section ===
+  categoriesSection: {
+    backgroundColor: COLORS.white,
+    paddingHorizontal: SPACING.lg,
+    paddingBottom: SPACING.md,
+    paddingTop: SPACING.sm,
     marginBottom: SPACING.xs,
   },
-  
-  storeDescription: {
-    fontSize: 16,
-    color: COLORS.textSecondary,
-    lineHeight: 24,
-    marginBottom: SPACING.md,
-  },
-  
-  storeStats: {
-    flexDirection: 'row',
-    justifyContent: 'space-around',
-  },
-  
-  statItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-  },
-  
-  statText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: COLORS.text,
-  },
-  
-  statLabel: {
-    fontSize: 12,
-    color: COLORS.gray500,
-  },
-  
-  section: {
-    backgroundColor: COLORS.white,
-    padding: SPACING.lg,
-    marginBottom: SPACING.sm,
-  },
-  
-  sectionHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: SPACING.md,
-  },
-  
+
   sectionTitle: {
     fontSize: 18,
     fontWeight: 'bold',
     color: COLORS.text,
+    fontFamily: Fonts.LeagueSpartanSemiBold,
   },
-  
+
   categoriesContainer: {
     paddingVertical: SPACING.sm,
   },
-  
+
   categoryChip: {
     backgroundColor: COLORS.gray100,
     borderRadius: BORDER_RADIUS.full,
@@ -518,57 +580,73 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: COLORS.border,
   },
-  
+
   categoryChipSelected: {
     backgroundColor: COLORS.primary,
     borderColor: COLORS.primary,
   },
-  
+
   categoryChipText: {
     fontSize: 14,
     fontWeight: '500',
     color: COLORS.text,
+    fontFamily: Fonts.LeagueSpartanMedium,
   },
-  
+
   categoryChipTextSelected: {
     color: COLORS.white,
+    fontFamily: Fonts.LeagueSpartanSemiBold,
   },
-  
+
   clearFilterButton: {
     padding: SPACING.xs,
   },
-  
+
   clearFilterText: {
     fontSize: 14,
     color: COLORS.primary,
     fontWeight: '500',
+    fontFamily: Fonts.LeagueSpartanMedium,
   },
-  
-  foodsGrid: {
-    paddingBottom: SPACING.md,
+
+  // === List header cho phần món ăn ===
+  foodHeaderRow: {
+    backgroundColor: COLORS.white,
+    paddingHorizontal: SPACING.lg,
+    paddingVertical: SPACING.md,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: SPACING.xs,
   },
-  
+
+  // === Foods grid ===
+  listContent: {
+    paddingBottom: SPACING.xl,
+  },
+
   foodsRow: {
     justifyContent: 'space-between',
+    paddingHorizontal: SPACING.lg,
   },
-  
+
   foodCard: {
     width: '48%',
     marginBottom: SPACING.md,
   },
-  
+
   loadingFooter: {
     padding: SPACING.lg,
     alignItems: 'center',
   },
-  
+
   emptyState: {
     padding: SPACING.lg,
     alignItems: 'center',
     justifyContent: 'center',
     minHeight: 100,
   },
-  
+
   retryButton: {
     backgroundColor: COLORS.primary,
     borderRadius: BORDER_RADIUS.md,
@@ -576,10 +654,11 @@ const styles = StyleSheet.create({
     paddingHorizontal: SPACING.lg,
     marginTop: SPACING.md,
   },
-  
+
   retryButtonText: {
     color: COLORS.white,
     fontSize: 16,
     fontWeight: '600',
+    fontFamily: Fonts.LeagueSpartanSemiBold,
   },
 });

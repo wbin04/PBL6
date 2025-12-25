@@ -5,13 +5,22 @@ from rest_framework import status
 from django.shortcuts import get_object_or_404
 from django.core.paginator import Paginator
 from django.db.models import Q
-from decimal import Decimal
+from decimal import Decimal, ROUND_HALF_UP
+import os
+import uuid
+from django.core.files.storage import default_storage
 from .models import Order, OrderDetail
 from .serializers import OrderSerializer, OrderDetailSerializer
 from apps.menu.models import Food
 from apps.cart.models import Cart, Item
 from apps.promotions.models import Promo
 from django.db import connection
+from apps.stores.models import Store
+from apps.utils.shipping import (
+    driving_distance_km,
+    calculate_shipping_fee,
+    normalize_coordinate,
+)
 
 
 @api_view(['GET', 'POST'])
@@ -63,51 +72,90 @@ def order_list_create(request):
         try:
             # Get cart
             cart = Cart.objects.get(user=request.user)
-            # Retrieve cart items via raw SQL to get food_option_id
+
+            # Retrieve cart items via raw SQL to get item id and food_option_id
             with connection.cursor() as cursor:
                 cursor.execute(
-                    "SELECT i.food_id, i.quantity, i.item_note, f.store_id, i.food_option_id FROM item i JOIN food f ON i.food_id = f.id WHERE i.cart_id = %s", 
+                    "SELECT i.id, i.food_id, i.quantity, i.item_note, f.store_id, i.food_option_id FROM item i JOIN food f ON i.food_id = f.id WHERE i.cart_id = %s",
                     [cart.id]
                 )
                 cart_rows = cursor.fetchall()
+
+            # Optional: filter cart items by selected_item_ids from frontend (for partial checkout)
+            raw_selected_ids = request.data.get('selected_item_ids') or request.data.get('selected_items') or []
+            selected_item_ids = set()
+            if raw_selected_ids:
+                if not isinstance(raw_selected_ids, (list, tuple, set)):
+                    raw_selected_ids = [raw_selected_ids]
+                for raw_id in raw_selected_ids:
+                    try:
+                        selected_item_ids.add(int(raw_id))
+                    except (TypeError, ValueError):
+                        continue
+
+                if selected_item_ids:
+                    cart_rows = [row for row in cart_rows if row[0] in selected_item_ids]
+
+            if selected_item_ids and not cart_rows:
+                return Response({'error': 'Selected items not found in cart'}, status=status.HTTP_400_BAD_REQUEST)
             if not cart_rows:
                 return Response({'error': 'Cart is empty'}, status=status.HTTP_400_BAD_REQUEST)
             
             # Group cart items by store
             items_by_store = {}
-            for food_id, quantity, item_note, store_id, food_option_id in cart_rows:
+            for item_id, food_id, quantity, item_note, store_id, food_option_id in cart_rows:
                 if store_id not in items_by_store:
                     items_by_store[store_id] = []
-                items_by_store[store_id].append((food_id, quantity, item_note, food_option_id))
+                items_by_store[store_id].append((item_id, food_id, quantity, item_note, food_option_id))
+
+            store_ids = [store_id for store_id in items_by_store.keys() if store_id is not None]
+            stores_cache = {store.id: store for store in Store.objects.filter(id__in=store_ids)}
             
             # Get food prices for calculating totals
-            food_ids = [food_id for food_id, _, _, _, _ in cart_rows]
+            food_ids = [food_id for _, food_id, _, _, _, _ in cart_rows]
             foods = {f.id: f for f in Food.objects.filter(id__in=food_ids)}
             
             # Get food options for price calculations
-            food_option_ids = [food_option_id for _, _, _, _, food_option_id in cart_rows if food_option_id]
+            food_option_ids = [food_option_id for _, _, _, _, _, food_option_id in cart_rows if food_option_id]
             food_options = {}
             if food_option_ids:
                 from apps.menu.models import FoodSize
                 food_options = {fs.id: fs for fs in FoodSize.objects.filter(id__in=food_option_ids)}
+
+            # Calculate selected cart total (only chosen items)
+            selected_cart_total = Decimal('0')
+            for _, food_id, quantity, _, _, food_option_id in cart_rows:
+                food = foods.get(food_id)
+                if food:
+                    item_price = food.price
+                    if food_option_id and food_option_id in food_options:
+                        item_price += food_options[food_option_id].price
+                    selected_cart_total += item_price * Decimal(str(quantity))
             
-            # Base order data - use Decimal for shipping_fee
-            from decimal import Decimal
-            shipping_fee = 15000  # Fixed shipping fee per store
+            # Determine drop-off coordinates (prefer request payload, fallback to profile)
+            customer_latitude = normalize_coordinate(request.data.get('ship_latitude'))
+            customer_longitude = normalize_coordinate(request.data.get('ship_longitude'))
+
+            if customer_latitude is None or customer_longitude is None:
+                customer_latitude = normalize_coordinate(getattr(request.user, 'latitude', None))
+                customer_longitude = normalize_coordinate(getattr(request.user, 'longitude', None))
+
+            # Base order data
             base_order_data = {
                 'user_id': request.user.id,
                 'receiver_name': request.data.get('receiver_name'),
                 'phone_number': request.data.get('phone_number'),
                 'ship_address': request.data.get('ship_address'),
+                'ship_latitude': customer_latitude,
+                'ship_longitude': customer_longitude,
                 'note': request.data.get('note', ''),
                 'payment_method': request.data.get('payment_method', 'COD'),
-                'shipping_fee': Decimal(str(shipping_fee))
             }
             
             # Apply promo if provided
-            from decimal import Decimal
             promo_discount = Decimal('0')
             applied_promos = []
+            multi_promo_support = False
             
             # Debug: Print received promo data
             print(f"Received promo data: promo_ids={request.data.get('promo_ids')}, discount_amount={request.data.get('discount_amount')}")
@@ -115,6 +163,7 @@ def order_list_create(request):
             # Handle multiple promos (new format)
             promo_ids = request.data.get('promo_ids', [])
             discount_amount = request.data.get('discount_amount', 0)
+            promo_details = request.data.get('promo_details', [])  # New: detailed promo info
             
             if promo_ids and discount_amount:
                 # Use discount amount calculated by frontend - convert to Decimal
@@ -123,6 +172,7 @@ def order_list_create(request):
                 # Set first promo as primary for database storage
                 base_order_data['promo'] = promo_ids[0] if promo_ids else None
                 print(f"Applied multiple promos: {applied_promos}, discount: {promo_discount}")
+                print(f"Promo details: {promo_details}")
                 
                 # Store promo info for order_promo table
                 try:
@@ -132,7 +182,7 @@ def order_list_create(request):
                     multi_promo_support = False
                 
                 # Validate discount amount is reasonable
-                if promo_discount > Decimal('1000000'):  # 1 million VND max discount
+                if promo_discount > Decimal('10000000'):  # 10 million VND max discount
                     print(f"ERROR: Discount too large: {promo_discount}")
                     return Response({
                         'error': f'Số tiền giảm giá quá lớn: {promo_discount}'
@@ -145,13 +195,13 @@ def order_list_create(request):
                         from django.utils import timezone
                         now = timezone.now()
                         promo = Promo.objects.get(
-                            id=promo_id, 
+                            id=promo_id,
                             start_date__lte=now,
                             end_date__gte=now
                         )
-                        if cart.total_money >= promo.minimum_pay:
+                        if selected_cart_total >= promo.minimum_pay:
                             # Sử dụng method calculate_discount từ model
-                            promo_discount = promo.calculate_discount(cart.total_money)
+                            promo_discount = promo.calculate_discount(selected_cart_total)
                             base_order_data['promo'] = promo.id
                             applied_promos = [promo_id]
                             print(f"Applied single promo: {promo_id}, discount: {promo_discount}")
@@ -167,7 +217,7 @@ def order_list_create(request):
             store_subtotals = {}
             for store_id, store_items in items_by_store.items():
                 store_subtotal = Decimal('0')
-                for food_id, quantity, item_note, food_option_id in store_items:
+                for _, food_id, quantity, item_note, food_option_id in store_items:
                     food = foods.get(food_id)
                     if food:
                         # Calculate item total: food_price + food_option_price (if any)
@@ -185,11 +235,23 @@ def order_list_create(request):
             for store_id, store_items in items_by_store.items():
                 store_subtotal = store_subtotals[store_id]
                 
-                # Calculate total = subtotal + shipping fee - use Decimal
-                shipping_fee_decimal = Decimal(str(shipping_fee))
+                store_obj = stores_cache.get(store_id)
+                distance_km = None
+                route_polyline = None
+                if store_obj:
+                    route_info = driving_distance_km(
+                        getattr(store_obj, 'latitude', None),
+                        getattr(store_obj, 'longitude', None),
+                        customer_latitude,
+                        customer_longitude,
+                    )
+                    distance_km = route_info.distance_km
+                    route_polyline = route_info.polyline
+
+                shipping_fee_decimal = calculate_shipping_fee(distance_km)
                 store_total_before_discount = store_subtotal + shipping_fee_decimal
                 
-                print(f"Store {store_id}: subtotal={store_subtotal}, shipping={shipping_fee_decimal}, before_discount={store_total_before_discount}")
+                print(f"Store {store_id}: subtotal={store_subtotal}, distance_km={distance_km}, shipping={shipping_fee_decimal}, before_discount={store_total_before_discount}")
                 
                 # Apply promo discount proportionally based on store subtotal
                 store_discount = Decimal('0')
@@ -207,10 +269,10 @@ def order_list_create(request):
                     # Apply discount but ensure total >= shipping_fee
                     store_total = max(shipping_fee_decimal, store_total_before_discount - store_discount)
                     # Round to 3 decimal places
-                    store_total = store_total.quantize(Decimal('0.001'), rounding='ROUND_HALF_UP')
+                    store_total = store_total.quantize(Decimal('0.001'), rounding=ROUND_HALF_UP)
                     print(f"Store {store_id}: final total after discount={store_total}")
                 else:
-                    store_total = store_total_before_discount.quantize(Decimal('0.001'), rounding='ROUND_HALF_UP')
+                    store_total = store_total_before_discount.quantize(Decimal('0.001'), rounding=ROUND_HALF_UP)
                     print(f"Store {store_id}: no discount applied, final total={store_total}")
                 
                 # Validate total_money is reasonable  
@@ -222,13 +284,14 @@ def order_list_create(request):
                         'error': f'Calculated total for store {store_id} is too large: {store_total}. Subtotal: {store_subtotal}, Shipping: {shipping_fee_decimal}, Discount: {store_discount}'
                     }, status=status.HTTP_400_BAD_REQUEST)
                 
-                # Round to 3 decimal places
-                store_total = round(store_total, 3)
-                
                 # Create order data for this store
                 order_data = base_order_data.copy()
-                order_data['total_money'] = store_total
+                # total_money should be FOOD ONLY (no shipping, no discount applied)
+                order_data['total_money'] = float(store_subtotal)
                 order_data['store_id'] = store_id
+                order_data['shipping_fee'] = shipping_fee_decimal
+                if route_polyline:
+                    order_data['route_polyline'] = route_polyline
                 
                 # Only set promo on the first order (for database storage)
                 if len(created_orders) > 0:
@@ -243,42 +306,63 @@ def order_list_create(request):
                         first_order_id = order.id
                     
                     order.group_id = first_order_id
+                    if route_polyline and not order.route_polyline:
+                        order.route_polyline = route_polyline
                     
                     # Update financial fields if they exist
                     if hasattr(order, 'total_before_discount'):
-                        # Calculate store subtotal without shipping
-                        store_subtotal_only = store_total - shipping_fee_decimal
-                        if len(created_orders) == 0 and promo_discount > Decimal('0'):
-                            # For first order, apply proportional discount
-                            store_discount = promo_discount  # Apply full discount to first store for simplicity
-                        else:
-                            store_discount = Decimal('0')
-                            
-                        order.total_before_discount = store_subtotal_only + shipping_fee_decimal
+                        # total_money is already set to store_subtotal (food only)
+                        # Now calculate with shipping and discount
+                        order.total_before_discount = store_subtotal + shipping_fee_decimal
                         order.total_discount = store_discount
                         order.total_after_discount = max(shipping_fee_decimal, order.total_before_discount - store_discount)
-                        order.total_money = order.total_after_discount  # Keep legacy field in sync
+                        # total_money remains as food subtotal only (no shipping, no discount)
                     
                     order.save()
                     
-                    # Save multiple promotions if supported
-                    if len(created_orders) == 0 and applied_promos and multi_promo_support:
+                    # Save promotions for this specific store
+                    if applied_promos and multi_promo_support and promo_details:
                         try:
-                            for promo_id in applied_promos:
-                                promo = Promo.objects.get(id=promo_id)
-                                # Calculate individual promo discount
-                                individual_discount = promo.calculate_discount(store_subtotal_only)
-                                OrderPromo.objects.create(
-                                    order=order,
-                                    promo=promo,
-                                    applied_amount=individual_discount
-                                )
+                            # Find promos that apply to this store
+                            for promo_detail in promo_details:
+                                promo_id = promo_detail.get('promo_id')
+                                promo_store_id = promo_detail.get('store_id')
+                                promo_discount_amount = Decimal(str(promo_detail.get('discount', 0)))
+                                
+                                # Apply promo to this order if:
+                                # 1. It's a system-wide promo (store_id = 0), OR
+                                # 2. It's specific to this store
+                                if promo_store_id == 0:
+                                    # System-wide promo: distribute proportionally
+                                    if total_cart_amount > Decimal('0'):
+                                        store_ratio = store_subtotal / total_cart_amount
+                                        individual_discount = (promo_discount_amount * store_ratio).quantize(Decimal('0.01'), rounding='ROUND_HALF_UP')
+                                    else:
+                                        individual_discount = Decimal('0')
+                                elif promo_store_id == store_id:
+                                    # Store-specific promo: full discount
+                                    individual_discount = promo_discount_amount
+                                else:
+                                    # This promo doesn't apply to this store
+                                    continue
+                                
+                                if individual_discount > Decimal('0'):
+                                    promo = Promo.objects.get(id=promo_id)
+                                    OrderPromo.objects.create(
+                                        order=order,
+                                        promo=promo,
+                                        applied_amount=individual_discount,
+                                        note=f"Store {store_id}"
+                                    )
+                                    print(f"Saved promo {promo_id} for order {order.id}, store {store_id}, discount: {individual_discount}")
                         except Exception as e:
-                            print(f"Warning: Could not save multiple promos: {e}")
+                            print(f"Warning: Could not save promos for store {store_id}: {e}")
+                            import traceback
+                            traceback.print_exc()
                     
                     # Insert order details for this store
                     with connection.cursor() as cursor:
-                        for food_id, quantity, item_note, food_option_id in store_items:
+                        for _, food_id, quantity, item_note, food_option_id in store_items:
                             food = foods.get(food_id)
                             if food:
                                 # Get food_option price if exists
@@ -296,9 +380,17 @@ def order_list_create(request):
                 else:
                     return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
             
-            # Clear cart items via raw SQL and update total
+            # Clear only the items that were actually ordered; if none specified, clear all
             with connection.cursor() as cursor:
-                cursor.execute("DELETE FROM item WHERE cart_id = %s", [cart.id])
+                if selected_item_ids:
+                    placeholders = ','.join(['%s'] * len(selected_item_ids))
+                    params = [cart.id, *selected_item_ids]
+                    cursor.execute(
+                        f"DELETE FROM item WHERE cart_id = %s AND id IN ({placeholders})",
+                        params
+                    )
+                else:
+                    cursor.execute("DELETE FROM item WHERE cart_id = %s", [cart.id])
             cart.update_total()
             
             # Return all created orders
@@ -347,12 +439,15 @@ def update_order_status(request, pk):
     
     new_status = request.data.get('order_status')
     cancel_reason = request.data.get('cancel_reason')
+    bank_name = request.data.get('bank_name')
+    bank_account = request.data.get('bank_account')
+    refund_requested_flag = request.data.get('refund_requested')
     
     print(f"New status: {new_status}")
     print(f"Cancel reason: {cancel_reason}")
     
     # Only allow customer to cancel with Vietnamese status
-    if new_status not in ['Đã huỷ']:
+    if new_status not in ['Đã huỷ', 'Đã hủy']:
         return Response({'error': 'Trạng thái không hợp lệ'}, status=status.HTTP_400_BAD_REQUEST)
     
     # Only cancel if current status is 'Chờ xác nhận'
@@ -370,6 +465,17 @@ def update_order_status(request, pk):
         order.cancelled_date = get_vietnam_time()
         order.cancelled_by_role = 'Khách hàng'  # Customer is cancelling
         print(f"Set cancelled_date and cancelled_by_role: Khách hàng")
+
+        # Handle refund info when non-cash payment
+        non_cash_payment = str(order.payment_method).lower() not in ['cash', 'cod']
+        refund_requested = refund_requested_flag is True or non_cash_payment
+        if refund_requested:
+            order.refund_requested = True
+            order.refund_status = 'Chờ xử lý'
+            if bank_name:
+                order.bank_name = bank_name
+            if bank_account:
+                order.bank_account = bank_account
     
     order.save()
     print(f"Order saved successfully")
@@ -589,14 +695,18 @@ def shipper_orders(request):
     
     try:
         shipper = Shipper.objects.get(user=request.user)
+        print(f"DEBUG: Current user: {request.user.id}, Shipper ID: {shipper.id}")
     except Shipper.DoesNotExist:
         return Response({'error': 'User is not a shipper'}, status=status.HTTP_403_FORBIDDEN)
     
     # Get orders assigned to this shipper
     orders = Order.objects.filter(shipper=shipper).order_by('-created_date')
+    print(f"DEBUG: Total orders for shipper {shipper.id}: {orders.count()}")
     
     # Filter by delivery status or order status
     status_filter = request.GET.get('delivery_status') or request.GET.get('status') 
+    print(f"DEBUG: Status filter requested: '{status_filter}'")
+    
     if status_filter:
         if status_filter == 'Đã hủy' or status_filter == 'Đã huỷ':
             # For cancelled tab, show orders where EITHER delivery_status OR order_status is cancelled
@@ -667,8 +777,8 @@ def update_delivery_status(request, order_id):
     valid_transitions = {
         'Chờ xác nhận': ['Đã xác nhận'],   # Can accept pending orders
         'Đã xác nhận': ['Đã lấy hàng'],    # After accepting, can pick up
-        'Đã lấy hàng': ['Đang giao'],      # After pickup, start delivery  
-        'Đang giao': ['Đã giao'],          # After delivery start, mark as delivered
+        'Đã lấy hàng': ['Đã giao'],        # After pickup, mark as delivered directly
+        'Đang giao': ['Đã giao'],          # Legacy: still allow from Đang giao
         'Đã giao': []                       # Cannot change from delivered
     }
     
@@ -692,6 +802,30 @@ def update_delivery_status(request, order_id):
         order.order_status = 'Đang giao'  
     elif new_status == 'Đã giao':
         order.order_status = 'Đã giao'
+        
+        # Handle proof image upload when marking as delivered
+        proof_image = request.FILES.get('proof_image')
+        if proof_image:
+            import os
+            from django.conf import settings
+            
+            # Generate unique filename
+            ext = os.path.splitext(proof_image.name)[1]
+            filename = f"delivery_proof_{order.id}_{shipper.id}{ext}"
+            # Use forward slash for URL compatibility (not os.path.join which uses backslash on Windows)
+            filepath = f"assets/{filename}"
+            
+            # Save file to media directory
+            full_path = os.path.join(settings.MEDIA_ROOT, 'assets', filename)
+            os.makedirs(os.path.dirname(full_path), exist_ok=True)
+            
+            with open(full_path, 'wb+') as destination:
+                for chunk in proof_image.chunks():
+                    destination.write(chunk)
+            
+            # Save path to database with forward slashes
+            order.proof_image = filepath
+            print(f"DEBUG: Saved delivery proof image: {filepath}")
     
     print(f"DEBUG: Updating order {order.id}")
     print(f"DEBUG: Before save - delivery_status: {order.delivery_status}, order_status: {order.order_status}")
@@ -724,13 +858,17 @@ def admin_update_order_status(request, pk):
         
         new_status = request.data.get('order_status')
         cancel_reason = request.data.get('cancel_reason')
+        bank_name = request.data.get('bank_name')
+        bank_account = request.data.get('bank_account')
+        refund_requested_flag = request.data.get('refund_requested')
+        proof_image_file = request.FILES.get('proof_image')
         
         if not new_status:
             return Response({'error': 'order_status is required'}, status=status.HTTP_400_BAD_REQUEST)
         
         # Determine cancellation role based on user role
         cancelled_by_role = None
-        if new_status == 'Đã huỷ':
+        if new_status in ['Đã huỷ', 'Đã hủy']:
             if request.user.role == 'Quản lý':
                 cancelled_by_role = 'Quản lý'
             else:
@@ -747,10 +885,35 @@ def admin_update_order_status(request, pk):
             order.cancel_reason = cancel_reason
         
         # Set cancellation info if being cancelled
-        if new_status == 'Đã huỷ':
+        if new_status in ['Đã huỷ', 'Đã hủy']:
             from apps.orders.models import get_vietnam_time
             order.cancelled_date = get_vietnam_time()
             order.cancelled_by_role = cancelled_by_role
+
+            # Handle refund info if supplied or required
+            non_cash_payment = str(order.payment_method).lower() not in ['cash', 'cod']
+            refund_requested = refund_requested_flag is True or non_cash_payment
+            if refund_requested:
+                order.refund_requested = True
+                order.refund_status = 'Chờ xử lý'
+                if bank_name:
+                    order.bank_name = bank_name
+                if bank_account:
+                    order.bank_account = bank_account
+
+        if proof_image_file:
+            ext = os.path.splitext(proof_image_file.name)[1]
+            filename = f"assets/{uuid.uuid4().hex}{ext}"
+            saved_path = default_storage.save(filename, proof_image_file)
+
+            if order.proof_image and order.proof_image != saved_path:
+                try:
+                    if default_storage.exists(order.proof_image):
+                        default_storage.delete(order.proof_image)
+                except Exception:
+                    pass
+
+            order.proof_image = saved_path
         
         order.save()
         

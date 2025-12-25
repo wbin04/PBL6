@@ -13,6 +13,7 @@ import { SafeAreaProvider, useSafeAreaInsets } from "react-native-safe-area-cont
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { VoucherProvider } from "./src/contexts/VoucherContext";
 import { ShipperProvider } from "./src/context/ShipperContext";
+import { AdminProvider } from "./src/contexts/AdminContext";
 import { fontAssets } from "@/constants/Fonts";
 
 // ICONS
@@ -26,6 +27,10 @@ import {
   MapPin,
   BarChart3,
   User,
+  Tag,   
+  Users,  
+  Store,  
+  Truck,  
 } from "lucide-react-native";
 
 // Screens
@@ -54,6 +59,8 @@ import CancelDetailScreen from "@/screens/CancelDetailScreen";
 import AddressPickerScreen from "@/screens/address/AddressPickerScreen";
 import { ProfileScreen } from "@/screens/ProfileScreen";
 import RatingScreen from "@/screens/RatingScreen";
+import ChatbotScreen from "@/screens/ChatbotScreen";
+import SearchResultsScreen from '@/screens/SearchResultScreen';
 
 // Redux
 import { Provider, useSelector, useDispatch } from "react-redux";
@@ -81,24 +88,64 @@ const Tab = createBottomTabNavigator();
 
 function MainTabs() {
   const insets = useSafeAreaInsets();
-  const { user } = useSelector((state: RootState) => state.auth);
+  const { user, isAuthenticated } = useSelector((state: RootState) => state.auth);
   const TAB_BASE_HEIGHT = 42;
 
-  const [mode, setMode] = useState<"customer" | "shipper" | null>(null);
+  // Early return if not authenticated - don't show bottom bar
+  if (!isAuthenticated || !user) {
+    return null;
+  }
+
+  // Thêm "seller" và "admin" vào type
+  const [mode, setMode] = useState<"customer" | "shipper" | "seller" | "admin" | null>(null);
 
   const readMode = useCallback(async () => {
     const activeRole = await AsyncStorage.getItem("activeRole");
     console.log('MainTabs - activeRole from storage:', activeRole);
-    console.log('MainTabs - user role:', user?.role);
+    console.log('MainTabs - user role:', user?.role, 'role_id:', user?.role_id);
     
-    // If user is shipper, they can choose between shipper and customer mode
-    if (user?.role === 'Người vận chuyển') {
-      setMode(activeRole === "shipper" ? "shipper" : "customer");
-    } else {
-      // Other users (customers, admins) default to customer mode
-      setMode("customer");
+    const isShipper = user?.role === 'Người vận chuyển' || user?.role_id === 4;
+    const isSeller = user?.role === 'Chủ cửa hàng' || user?.role_id === 3;
+    const isAdmin = user?.role === 'Quản lý' || user?.role_id === 2;
+    
+    // 1. Admin logic
+    if (isAdmin) {
+      if (activeRole === 'customer') {
+        setMode('customer');
+      } else {
+        setMode('admin');
+      }
+      return;
     }
-  }, [user?.role]);
+
+    // 2. Seller logic
+    if (isSeller) {
+      if (activeRole === 'customer') {
+        setMode('customer');
+      } else {
+        setMode('seller');
+      }
+      return;
+    }
+
+    // 3. Shipper logic
+    if (isShipper) {
+      if (!activeRole) {
+        console.log('MainTabs - Setting default activeRole to shipper');
+        await AsyncStorage.setItem("activeRole", "shipper");
+        setMode("shipper");
+        return;
+      }
+      const newMode = activeRole === "shipper" ? "shipper" : "customer";
+      console.log('MainTabs - Setting mode to:', newMode);
+      setMode(newMode);
+      return;
+    }
+    
+    // 4. Default customer
+    console.log('MainTabs - Regular customer, setting mode to customer');
+    setMode("customer");
+  }, [user?.role, user?.role_id]);
 
   useEffect(() => {
     readMode();
@@ -109,8 +156,8 @@ function MainTabs() {
     readMode();
   }, [readMode]));
 
-  if (!mode || !user) {
-    return null; // Show loading or placeholder
+  if (!mode) {
+    return null; // Show loading while determining mode
   }
 
   const commonTabOptions = {
@@ -132,6 +179,73 @@ function MainTabs() {
     },
   };
 
+  // ===== ADMIN BOTTOM BAR =====
+  if (mode === "admin") {
+    return (
+      <Tab.Navigator initialRouteName="AdminDashboard" screenOptions={commonTabOptions}>
+        <Tab.Screen
+          name="AdminDashboard"
+          component={require('./src/screens/AdminDashboardScreen').default}
+          options={{ tabBarIcon: ({ color }) => <HomeIcon color={color} size={24} /> }}
+        />
+        <Tab.Screen
+          name="AdminCustomers"
+          component={require('./src/screens/CustomerListScreen').default}
+          options={{ tabBarIcon: ({ color }) => <Users color={color} size={24} /> }}
+        />
+        <Tab.Screen
+          name="AdminStores"
+          component={require('./src/screens/StoreListScreen').default}
+          options={{ tabBarIcon: ({ color }) => <Store color={color} size={24} /> }}
+        />
+        <Tab.Screen
+          name="AdminOrders"
+          component={require('./src/screens/OrderListScreen').default}
+          options={{ tabBarIcon: ({ color }) => <FileText color={color} size={24} /> }}
+        />
+        <Tab.Screen
+          name="AdminShippers"
+          component={require('./src/screens/ShipperListScreen').default}
+          options={{ tabBarIcon: ({ color }) => <Truck color={color} size={24} /> }}
+        />
+        <Tab.Screen
+          name="AdminVouchers"
+          component={require('./src/screens/VoucherManagementScreen').default}
+          options={{ tabBarIcon: ({ color }) => <Tag color={color} size={24} /> }}
+        />
+      </Tab.Navigator>
+    );
+  }
+
+  // ===== SELLER BOTTOM BAR =====
+  if (mode === "seller") {
+    return (
+      <Tab.Navigator initialRouteName="SellerDashboard" screenOptions={commonTabOptions}>
+        <Tab.Screen
+          name="SellerDashboard"
+          component={require('./src/screens/seller/DashboardScreen').default}
+          options={{ tabBarIcon: ({ color }) => <HomeIcon color={color} size={24} /> }}
+        />
+        <Tab.Screen
+          name="SellerManageMenu"
+          component={require('./src/screens/seller/ManageMenuScreen').default}
+          options={{ tabBarIcon: ({ color }) => <UtensilsCrossed color={color} size={24} /> }}
+        />
+        <Tab.Screen
+          name="SellerOrders"
+          component={require('./src/screens/seller/NewOrderListScreen').default}
+          options={{ tabBarIcon: ({ color }) => <FileText color={color} size={24} /> }}
+        />
+        <Tab.Screen
+          name="SellerVouchers"
+          component={require('./src/screens/seller/VoucherManagementScreen').default}
+          options={{ tabBarIcon: ({ color }) => <Tag color={color} size={24} /> }}
+        />
+      </Tab.Navigator>
+    );
+  }
+
+  // ===== SHIPPER BOTTOM BAR =====
   if (mode === "shipper") {
     return (
       <Tab.Navigator initialRouteName="ShipperOrders" screenOptions={commonTabOptions}>
@@ -147,7 +261,7 @@ function MainTabs() {
         />
         <Tab.Screen
           name="ShipperStats"
-          component={ShipperStatsScreen }
+          component={ShipperStatsScreen}
           options={{ tabBarIcon: ({ color }) => <BarChart3 color={color} size={24} /> }}
         />
         <Tab.Screen
@@ -164,7 +278,7 @@ function MainTabs() {
     );
   }
 
-  // Customer
+  // ===== CUSTOMER BOTTOM BAR =====
   return (
     <Tab.Navigator initialRouteName="Home" screenOptions={commonTabOptions}>
       <Tab.Screen
@@ -191,7 +305,7 @@ function MainTabs() {
       />
       <Tab.Screen
         name="Support"
-        component={CheckoutScreen}
+        component={ShipperSupportScreen}
         options={{ tabBarIcon: ({ color }) => <Headphones color={color} size={24} /> }}
       />
     </Tab.Navigator>
@@ -203,47 +317,25 @@ function AppNavigator() {
   const { isAuthenticated, loading, user } = useSelector((state: RootState) => state.auth);
 
   useEffect(() => {
-    // Load user from storage on app start
     dispatch(loadUserFromStorage());
   }, [dispatch]);
 
   console.log('App Navigator - Auth state:', { isAuthenticated, loading, userRole: user?.role });
 
-  // Show loading screen while checking authentication
   if (loading) {
-    return null; // You can add a loading screen component here
-  }
-
-  // Determine initial route based on auth state and user role
-  let initialRouteName = "Login";
-  // Ensure role is loaded before determining initial route
-  if (!isAuthenticated || !user?.role) {
-    initialRouteName = "Login";
-  } else {
-    switch (user.role) {
-      case 'Chủ cửa hàng':
-        initialRouteName = "SellerDashboard";
-        break;
-      case 'Quản lý':
-        initialRouteName = "AdminDashboard";
-        break;
-      default:
-        initialRouteName = "MainTabs";
-        break;
-    }
+    return null;
   }
 
   return (
     <VoucherProvider>
       <ShipperProvider>
-        <NavigationContainer>
-          <StatusBar style="auto" />
-          <Stack.Navigator 
-            screenOptions={{ headerShown: false }} 
-            initialRouteName={initialRouteName}
-          >
+        <AdminProvider>
+          <NavigationContainer>
+            <StatusBar style="auto" />
+            <Stack.Navigator 
+              screenOptions={{ headerShown: false }}
+            >
             {!isAuthenticated ? (
-              // Auth screens - show when not authenticated
               <>
                 <Stack.Screen 
                   name="Login" 
@@ -253,32 +345,18 @@ function AppNavigator() {
                 <Stack.Screen name="Register" component={RegisterScreen} />
               </>
             ) : (
-              // Main app screens - show when authenticated
               <>
-                {/* Admin Dashboard */}
-                {user?.role === 'Quản lý' && (
-                  <Stack.Screen 
-                    name="AdminDashboard" 
-                    component={require('./src/screens/AdminDashboardScreen').default}
-                    options={{ gestureEnabled: false }}
-                  />
-                )}
-                
-                {/* Seller Dashboard */}
-                {user?.role === 'Chủ cửa hàng' && (
-                  <Stack.Screen 
-                    name="SellerDashboard" 
-                    component={require('./src/screens/seller/DashboardScreen').default}
-                    options={{ gestureEnabled: false }}
-                  />
-                )}
-                
-                {/* MainTabs - Always available for all authenticated users */}
                 <Stack.Screen 
                   name="MainTabs" 
                   component={MainTabs}
                   options={{ gestureEnabled: false }}
                 />
+                
+                {/* Admin screens */}
+                <Stack.Screen name="CustomerListScreen" component={require('./src/screens/CustomerListScreen').default} />
+                <Stack.Screen name="StoreListScreen" component={require('./src/screens/StoreListScreen').default} />
+                <Stack.Screen name="OrderListScreen" component={require('./src/screens/OrderListScreen').default} />
+                <Stack.Screen name="ShipperListScreen" component={require('./src/screens/ShipperListScreen').default} />
                 
                 {/* Seller screens */}
                 <Stack.Screen name="SellerProfileScreen" component={require('./src/screens/seller/SellerProfileScreen').default} />
@@ -289,6 +367,7 @@ function AppNavigator() {
                 <Stack.Screen name="SellerProfileEditScreen" component={require('./src/screens/seller/SellerProfileEditScreen').default} />
                 <Stack.Screen name="SellerVoucherEditScreen" component={require('./src/screens/seller/VoucherEditScreen').default} />
                 <Stack.Screen name="SellerVoucherManagementScreen" component={require('./src/screens/seller/VoucherManagementScreen').default} />
+                <Stack.Screen name="NewOrderListScreen" component={require('./src/screens/seller/NewOrderListScreen').default} />
                 
                 {/* Common screens available to all authenticated users */}
                 <Stack.Screen name="UpdateCustomerScreen" component={require('./src/screens/UpdateCustomerScreen').default} />
@@ -312,15 +391,26 @@ function AppNavigator() {
                 <Stack.Screen name="Review" component={ReviewScreen} />
                 <Stack.Screen name="CancelDetail" component={CancelDetailScreen} />
                 <Stack.Screen name="Profile" component={ProfileScreen} />
+                <Stack.Screen name="Chatbot" component={ChatbotScreen} />
                 <Stack.Screen name="FoodDetailPopup" component={require('./src/screens/FoodDetailPopup').default} />
                 <Stack.Screen name="VoucherManagementScreen" component={require('./src/screens/VoucherManagementScreen').default} />
                 <Stack.Screen name="VoucherEditScreen" component={require('./src/screens/VoucherEditScreen').default} />
                 <Stack.Screen name="ShipperEditScreen" component={require('./src/screens/ShipperEditScreen').default} />
                 <Stack.Screen name="ShipperDetailScreen" component={require('./src/screens/ShipperDetailScreen').default} />
+                <Stack.Screen name="Rating" component={RatingScreen} />
+                <Stack.Screen name="ShipperProfile" component={ShipperProfileScreen} />
+                <Stack.Screen name="PasswordSetting" component={PasswordSettingScreen} />
+                <Stack.Screen name="Wallet" component={WalletScreen} />
+                <Stack.Screen name="ChangeWalletPassword" component={ChangeWalletPasswordScreen} />
+                <Stack.Screen name="WalletTransactions" component={WalletTransactionsScreen} />
+                <Stack.Screen name="NotificationSettings" component={NotificationSettingsScreen} />
+                <Stack.Screen name="WithdrawalMethods" component={WithdrawalMethodsScreen} />
+                <Stack.Screen name="SearchResults" component={SearchResultsScreen} />
               </>
             )}
           </Stack.Navigator>
         </NavigationContainer>
+      </AdminProvider>
       </ShipperProvider>
     </VoucherProvider>
   );
@@ -345,3 +435,4 @@ export default function App() {
     </Provider>
   );
 }
+

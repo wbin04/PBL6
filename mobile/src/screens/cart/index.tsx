@@ -447,7 +447,7 @@ export default function CartScreen() {
                 Thêm món ăn yêu thích vào giỏ hàng!
               </Text>
               <TouchableOpacity
-                onPress={() => navigation.navigate("Home")} 
+                onPress={() => navigation.navigate("MainTabs", { screen: "Home" })} 
                 style={styles.exploreBtn}
               >
                 <Text style={styles.exploreText}>Khám phá món ăn</Text>

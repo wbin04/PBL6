@@ -3,6 +3,10 @@ __pycache__/
 
 .env
 
+assets/
+
 node_modules/
 
 .expo/
+
+data/

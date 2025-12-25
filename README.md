@@ -31,6 +31,7 @@ psql -U postgres -f fastfood_db.sql
 
 # Hoặc
 psql -U postgres -f backup.sql
+psql -h localhost -U postgres -d fastfood_db -f data/rating_food_oct2025.sql
 ```
 
 ### 2. Cài đặt Backend

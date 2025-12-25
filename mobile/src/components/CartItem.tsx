@@ -10,6 +10,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { CartItem as CartItemType } from '@/types';
 import { COLORS, SPACING, BORDER_RADIUS, SHADOWS, API_CONFIG } from '@/constants';
+import { getImageSource } from '@/utils/imageUtils';
 
 interface CartItemProps {
   item: CartItemType;
@@ -32,10 +33,9 @@ const CartItem: React.FC<CartItemProps> = ({
   onPress,
   formatPrice,
 }) => {
-  const getImageUri = (imageUrl: string) => {
-    return imageUrl.startsWith('http')
-      ? imageUrl
-      : `${API_CONFIG.BASE_URL.replace(/\/api$/, '')}/media/${imageUrl}`;
+  // Use centralized image helper to safely resolve image sources
+  const getImageUri = (imageUrl?: string | null) => {
+    return getImageSource(imageUrl as any);
   };
 
   return (
@@ -60,7 +60,7 @@ const CartItem: React.FC<CartItemProps> = ({
 
         {/* Image */}
         <Image
-          source={{ uri: getImageUri(item.food.image) }}
+          source={getImageUri(item.food.image)}
           style={styles.itemImage}
           resizeMode="cover"
         />

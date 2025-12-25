@@ -94,6 +94,22 @@ npm run build:android
 npm run build:ios
 ```
 
+### 5. Cấu hình Google Maps API key (để chọn địa chỉ trên bản đồ)
+
+Tính năng chọn địa chỉ mới sử dụng Google Places API và Geocoding API để đảm bảo địa chỉ chính xác:
+
+1. Truy cập [Google Cloud Console](https://console.cloud.google.com/) và tạo một API Key.
+2. Bật tối thiểu các dịch vụ: **Places API**, **Geocoding API** và **Maps SDK for Android/iOS**.
+3. Tạo file `.env` trong thư mục `mobile/` (hoặc cập nhật `.env` hiện tại) với nội dung:
+
+```bash
+EXPO_PUBLIC_GOOGLE_MAPS_API_KEY=YOUR_GOOGLE_MAPS_KEY
+```
+
+4. Khởi động lại Expo dev server để biến môi trường mới có hiệu lực.
+
+> Lưu ý: Khoá API nên giới hạn domain/package để tránh bị lạm dụng.
+
 ## 📱 Cấu trúc dự án
 
 ```

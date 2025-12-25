@@ -1,8 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, TextInput, ScrollView, Image, Alert, Keyboard, TouchableWithoutFeedback, Modal } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, TextInput, ScrollView, Image, Alert, Keyboard, TouchableWithoutFeedback, Modal, Pressable } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
-import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import type { RouteProp } from '@react-navigation/native';
+import { ArrowLeft } from "lucide-react-native";
+
+import { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import { RouteProp } from '@react-navigation/native';
 
 import axios from 'axios';
 import { useSelector } from 'react-redux';
@@ -10,6 +12,8 @@ import { RootState } from '../../store/index';
 
 import { API_CONFIG } from '@/constants';
 import { IMAGE_MAP, type ImageName } from "@/assets/imageMap";
+import { Fonts } from "@/constants/Fonts";
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 // Fallback categories nếu không nhận được từ ManageMenuScreen
 const fallbackCategories = ['Món chính', 'Khai vị', 'Tráng miệng', 'Đồ uống', 'Món nướng', 'Món chiên', 'Món hấp', 'Salad', 'Súp', 'Khác'];
@@ -38,6 +42,9 @@ function getImageSource(img?: ImageName | string) {
   
   return require("@/assets/images/gourmet-burger.png");
 }
+
+const ORANGE = "#e95322";
+const BORDER = "#e5e7eb";
 
 const EditFoodScreen: React.FC<EditFoodScreenProps> = ({ navigation, route }) => {
   const foodEdit = route.params?.food;
@@ -340,310 +347,495 @@ const EditFoodScreen: React.FC<EditFoodScreenProps> = ({ navigation, route }) =>
 
   return (
     <TouchableWithoutFeedback onPress={Keyboard.dismiss} accessible={false}>
-      <View style={styles.container}>
-        {/* Header */}
+      <SafeAreaView style={{ flex: 1, backgroundColor: "#fff" }} edges={['top', 'bottom']}>
         <View style={styles.header}>
-          <Text style={styles.headerTitle}>Sửa món ăn</Text>
-          <TouchableOpacity onPress={() => navigation.goBack()}>
-            <Text style={styles.headerClose}>×</Text>
+          <TouchableOpacity onPress={() => navigation.goBack()} style={{ padding: 6 }}>
+            <ArrowLeft size={24} color="#374151" />
           </TouchableOpacity>
+          <Text style={styles.headerTitle}>Chỉnh sửa món ăn</Text>
+          <View style={{ width: 24 }} />
         </View>
-        
-        <ScrollView showsVerticalScrollIndicator={false}>
-        {/* Hình ảnh món ăn */}
-        <View style={styles.imageSection}>
-          <TouchableOpacity style={styles.imageBox} onPress={pickImage}>
-            {getDisplayImage() ? (
-              <Image source={getDisplayImage()} style={styles.foodImage} />
-            ) : (
-              <View style={{ alignItems: 'center' }}>
-                <Image source={require('../../assets/images/placeholder.png')} style={{ width: 40, height: 40, marginBottom: 8 }} />
-                <Text style={styles.imageText}>Thêm ảnh món ăn</Text>
-                <Text style={styles.imageSubText}>Nhấn để chọn từ thư viện hoặc chụp ảnh</Text>
-              </View>
+
+        <ScrollView
+          showsVerticalScrollIndicator={false}
+          contentContainerStyle={{ padding: 16, paddingBottom: 120 }}
+        >
+          {/* Ảnh món ăn */}
+          <View style={styles.imageSection}>
+            <TouchableOpacity style={styles.imageBox} onPress={pickImage} activeOpacity={0.9}>
+              {getDisplayImage() ? (
+                <Image source={getDisplayImage()} style={styles.foodImage} />
+              ) : (
+                <View style={{ alignItems: "center" }}>
+                  <Image
+                    source={require('../../assets/images/placeholder.png')}
+                    style={{ width: 40, height: 40, marginBottom: 8 }}
+                  />
+                  <Text style={styles.imageText}>Thêm ảnh món ăn</Text>
+                  <Text style={styles.imageSubText}>
+                    Nhấn để chọn từ thư viện hoặc chụp ảnh
+                  </Text>
+                </View>
+              )}
+            </TouchableOpacity>
+            {hasNewImage && (
+              <Text style={styles.newImageIndicator}>Ảnh mới đã được chọn</Text>
             )}
-          </TouchableOpacity>
-          {hasNewImage && (
-            <Text style={styles.newImageIndicator}>Ảnh mới đã được chọn</Text>
-          )}
-        </View>
-        
-        {/* Thông tin cơ bản */}
-        <View style={styles.sectionTitleBox}>
-          <Text style={styles.sectionTitle}>Thông tin cơ bản</Text>
-        </View>
-        <View style={styles.formBox}>
-          <Text style={styles.label}>Tên món ăn *</Text>
-          <TextInput style={styles.input} placeholder="VD: Phở Bò Tái" value={name} onChangeText={setName} />
-          
-          <Text style={styles.label}>Giá tiền (VND) *</Text>
-          <TextInput style={styles.input} placeholder="VD: 65000" value={price} onChangeText={setPrice} keyboardType="numeric" />
-          
-          <Text style={styles.label}>Danh mục *</Text>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.categoryScroll}>
-            {categoriesList.map(catObj => (
-              <TouchableOpacity
-                key={catObj.id.toString()}
-                style={[
-                  styles.categoryBtn,
-                  selectedCategoryId === catObj.id && styles.categoryBtnActive
-                ]}
-                onPress={() => {
-                  setSelectedCategoryId(catObj.id);
-                  console.log('EditFoodScreen - Selected category id:', catObj.id);
-                }}
-              >
-                <Text
-                  style={[
-                    styles.categoryText,
-                    selectedCategoryId === catObj.id && styles.categoryTextActive
-                  ]}
-                >
-                  {catObj.name}
-                </Text>
-              </TouchableOpacity>
-            ))}
-          </ScrollView>
-          
-          <Text style={styles.label}>Mô tả món ăn</Text>
-          <TextInput 
-            style={[styles.input, styles.textArea]} 
-            placeholder="Mô tả về hương vị, nguyên liệu..." 
-            value={description} 
-            onChangeText={setDescription} 
-            multiline 
-            numberOfLines={3} 
-          />
-        </View>
-        
-        {/* Quản lý Size */}
-        <View style={styles.sectionTitleBox}>
-          <Text style={styles.sectionTitle}>Quản lý Size (Tùy chọn)</Text>
-        </View>
-        <View style={styles.formBox}>
-          <Text style={styles.sizeDescription}>Thêm các size khác nhau cho món ăn. Giá size là giá phụ thêm vào giá gốc.</Text>
-          
-          {sizes.map((size, index) => (
-            <View key={index} style={styles.sizeItem}>
-              <View style={styles.sizeInfo}>
-                <Text style={styles.sizeName}>{size.size_name}</Text>
-                <Text style={styles.sizePrice}>+{parseFloat(size.price).toLocaleString('vi-VN')}₫</Text>
-              </View>
-              <View style={styles.sizeActions}>
-                <TouchableOpacity onPress={() => handleEditSize(size, index)} style={styles.sizeActionBtn}>
-                  <Text style={styles.sizeActionText}>✏️</Text>
-                </TouchableOpacity>
-                <TouchableOpacity onPress={() => handleDeleteSize(index)} style={styles.sizeActionBtn}>
-                  <Text style={styles.sizeActionText}>🗑️</Text>
-                </TouchableOpacity>
-              </View>
+          </View>
+
+          {/* Thông tin cơ bản */}
+          <View style={styles.card}>
+            <Text style={styles.sectionLabel}>Thông tin cơ bản</Text>
+
+            <View style={{ marginBottom: 12 }}>
+              <Text style={styles.label}>Tên món ăn</Text>
+              <TextInput
+                style={styles.input}
+                placeholder="VD: Phở Bò Tái"
+                placeholderTextColor="#9ca3af"
+                value={name}
+                onChangeText={setName}
+              />
             </View>
-          ))}
-          
-          <TouchableOpacity style={styles.addSizeBtn} onPress={handleAddSize}>
-            <Text style={styles.addSizeText}>+ Thêm Size</Text>
-          </TouchableOpacity>
-        </View>
-        
-        {/* Nút hành động */}
-        <View style={styles.actionRow}>
-          <TouchableOpacity style={styles.cancelBtn} onPress={() => navigation.goBack()}>
-            <Text style={styles.cancelText}>Hủy</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.addBtn} onPress={handleEditFood}>
-            <Text style={styles.addText}>Lưu thay đổi</Text>
-          </TouchableOpacity>
-        </View>
+
+            <View style={{ marginBottom: 12 }}>
+              <Text style={styles.label}>Giá tiền (VND)</Text>
+              <TextInput
+                style={styles.input}
+                placeholder="VD: 65000"
+                placeholderTextColor="#9ca3af"
+                keyboardType="numeric"
+                value={price}
+                onChangeText={setPrice}
+              />
+            </View>
+
+            <View style={{ marginBottom: 12 }}>
+              <Text style={styles.label}>Danh mục</Text>
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                style={{ marginTop: 4 }}
+              >
+                {categoriesList.map((catObj) => {
+                  const active = selectedCategoryId === catObj.id;
+                  return (
+                    <TouchableOpacity
+                      key={catObj.id.toString()}
+                      onPress={() => {
+                        setSelectedCategoryId(catObj.id);
+                        console.log("EditFoodScreen - Selected category id:", catObj.id);
+                      }}
+                      style={[
+                        styles.chip,
+                        active && { backgroundColor: ORANGE, borderColor: ORANGE },
+                      ]}
+                      activeOpacity={0.9}
+                    >
+                      <Text
+                        style={[
+                          styles.chipText,
+                          active && { color: "#fff" },
+                        ]}
+                      >
+                        {catObj.name}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </ScrollView>
+            </View>
+
+            <View style={{ marginBottom: 8 }}>
+              <Text style={styles.label}>Mô tả món ăn</Text>
+              <TextInput
+                style={[styles.input, { height: 100, textAlignVertical: "top" }]}
+                placeholder="Mô tả về hương vị, nguyên liệu..."
+                placeholderTextColor="#9ca3af"
+                multiline
+                numberOfLines={3}
+                value={description}
+                onChangeText={setDescription}
+              />
+            </View>
+          </View>
+
+          {/* Quản lý Size */}
+          <View style={styles.card}>
+            <Text style={styles.sectionLabel}>Quản lý Size (tùy chọn)</Text>
+            <Text style={styles.helperText}>
+              Thêm các size khác nhau cho món ăn. Giá size là giá phụ thêm vào giá gốc.
+            </Text>
+
+            {sizes.map((size, index) => (
+              <View key={index} style={styles.sizeItem}>
+                <View style={styles.sizeInfo}>
+                  <Text style={styles.sizeName}>{size.size_name}</Text>
+                  <Text style={styles.sizePrice}>
+                    +{parseFloat(size.price).toLocaleString("vi-VN")}₫
+                  </Text>
+                </View>
+                <View style={styles.sizeActions}>
+                  <TouchableOpacity
+                    onPress={() => handleEditSize(size, index)}
+                    style={styles.sizeIconBtn}
+                  >
+                    <Text style={styles.sizeIconText}>✏️</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    onPress={() => handleDeleteSize(index)}
+                    style={styles.sizeIconBtn}
+                  >
+                    <Text style={styles.sizeIconText}>🗑️</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            ))}
+
+            <TouchableOpacity
+              onPress={handleAddSize}
+              style={styles.addSizeBtn}
+              activeOpacity={0.9}
+            >
+              <Text style={styles.addSizeText}>+ Thêm Size</Text>
+            </TouchableOpacity>
+          </View>
         </ScrollView>
 
-        {/* Size Modal */}
+        {/* Bottom bar như add.tsx */}
+        <View style={styles.bottomBar}>
+          <TouchableOpacity
+            onPress={handleEditFood}
+            style={styles.saveBtn}
+            activeOpacity={0.9}
+          >
+            <Text style={styles.saveText}>Lưu món ăn</Text>
+          </TouchableOpacity>
+        </View>
+
+        {/* Modal Size – chỉ đổi style, giữ logic */}
         <Modal
           visible={showSizeModal}
           transparent
-          animationType="slide"
+          animationType="fade"
           onRequestClose={() => setShowSizeModal(false)}
         >
-          <TouchableWithoutFeedback onPress={() => setShowSizeModal(false)}>
-            <View style={styles.modalOverlay}>
-              <TouchableWithoutFeedback onPress={e => e.stopPropagation()}>
-                <View style={styles.modalContent}>
-                  <Text style={styles.modalTitle}>
-                    {editingSize?.index !== undefined ? 'Sửa Size' : 'Thêm Size'}
+          <View style={styles.modalRoot}>
+            <Pressable
+              style={styles.backdrop}
+              onPress={() => {
+                setShowSizeModal(false);
+                setEditingSize(null);
+              }}
+            />
+            <View style={styles.modalSheet}>
+              <View style={styles.modalHeader}>
+                <Text style={styles.modalTitle}>
+                  {editingSize?.index !== undefined ? "Sửa Size" : "Thêm Size"}
+                </Text>
+                <TouchableOpacity
+                  onPress={() => {
+                    setShowSizeModal(false);
+                    setEditingSize(null);
+                  }}
+                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                >
+                  <Text style={{ fontSize: 18, color: "#6B7280" }}>×</Text>
+                </TouchableOpacity>
+              </View>
+
+              <View style={{ marginBottom: 12 }}>
+                <Text style={styles.label}>Tên size</Text>
+                <TextInput
+                  style={styles.input}
+                  placeholder="VD: Size L, Size M, Size lớn..."
+                  placeholderTextColor="#9ca3af"
+                  value={editingSize?.size_name || ""}
+                  onChangeText={(text) =>
+                    setEditingSize((prev) =>
+                      prev ? { ...prev, size_name: text } : null
+                    )
+                  }
+                />
+              </View>
+
+              <View style={{ marginBottom: 12 }}>
+                <Text style={styles.label}>Giá thêm (VND)</Text>
+                <TextInput
+                  style={styles.input}
+                  placeholder="VD: 10000"
+                  placeholderTextColor="#9ca3af"
+                  keyboardType="numeric"
+                  value={editingSize?.price || ""}
+                  onChangeText={(text) =>
+                    setEditingSize((prev) =>
+                      prev ? { ...prev, price: text } : null
+                    )
+                  }
+                />
+              </View>
+
+              <View style={styles.modalActions}>
+                <TouchableOpacity
+                  style={[styles.modalBtn, { backgroundColor: "#f3f4f6" }]}
+                  onPress={() => {
+                    setShowSizeModal(false);
+                    setEditingSize(null);
+                  }}
+                >
+                  <Text style={[styles.modalBtnText, { color: "#6b7280" }]}>
+                    Hủy
                   </Text>
-                  
-                  <Text style={styles.modalLabel}>Tên size *</Text>
-                  <TextInput
-                    style={styles.modalInput}
-                    placeholder="VD: Size L, Size M, Size Lớn..."
-                    value={editingSize?.size_name || ''}
-                    onChangeText={(text) => setEditingSize(prev => prev ? { ...prev, size_name: text } : null)}
-                  />
-                  
-                  <Text style={styles.modalLabel}>Giá thêm (VND) *</Text>
-                  <TextInput
-                    style={styles.modalInput}
-                    placeholder="VD: 10000"
-                    value={editingSize?.price || ''}
-                    onChangeText={(text) => setEditingSize(prev => prev ? { ...prev, price: text } : null)}
-                    keyboardType="numeric"
-                  />
-                  
-                  <View style={styles.modalActions}>
-                    <TouchableOpacity
-                      style={styles.modalCancelBtn}
-                      onPress={() => {
-                        setShowSizeModal(false);
-                        setEditingSize(null);
-                      }}
-                    >
-                      <Text style={styles.modalCancelText}>Hủy</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                      style={styles.modalSaveBtn}
-                      onPress={handleSaveSize}
-                    >
-                      <Text style={styles.modalSaveText}>Lưu</Text>
-                    </TouchableOpacity>
-                  </View>
-                </View>
-              </TouchableWithoutFeedback>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.modalBtn, { backgroundColor: ORANGE }]}
+                  onPress={handleSaveSize}
+                >
+                  <Text style={[styles.modalBtnText, { color: "#fff" }]}>
+                    Lưu
+                  </Text>
+                </TouchableOpacity>
+              </View>
             </View>
-          </TouchableWithoutFeedback>
+          </View>
         </Modal>
-      </View>
+      </SafeAreaView>
     </TouchableWithoutFeedback>
   );
 };
 
+// CHỈ styles mới, dựa theo address/add.tsx
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#fff7ed' },
-  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 20, backgroundColor: '#fff7ed', borderBottomWidth: 1, borderBottomColor: '#f3f4f6' },
-  headerTitle: { fontSize: 25, fontWeight: 'bold', color: '#ea580c', marginTop: 40 },
-  headerClose: { fontSize: 28, color: '#ea580c', fontWeight: 'bold' },
-  imageSection: { alignItems: 'center', padding: 20 },
-  imageBox: { width: 180, height: 140, borderRadius: 16, borderWidth: 2, borderColor: '#fee2e2', backgroundColor: '#fff', alignItems: 'center', justifyContent: 'center', marginBottom: 8, overflow: 'hidden' },
-  foodImage: { width: 180, height: 140, borderRadius: 16 },
-  imageText: { fontSize: 16, color: '#ea580c', fontWeight: 'bold', textAlign: 'center' },
-  imageSubText: { fontSize: 13, color: '#6b7280', textAlign: 'center' },
-  newImageIndicator: { 
-    fontSize: 12, 
-    color: '#10b981', 
-    fontWeight: 'bold',
-    marginTop: 4,
-    textAlign: 'center'
+  header: {
+    backgroundColor: "#fff",
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: "#f3f4f6",
   },
-  sectionTitleBox: { backgroundColor: '#fff7ed', paddingVertical: 10, paddingHorizontal: 20 },
-  sectionTitle: { fontWeight: 'bold', fontSize: 16, color: '#ea580c' },
-  formBox: { backgroundColor: '#fff', padding: 20, borderRadius: 16, marginHorizontal: 20, marginTop: 8 },
-  label: { fontSize: 14, color: '#6b7280', marginBottom: 4, marginTop: 12 },
-  input: { backgroundColor: '#fff7ed', borderRadius: 8, borderWidth: 1, borderColor: '#f3f4f6', padding: 12, fontSize: 15, marginBottom: 8 },
-  textArea: { height: 80, textAlignVertical: 'top' },
-  categoryScroll: { marginVertical: 8 },
-  categoryBtn: { backgroundColor: '#fff7ed', borderRadius: 20, paddingHorizontal: 16, paddingVertical: 6, marginRight: 8, borderWidth: 1, borderColor: '#f3f4f6' },
-  categoryBtnActive: { backgroundColor: '#ea580c', borderColor: '#ea580c' },
-  categoryText: { color: '#ea580c', fontSize: 14 },
-  categoryTextActive: { color: '#fff', fontWeight: 'bold' },
-  actionRow: { flexDirection: 'row', justifyContent: 'space-between', padding: 20, backgroundColor: '#fff7ed' },
-  cancelBtn: { flex: 1, backgroundColor: '#fff', borderRadius: 10, borderWidth: 1, borderColor: '#f3f4f6', paddingVertical: 14, alignItems: 'center', marginRight: 12 },
-  cancelText: { color: '#6b7280', fontWeight: 'bold', fontSize: 16 },
-  addBtn: { flex: 1, backgroundColor: '#ea580c', borderRadius: 10, paddingVertical: 14, alignItems: 'center' },
-  addText: { color: '#fff', fontWeight: 'bold', fontSize: 16 },
-  
-  // Size management styles
-  sizeDescription: { fontSize: 13, color: '#6b7280', marginBottom: 12, fontStyle: 'italic' },
-  sizeItem: { 
-    flexDirection: 'row', 
-    justifyContent: 'space-between', 
-    alignItems: 'center', 
-    backgroundColor: '#fff7ed', 
-    padding: 12, 
-    borderRadius: 8, 
-    marginBottom: 8,
+  headerTitle: {
+    flex: 1,
+    textAlign: "center",
+    fontFamily: Fonts.LeagueSpartanSemiBold,
+    fontSize: 18,
+    color: "#111827",
+  },
+
+  imageSection: {
+    alignItems: "center",
+    marginBottom: 16,
+  },
+  imageBox: {
+    width: 200,
+    height: 150,
+    borderRadius: 16,
     borderWidth: 1,
-    borderColor: '#fed7aa'
+    borderColor: BORDER,
+    backgroundColor: "#fff",
+    alignItems: "center",
+    justifyContent: "center",
+    overflow: "hidden",
+  },
+  foodImage: {
+    width: "100%",
+    height: "100%",
+  },
+  imageText: {
+    fontFamily: Fonts.LeagueSpartanSemiBold,
+    fontSize: 15,
+    color: ORANGE,
+    textAlign: "center",
+  },
+  imageSubText: {
+    fontFamily: Fonts.LeagueSpartanRegular,
+    fontSize: 12,
+    color: "#6b7280",
+    textAlign: "center",
+    marginTop: 4,
+  },
+  newImageIndicator: {
+    marginTop: 6,
+    fontFamily: Fonts.LeagueSpartanMedium,
+    fontSize: 12,
+    color: "#10b981",
+  },
+
+  card: {
+    backgroundColor: "#fff",
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: BORDER,
+  },
+  sectionLabel: {
+    fontFamily: Fonts.LeagueSpartanSemiBold,
+    fontSize: 14,
+    color: "#111827",
+    marginBottom: 8,
+  },
+  label: {
+    fontFamily: Fonts.LeagueSpartanMedium,
+    fontSize: 13,
+    color: "#374151",
+    marginBottom: 6,
+  },
+  input: {
+    borderWidth: 1,
+    borderColor: BORDER,
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    fontFamily: Fonts.LeagueSpartanRegular,
+    fontSize: 14,
+    color: "#111827",
+    backgroundColor: "#fff",
+  },
+
+  chip: {
+    borderWidth: 1,
+    borderColor: BORDER,
+    borderRadius: 999,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    marginRight: 8,
+    backgroundColor: "#fff",
+  },
+  chipText: {
+    fontFamily: Fonts.LeagueSpartanMedium,
+    fontSize: 13,
+    color: "#374151",
+  },
+
+  helperText: {
+    fontFamily: Fonts.LeagueSpartanRegular,
+    fontSize: 12,
+    color: "#6b7280",
+    marginBottom: 10,
+  },
+
+  sizeItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    borderWidth: 1,
+    borderColor: BORDER,
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    marginBottom: 8,
+    backgroundColor: "#fff",
   },
   sizeInfo: { flex: 1 },
-  sizeName: { fontSize: 15, fontWeight: 'bold', color: '#ea580c', marginBottom: 2 },
-  sizePrice: { fontSize: 14, color: '#6b7280' },
-  sizeActions: { flexDirection: 'row', gap: 8 },
-  sizeActionBtn: { padding: 8 },
-  sizeActionText: { fontSize: 18 },
-  addSizeBtn: { 
-    backgroundColor: '#ea580c', 
-    borderRadius: 8, 
-    paddingVertical: 10, 
-    alignItems: 'center', 
-    marginTop: 8,
-    borderWidth: 2,
-    borderStyle: 'dashed',
-    borderColor: '#fb923c'
+  sizeName: {
+    fontFamily: Fonts.LeagueSpartanSemiBold,
+    fontSize: 14,
+    color: "#111827",
+    marginBottom: 2,
   },
-  addSizeText: { color: '#fff', fontWeight: 'bold', fontSize: 14 },
-  
-  // Modal styles
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.5)',
-    justifyContent: 'center',
-    alignItems: 'center',
+  sizePrice: {
+    fontFamily: Fonts.LeagueSpartanRegular,
+    fontSize: 13,
+    color: ORANGE,
   },
-  modalContent: {
-    backgroundColor: '#fff',
+  sizeActions: {
+    flexDirection: "row",
+    gap: 4,
+    marginLeft: 8,
+  },
+  sizeIconBtn: {
+    padding: 6,
+  },
+  sizeIconText: {
+    fontSize: 16,
+  },
+  addSizeBtn: {
+    marginTop: 4,
+    alignSelf: "flex-start",
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: ORANGE,
+    backgroundColor: "#fff",
+  },
+  addSizeText: {
+    fontFamily: Fonts.LeagueSpartanSemiBold,
+    fontSize: 13,
+    color: ORANGE,
+  },
+
+  bottomBar: {
+    position: "absolute",
+    left: 0,
+    right: 0,
+    bottom: 0,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: "#f3f4f6",
+    backgroundColor: "#fff",
+    padding: 12,
+    paddingBottom: 40,
+  },
+  saveBtn: {
+    backgroundColor: ORANGE,
+    borderRadius: 12,
+    paddingVertical: 14,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  saveText: {
+    color: "#fff",
+    fontFamily: Fonts.LeagueSpartanSemiBold,
+    fontSize: 15,
+  },
+
+  // Modal (dựa theo add.tsx)
+  modalRoot: { flex: 1, justifyContent: "center", alignItems: "center", paddingHorizontal: 20 },
+  backdrop: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: "rgba(0,0,0,0.5)",
+  },
+  modalSheet: {
+    backgroundColor: "#fff",
     borderRadius: 16,
-    padding: 24,
-    width: '85%',
+    padding: 16,
+    width: "100%",
     maxWidth: 400,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 8,
+  },
+  modalHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: 10,
   },
   modalTitle: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: '#ea580c',
-    marginBottom: 20,
-    textAlign: 'center',
-  },
-  modalLabel: {
-    fontSize: 14,
-    color: '#6b7280',
-    marginBottom: 6,
-    marginTop: 8,
-  },
-  modalInput: {
-    backgroundColor: '#fff7ed',
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: '#f3f4f6',
-    padding: 12,
-    fontSize: 15,
+    fontFamily: Fonts.LeagueSpartanSemiBold,
+    fontSize: 16,
+    color: "#111827",
   },
   modalActions: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginTop: 20,
-    gap: 12,
+    flexDirection: "row",
+    marginTop: 16,
+    gap: 10,
   },
-  modalCancelBtn: {
+  modalBtn: {
     flex: 1,
-    backgroundColor: '#f3f4f6',
-    borderRadius: 8,
+    borderRadius: 10,
     paddingVertical: 12,
-    alignItems: 'center',
+    alignItems: "center",
+    justifyContent: "center",
   },
-  modalCancelText: {
-    color: '#6b7280',
-    fontWeight: 'bold',
-    fontSize: 15,
-  },
-  modalSaveBtn: {
-    flex: 1,
-    backgroundColor: '#ea580c',
-    borderRadius: 8,
-    paddingVertical: 12,
-    alignItems: 'center',
-  },
-  modalSaveText: {
-    color: '#fff',
-    fontWeight: 'bold',
-    fontSize: 15,
+  modalBtnText: {
+    fontFamily: Fonts.LeagueSpartanSemiBold,
+    fontSize: 14,
   },
 });
 

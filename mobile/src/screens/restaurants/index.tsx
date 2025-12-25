@@ -12,8 +12,9 @@ import {
   View,
   ActivityIndicator,
   RefreshControl,
+  Image,
 } from "react-native";
-import { ArrowLeft, Search, ShoppingCart, User } from "lucide-react-native";
+import { ArrowLeft, Search, ShoppingCart, User, MessageCircle } from "lucide-react-native";
 import { useDispatch, useSelector } from 'react-redux';
 
 // Import StoreCard component thay vì RestaurantCard1
@@ -22,7 +23,6 @@ import { Fonts } from "@/constants/Fonts";
 import { RootState, AppDispatch } from '@/store';
 import { fetchStoresWithStats } from '@/store/slices/storesSlice';
 import { Store } from '@/types';
-
 const TABS = ["Tất cả", "Burger", "Pizza", "Lành mạnh"] as const;
 
 const CONTENT_PADDING = 16;
@@ -99,7 +99,7 @@ export default function RestaurantsIndex() {
         <View style={styles.headerWrap}>
           <View style={styles.headerTopRow}>
             <TouchableOpacity onPress={() => navigation.goBack()} style={styles.roundIconBtn}>
-              <ArrowLeft size={18} color="#3a1a12" />
+              <ArrowLeft size={24} color="#eb552d" />
             </TouchableOpacity>
 
             <Text style={styles.headerTitle}>Cửa hàng</Text>
@@ -109,13 +109,13 @@ export default function RestaurantsIndex() {
                 style={styles.roundIconBtn}
                 onPress={() => navigation.navigate("Cart")}
               >
-                <ShoppingCart size={18} color="#3a1a12" />
+                <ShoppingCart size={24} color="#eb552d" />
               </TouchableOpacity>
               <TouchableOpacity
                 style={styles.roundIconBtn}
                 onPress={() => navigation.navigate("Support" as any)} 
               >
-                <User size={18} color="#3a1a12" />
+                <User size={24} color="#eb552d" />
               </TouchableOpacity>
             </View>
           </View>
@@ -196,6 +196,15 @@ export default function RestaurantsIndex() {
           ) : null
         }
       />
+      {/* Floating Copilot button - positioned above bottom nav */}
+      <TouchableOpacity
+        accessibilityLabel="Copilot"
+        onPress={() => navigation.navigate('Chatbot' as never)}
+        activeOpacity={0.85}
+        style={styles.copilotButton}
+      >
+        <MessageCircle width={28} height={28} color="#ffffff" strokeWidth={2.2} />
+      </TouchableOpacity>
     </SafeAreaView>
   );
 }
@@ -234,7 +243,7 @@ const styles = StyleSheet.create({
   },
   headerTitle: {
     fontSize: 20,
-    color: "#3a1a12",
+    color: "#ffffff",
     fontFamily: Fonts.LeagueSpartanExtraBold,
   },
   searchRow: {
@@ -342,5 +351,22 @@ const styles = StyleSheet.create({
     color: "#6B7280",
     fontFamily: Fonts.LeagueSpartanRegular,
     textAlign: "center",
+  },
+  copilotButton: {
+    position: 'absolute',
+    right: 16,
+    bottom: 72,
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: '#EB552D',
+    justifyContent: 'center',
+    alignItems: 'center',
+    elevation: 8,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 6,
+    zIndex: 1000,
   },
 });

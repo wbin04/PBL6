@@ -1,15 +1,17 @@
 import os
 from pathlib import Path
 from datetime import timedelta
+from decimal import Decimal
+from decouple import config
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = 'django-insecure-your-secret-key-here'
+SECRET_KEY = config('SECRET_KEY', default='django-insecure-your-secret-key-here')
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+DEBUG = config('DEBUG', default=True, cast=bool)
 
 ALLOWED_HOSTS = ['*']
 
@@ -37,6 +39,8 @@ INSTALLED_APPS = [
     'apps.ratings',
     'apps.stores',
     'apps.shipper',
+    'apps.chatbot',
+    'apps.dashboard',
 ]
 
 MIDDLEWARE = [
@@ -74,11 +78,11 @@ WSGI_APPLICATION = 'fastfood_api.wsgi.application'
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.postgresql',
-        'NAME': os.getenv('DB_NAME', 'fastfood_db'),
-        'USER': os.getenv('DB_USER', 'postgres'),
-        'PASSWORD': os.getenv('DB_PASSWORD', 'password'),
-        'HOST': os.getenv('DB_HOST', 'localhost'),
-        'PORT': os.getenv('DB_PORT', '5432'),
+        'NAME': config('DB_NAME', default='fastfood_data'),
+        'USER': config('DB_USER', default='postgres'),
+        'PASSWORD': config('DB_PASSWORD', default=' 456'),
+        'HOST': config('DB_HOST', default='localhost'),
+        'PORT': config('DB_PORT', default='5432'),
     }
 }
 
@@ -127,7 +131,14 @@ REST_FRAMEWORK = {
     # ],  # Temporarily disabled for testing
     'DEFAULT_PAGINATION_CLASS': 'rest_framework.pagination.PageNumberPagination',
     'PAGE_SIZE': 12,
+    # Tự động convert datetime sang múi giờ Việt Nam khi serialize
+    'DATETIME_FORMAT': '%Y-%m-%d %H:%M:%S',  # Format không có timezone suffix
 }
+
+# Shipping configuration
+SHIPPING_BASE_FEE = Decimal(config('SHIPPING_BASE_FEE', default='15000'))
+SHIPPING_FEE_PER_KM = Decimal(config('SHIPPING_FEE_PER_KM', default='4000'))
+GOOGLE_MAPS_API_KEY = config('GOOGLE_MAPS_API_KEY', default='')
 
 # JWT Configuration
 SIMPLE_JWT = {

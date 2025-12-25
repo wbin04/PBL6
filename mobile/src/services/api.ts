@@ -187,6 +187,18 @@ class ApiClient {
     });
     return response.data;
   }
+
+  // PUT with multipart/form-data for file uploads
+  async putMultipart<T>(url: string, formData: FormData, config?: AxiosRequestConfig): Promise<T> {
+    const response: AxiosResponse<T> = await this.client.put(url, formData, {
+      ...config,
+      headers: {
+        'Content-Type': 'multipart/form-data',
+        ...config?.headers,
+      },
+    });
+    return response.data;
+  }
 }
 
 export const apiClient = new ApiClient();
@@ -412,6 +424,11 @@ export const authApi = {
   rejectShipperApplication: async (userId: number) => {
     return apiClient.post(`/auth/shipper/applications/${userId}/reject/`);
   },
+
+  // Admin toggle user status (used for customers, store managers, shippers)
+  toggleCustomerStatus: async (userId: number) => {
+    return apiClient.post(`/auth/admin/customers/${userId}/toggle-status/`);
+  },
   
   // Store application management (admin only)
   getStoreApplications: async (params?: { page?: number; search?: string }) => {
@@ -424,6 +441,16 @@ export const authApi = {
   
   rejectStoreApplication: async (userId: number) => {
     return apiClient.post(`/auth/store/applications/${userId}/reject/`);
+  },
+};
+
+export const dashboardApi = {
+  getAdminMetrics: async () => {
+    return apiClient.get('/dashboard/admin/');
+  },
+
+  getStoreMetrics: async (storeId: number) => {
+    return apiClient.get(`/dashboard/store/${storeId}/`);
   },
 };
 

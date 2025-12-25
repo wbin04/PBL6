@@ -1,8 +1,24 @@
-import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Linking, ScrollView, ActivityIndicator, RefreshControl, Alert } from 'react-native';
+import React, { useState, useEffect, useCallback } from 'react';
+import {
+  View,
+  Text,
+  StyleSheet,
+  TouchableOpacity,
+  Linking,
+  FlatList,
+  ActivityIndicator,
+  RefreshControl,
+  Alert,
+  TextInput,
+} from 'react-native';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
-import { Phone, Plus, UserCheck, UserX } from 'lucide-react-native';
+import { Phone, UserCheck, UserX, Menu, BarChart3, ShoppingBag, Package, Users, Star } from 'lucide-react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { shipperApi, authApi } from '../services/api';
+import { Fonts } from '../constants/Fonts';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { useAdmin } from '@/contexts/AdminContext';
+import Sidebar from '@/components/sidebar';
 
 interface Shipper {
   id: number;
@@ -11,12 +27,14 @@ interface Shipper {
   phone: string;
   email: string;
   address: string;
+  is_active?: boolean;
   user?: {
     id: number;
     fullname: string;
     phone: string;
     email: string;
     address: string;
+    is_active?: boolean;
   };
 }
 
@@ -31,7 +49,21 @@ interface ShipperApplication {
   is_shipper_registered: boolean;
 }
 
-const ShipperListScreen: React.FC = () => {
+const menuItems = [
+  { title: 'Trang chủ', icon: BarChart3, section: 'dashboard' },
+  // { title: 'Mua hàng', icon: ShoppingBag, section: 'buy' },
+  { title: 'Quản lý tài khoản', icon: Users, section: 'customers' },
+  { title: 'Quản lý cửa hàng', icon: ShoppingBag, section: 'stores' },
+  { title: 'Quản lý đơn hàng', icon: Package, section: 'orders' },
+  { title: 'Quản lý shipper', icon: Users, section: 'shippers' },
+  { title: 'Khuyến mãi hệ thống', icon: Star, section: 'promotions' },
+];
+
+interface ShipperListScreenProps {
+  onMenuPress?: () => void;
+}
+
+const ShipperListScreen: React.FC<ShipperListScreenProps> = ({ onMenuPress }) => {
   const navigation = useNavigation<any>();
   const [activeTab, setActiveTab] = useState<'list' | 'applications'>('list');
   const [shippers, setShippers] = useState<Shipper[]>([]);
@@ -40,6 +72,27 @@ const ShipperListScreen: React.FC = () => {
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [statistics, setStatistics] = useState<any>(null);
+  const [searchText, setSearchText] = useState('');
+  const [togglingId, setTogglingId] = useState<number | null>(null);
+
+  // Try to use admin context if available
+  let adminContext: ReturnType<typeof useAdmin> | undefined;
+  try {
+    adminContext = useAdmin();
+  } catch (e) {
+    // Not in admin context
+    adminContext = undefined;
+  }
+
+  const handleMenuPress = () => {
+    if (onMenuPress) {
+      onMenuPress();
+    } else if (adminContext) {
+      adminContext.openSidebar();
+    } else if (navigation.canGoBack()) {
+      navigation.goBack();
+    }
+  };
 
   // Fetch shippers from API
   const fetchShippers = async (showLoading = true) => {
@@ -49,27 +102,36 @@ const ShipperListScreen: React.FC = () => {
       }
       setError(null);
 
-      const response = await shipperApi.getShippers({
+      const response = (await shipperApi.getShippers({
         page: 1,
-        per_page: 50 // Get more shippers per page
-      }) as any;
+        per_page: 50,
+      })) as any;
 
       console.log('Shippers API Response:', response);
 
-      // Handle different response formats
+      const normalize = (arr: any[]) =>
+        arr.map((item) => ({
+          ...item,
+          is_active:
+            item.is_active !== undefined
+              ? item.is_active
+              : item.user_is_active !== undefined
+              ? item.user_is_active
+              : item.user?.is_active,
+        }));
+
       if (response?.results) {
-        setShippers(response.results);
+        setShippers(normalize(response.results));
       } else if (response?.data?.results) {
-        setShippers(response.data.results);
+        setShippers(normalize(response.data.results));
       } else if (response?.shippers) {
-        setShippers(response.shippers);
+        setShippers(normalize(response.shippers));
       } else if (Array.isArray(response)) {
-        setShippers(response);
+        setShippers(normalize(response));
       } else {
         console.warn('Unexpected response format:', response);
         setShippers([]);
       }
-
     } catch (error: any) {
       console.error('Error fetching shippers:', error);
       setError(error.message || 'Không thể tải danh sách shipper');
@@ -85,10 +147,9 @@ const ShipperListScreen: React.FC = () => {
   // Fetch statistics
   const fetchStatistics = async () => {
     try {
-      const response = await shipperApi.getStatistics() as any;
+      const response = (await shipperApi.getStatistics()) as any;
       console.log('Statistics API Response:', response);
-      
-      // Handle different response formats
+
       if (response?.data) {
         setStatistics(response.data);
       } else {
@@ -107,13 +168,12 @@ const ShipperListScreen: React.FC = () => {
       }
       setError(null);
 
-      const response = await authApi.getShipperApplications({
+      const response = (await authApi.getShipperApplications({
         page: 1,
-      }) as any;
+      })) as any;
 
       console.log('Applications API Response:', response);
 
-      // Handle different response formats
       if (response?.applications) {
         setApplications(response.applications);
       } else if (response?.data?.applications) {
@@ -124,7 +184,6 @@ const ShipperListScreen: React.FC = () => {
         console.warn('Unexpected applications response format:', response);
         setApplications([]);
       }
-
     } catch (error: any) {
       console.error('Error fetching applications:', error);
       setError(error.message || 'Không thể tải danh sách đơn đăng ký');
@@ -148,11 +207,11 @@ const ShipperListScreen: React.FC = () => {
         fetchApplications();
       }
       fetchStatistics();
-    }, [activeTab])
+    }, [activeTab]),
   );
 
   // Refresh handler
-  const onRefresh = () => {
+  const onRefresh = useCallback(() => {
     setRefreshing(true);
     if (activeTab === 'list') {
       fetchShippers(false);
@@ -160,469 +219,865 @@ const ShipperListScreen: React.FC = () => {
       fetchApplications(false);
     }
     fetchStatistics();
-  };
+  }, [activeTab]);
 
   // Handle approve shipper application
   const handleApproveApplication = async (userId: number, userName: string) => {
     Alert.alert(
-      "Chấp nhận đơn đăng ký",
+      'Chấp nhận đơn đăng ký',
       `Bạn có chắc muốn chấp nhận đơn đăng ký của ${userName}?`,
       [
-        { text: "Hủy", style: "cancel" },
+        { text: 'Hủy', style: 'cancel' },
         {
-          text: "Chấp nhận",
+          text: 'Chấp nhận',
           onPress: async () => {
             try {
               setLoading(true);
               await authApi.approveShipperApplication(userId);
-              Alert.alert("Thành công", "Đã chấp nhận đơn đăng ký shipper");
-              fetchApplications(); // Refresh applications list
+              Alert.alert('Thành công', 'Đã chấp nhận đơn đăng ký shipper');
+              fetchApplications();
             } catch (error: any) {
               console.error('Error approving application:', error);
-              Alert.alert("Lỗi", error?.response?.data?.message || "Không thể chấp nhận đơn đăng ký");
+              Alert.alert(
+                'Lỗi',
+                error?.response?.data?.message || 'Không thể chấp nhận đơn đăng ký',
+              );
             } finally {
               setLoading(false);
             }
-          }
-        }
-      ]
+          },
+        },
+      ],
     );
   };
 
   // Handle reject shipper application
   const handleRejectApplication = async (userId: number, userName: string) => {
     Alert.alert(
-      "Từ chối đơn đăng ký",
+      'Từ chối đơn đăng ký',
       `Bạn có chắc muốn từ chối đơn đăng ký của ${userName}?`,
       [
-        { text: "Hủy", style: "cancel" },
+        { text: 'Hủy', style: 'cancel' },
         {
-          text: "Từ chối",
-          style: "destructive",
+          text: 'Từ chối',
+          style: 'destructive',
           onPress: async () => {
             try {
               setLoading(true);
               await authApi.rejectShipperApplication(userId);
-              Alert.alert("Thành công", "Đã từ chối đơn đăng ký shipper");
-              fetchApplications(); // Refresh applications list
+              Alert.alert('Thành công', 'Đã từ chối đơn đăng ký shipper');
+              fetchApplications();
             } catch (error: any) {
               console.error('Error rejecting application:', error);
-              Alert.alert("Lỗi", error?.response?.data?.message || "Không thể từ chối đơn đăng ký");
+              Alert.alert(
+                'Lỗi',
+                error?.response?.data?.message || 'Không thể từ chối đơn đăng ký',
+              );
             } finally {
               setLoading(false);
             }
-          }
-        }
-      ]
+          },
+        },
+      ],
     );
   };
 
-  if (loading && !refreshing) {
-    return (
-      <View style={[styles.container, styles.centered]}>
-        <ActivityIndicator size="large" color="#ea580c" />
-        <Text style={styles.loadingText}>
-          {activeTab === 'list' ? 'Đang tải danh sách shipper...' : 'Đang tải đơn đăng ký...'}
-        </Text>
-      </View>
-    );
-  }
+  const handleToggleShipperStatus = async (shipper: Shipper) => {
+    const userId = shipper?.user_id ?? shipper?.user?.id;
+    if (!userId) return;
 
-  if (error && !refreshing && (activeTab === 'list' ? shippers.length === 0 : applications.length === 0)) {
-    return (
-      <View style={[styles.container, styles.centered]}>
-        <Text style={styles.errorText}>{error}</Text>
-        <TouchableOpacity 
-          style={styles.retryButton} 
-          onPress={() => activeTab === 'list' ? fetchShippers() : fetchApplications()}
-        >
-          <Text style={styles.retryButtonText}>Thử lại</Text>
-        </TouchableOpacity>
-      </View>
-    );
-  }
+    try {
+      setTogglingId(userId);
+      const res = await authApi.toggleCustomerStatus(userId);
+      const updatedUser = res?.customer || res?.data?.customer || res;
+      const updatedIsActive =
+        updatedUser?.is_active ?? updatedUser?.user?.is_active ?? !shipper.is_active;
 
-  return (
-    <View style={styles.container}>
-      <View style={styles.header}>
-        <View>
-          <Text style={styles.title}>Quản lý shipper</Text>
-          {statistics && (
-            <Text style={styles.subtitle}>
-              Tổng cộng: {statistics.total_shippers} shipper
+      setShippers((prev) =>
+        prev.map((s) => {
+          if ((s.user_id ?? s.user?.id) !== userId) return s;
+          const nextUser = s.user ? { ...s.user, is_active: updatedIsActive } : s.user;
+          return {
+            ...s,
+            is_active: updatedIsActive,
+            user: nextUser,
+          };
+        }),
+      );
+      Alert.alert('Thành công', updatedIsActive ? 'Đã mở khóa tài khoản' : 'Đã khóa tài khoản');
+    } catch (error: any) {
+      console.error('Error toggling shipper status:', error);
+      Alert.alert(
+        'Lỗi',
+        error?.response?.data?.message || 'Không thể cập nhật trạng thái tài khoản',
+      );
+    } finally {
+      setTogglingId(null);
+    }
+  };
+
+  // Search functionality
+  const filteredShippers = shippers.filter(
+    (shipper) =>
+      shipper.fullname?.toLowerCase().includes(searchText.toLowerCase()) ||
+      shipper.user?.fullname?.toLowerCase().includes(searchText.toLowerCase()) ||
+      shipper.phone?.toLowerCase().includes(searchText.toLowerCase()) ||
+      shipper.user?.phone?.toLowerCase().includes(searchText.toLowerCase()) ||
+      shipper.email?.toLowerCase().includes(searchText.toLowerCase()) ||
+      shipper.user?.email?.toLowerCase().includes(searchText.toLowerCase()),
+  );
+
+  const filteredApplications = applications.filter(
+    (app) =>
+      app.fullname?.toLowerCase().includes(searchText.toLowerCase()) ||
+      app.email?.toLowerCase().includes(searchText.toLowerCase()) ||
+      app.phone_number?.toLowerCase().includes(searchText.toLowerCase()),
+  );
+
+  const renderShipperItem = ({ item }: { item: Shipper }) => {
+    const isActive = item.is_active ?? item.user?.is_active ?? true;
+    const userId = item.user_id ?? item.user?.id;
+
+    return (
+      <TouchableOpacity
+        style={styles.card}
+        activeOpacity={0.9}
+        onPress={() => navigation.navigate('ShipperDetailScreen', { shipper: item })}
+      >
+        <View style={styles.cardHeader}>
+          <View style={styles.shipperIcon}>
+            <Text style={styles.shipperIconText}>
+              {(item.fullname || item.user?.fullname || 'S').charAt(0).toUpperCase()}
             </Text>
-          )}
+          </View>
+          <View style={styles.shipperInfo}>
+            <Text style={styles.shipperName}>
+              {item.fullname || item.user?.fullname || 'Chưa có tên'}
+            </Text>
+            <View style={styles.shipperMetaRow}>
+              <View
+                style={[
+                  styles.statusBadge,
+                  isActive ? styles.statusBadgeActive : styles.statusBadgeLocked,
+                ]}
+              >
+                <Text
+                  style={[
+                    styles.statusText,
+                    isActive ? styles.statusTextActive : styles.statusTextLocked,
+                  ]}
+                >
+                  {isActive ? 'Đang hoạt động' : 'Đã khóa'}
+                </Text>
+              </View>
+            </View>
+            <View style={styles.phoneRow}>
+              <Text style={styles.shipperPhone}>
+                📞 {item.phone || item.user?.phone || 'Chưa có SĐT'}
+              </Text>
+              {(item.phone || item.user?.phone) && (
+                <TouchableOpacity
+                  style={styles.callButton}
+                  onPress={(e) => {
+                    e.stopPropagation();
+                    Linking.openURL(`tel:${item.phone || item.user?.phone}`);
+                  }}
+                >
+                  <Phone size={14} color="#fff" />
+                </TouchableOpacity>
+              )}
+            </View>
+            <Text style={styles.shipperEmail}>
+              ✉️ {item.email || item.user?.email || 'Chưa có email'}
+            </Text>
+            <Text style={styles.shipperAddress} numberOfLines={2}>
+              📍 {item.address || item.user?.address || 'Chưa có địa chỉ'}
+            </Text>
+          </View>
+          <TouchableOpacity
+            style={styles.editButton}
+            onPress={(e) => {
+              e.stopPropagation();
+              navigation.navigate('ShipperEditScreen', { shipper: item });
+            }}
+          >
+            <Ionicons name="create-outline" size={18} color="#fff" />
+          </TouchableOpacity>
+        </View>
+
+        <View style={styles.statsRow}>
+          <View style={styles.statBox}>
+            <Text style={styles.statValue}>0</Text>
+            <Text style={styles.statLabel}>Đã giao</Text>
+          </View>
+          <View style={styles.statBox}>
+            <Text style={styles.statValue}>0</Text>
+            <Text style={styles.statLabel}>Đánh giá</Text>
+          </View>
+          <View style={[styles.statBox, styles.toggleStatBox]}>
+            <TouchableOpacity
+              style={[
+                styles.toggleBtn,
+                isActive ? styles.toggleBtnActive : styles.toggleBtnLocked,
+                togglingId === userId && styles.toggleBtnDisabled,
+              ]}
+              disabled={togglingId === userId}
+              onPress={(e) => {
+                e.stopPropagation();
+                handleToggleShipperStatus(item);
+              }}
+              activeOpacity={0.8}
+            >
+              <Text
+                style={[
+                  styles.toggleBtnText,
+                  isActive ? styles.toggleBtnTextActive : styles.toggleBtnTextLocked,
+                ]}
+              >
+                {togglingId === userId
+                  ? 'Đang xử lý...'
+                  : isActive
+                  ? 'Khóa'
+                  : 'Mở khóa'}
+              </Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </TouchableOpacity>
+    );
+  };
+
+  const renderApplicationItem = ({ item }: { item: ShipperApplication }) => (
+    <View style={styles.applicationCard}>
+      <View style={styles.cardHeader}>
+        <View style={styles.applicationIcon}>
+          <Text style={styles.applicationIconText}>
+            {item.fullname.charAt(0).toUpperCase()}
+          </Text>
+        </View>
+        <View style={styles.applicationInfo}>
+          <Text style={styles.applicationName}>{item.fullname}</Text>
+          <View style={styles.phoneRow}>
+            <Text style={styles.applicationPhone}>
+              📞 {item.phone_number || 'Chưa có SĐT'}
+            </Text>
+            {item.phone_number && (
+              <TouchableOpacity
+                style={styles.callButton}
+                onPress={() => Linking.openURL(`tel:${item.phone_number}`)}
+              >
+                <Phone size={14} color="#fff" />
+              </TouchableOpacity>
+            )}
+          </View>
+          <Text style={styles.applicationEmail}>
+            ✉️ {item.email || 'Chưa có email'}
+          </Text>
+          <Text style={styles.applicationAddress} numberOfLines={2}>
+            📍 {item.address || 'Chưa có địa chỉ'}
+          </Text>
+          <Text style={styles.applicationDate}>
+            🕒 Đăng ký: {new Date(item.created_date).toLocaleDateString('vi-VN')}
+          </Text>
         </View>
       </View>
 
-      {/* Tab Toggle */}
-      <View style={styles.tabContainer}>
+      <View style={styles.actionRow}>
         <TouchableOpacity
-          style={[styles.tab, activeTab === 'list' && styles.activeTab]}
-          onPress={() => setActiveTab('list')}
+          style={styles.approveButton}
+          onPress={() => handleApproveApplication(item.id, item.fullname)}
+          disabled={loading}
+          activeOpacity={0.8}
         >
-          <Text style={[styles.tabText, activeTab === 'list' && styles.activeTabText]}>
-            Danh sách
-          </Text>
+          <UserCheck size={16} color="#fff" />
+          <Text style={styles.approveButtonText}>Chấp nhận</Text>
         </TouchableOpacity>
         <TouchableOpacity
-          style={[styles.tab, activeTab === 'applications' && styles.activeTab]}
-          onPress={() => setActiveTab('applications')}
+          style={styles.rejectButton}
+          onPress={() => handleRejectApplication(item.id, item.fullname)}
+          disabled={loading}
+          activeOpacity={0.8}
         >
-          <Text style={[styles.tabText, activeTab === 'applications' && styles.activeTabText]}>
+          <UserX size={16} color="#fff" />
+          <Text style={styles.rejectButtonText}>Từ chối</Text>
+        </TouchableOpacity>
+      </View>
+    </View>
+  );
+
+  const renderEmpty = () => {
+    if (loading) return null;
+
+    return (
+      <View style={styles.emptyContainer}>
+        <Ionicons
+          name={activeTab === 'list' ? 'bicycle-outline' : 'document-text-outline'}
+          size={64}
+          color="#d1d5db"
+        />
+        <Text style={styles.emptyText}>
+          {searchText
+            ? `Không tìm thấy ${activeTab === 'list' ? 'shipper' : 'đơn đăng ký'} nào`
+            : `Chưa có ${activeTab === 'list' ? 'shipper' : 'đơn đăng ký'} nào`}
+        </Text>
+      </View>
+    );
+  };
+
+  // ✅ thêm tính tổng cho result bar (chỉ dùng để hiển thị)
+  const totalFound =
+    activeTab === 'list' ? filteredShippers.length : filteredApplications.length;
+
+  return (
+    <>
+      <Sidebar
+        isOpen={adminContext?.isSidebarOpen || false}
+        onClose={() => adminContext?.closeSidebar()}
+        menuItems={menuItems}
+        hitSlop={{ top: 50, bottom: 10, left: 10, right: 10 }}
+        onMenuItemPress={(section) => {
+          adminContext?.closeSidebar();
+          
+          if (section === 'buy') {
+            navigation.reset({ index: 0, routes: [{ name: 'MainTabs' }] });
+          } else if (section === 'dashboard') {
+            navigation.navigate('AdminDashboard');
+          } else if (section === 'customers') {
+            navigation.navigate('CustomerListScreen');
+          } else if (section === 'stores') {
+            navigation.navigate('StoreListScreen');
+          } else if (section === 'orders') {
+            navigation.navigate('OrderListScreen');
+          } else if (section === 'shippers') {
+            // Stay on current screen
+          } else if (section === 'promotions') {
+            navigation.navigate('VoucherManagementScreen');
+          }
+        }}
+      />
+      <SafeAreaView style={styles.safeArea} edges={['top']}>
+      <View style={styles.headerWrap}>
+        <View style={styles.headerTopRow}>
+          <TouchableOpacity
+            onPress={handleMenuPress}
+            style={styles.roundIconBtn}
+          >
+            <Menu size={24} color="#eb552d" />
+          </TouchableOpacity>
+
+          <Text style={styles.headerTitle}>Shipper</Text>
+
+          <View style={{ width: 40 }} />
+        </View>
+
+        {/* Thanh tìm kiếm trong header - đổi UI như StoreListScreen */}
+        <View style={styles.searchRow}>
+          <View style={styles.searchBox}>
+            <TextInput
+              style={styles.searchInput}
+              placeholder={
+                activeTab === 'list'
+                  ? 'Tìm theo tên, SĐT, email...'
+                  : 'Tìm theo tên, SĐT, email...'
+              }
+              placeholderTextColor="#9ca3af"
+              value={searchText}
+              onChangeText={setSearchText}
+              returnKeyType="search"
+            />
+            {searchText.length > 0 && (
+              <TouchableOpacity
+                onPress={() => setSearchText('')}
+                style={styles.clearBtn}
+              >
+                <Ionicons name="close-circle" size={16} color="#9ca3af" />
+              </TouchableOpacity>
+            )}
+            <TouchableOpacity style={styles.searchBtn} activeOpacity={0.8}>
+              <Ionicons name="search" size={16} color="#fff" />
+            </TouchableOpacity>
+          </View>
+        </View>
+      </View>
+
+      {/* FILTER TABS giống restaurants/index.tsx */}
+      <View style={styles.tabs}>
+        <TouchableOpacity
+          style={[styles.tab, activeTab === 'list' && styles.tabActive]}
+          onPress={() => {
+            setActiveTab('list');
+            setSearchText('');
+          }}
+          activeOpacity={0.7}
+        >
+          <Text style={[styles.tabText, activeTab === 'list' && styles.tabTextActive]}>
+            Danh sách
+          </Text>
+          <View
+            style={[styles.countBadge, activeTab === 'list' && styles.countBadgeActive]}
+          >
+            <Text
+              style={[styles.countText, activeTab === 'list' && styles.countTextActive]}
+            >
+              {shippers.length}
+            </Text>
+          </View>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={[
+            styles.tab,
+            activeTab === 'applications' && styles.tabActive,
+          ]}
+          onPress={() => {
+            setActiveTab('applications');
+            setSearchText('');
+          }}
+          activeOpacity={0.7}
+        >
+          <Text
+            style={[
+              styles.tabText,
+              activeTab === 'applications' && styles.tabTextActive,
+            ]}
+          >
             Đơn đăng ký
           </Text>
+          <View
+            style={[
+              styles.countBadge,
+              activeTab === 'applications' && styles.countBadgeActive,
+            ]}
+          >
+            <Text
+              style={[
+                styles.countText,
+                activeTab === 'applications' && styles.countTextActive,
+              ]}
+            >
+              {applications.length}
+            </Text>
+          </View>
         </TouchableOpacity>
       </View>
 
-      <ScrollView 
-        style={styles.scrollView}
-        refreshControl={
-          <RefreshControl
-            refreshing={refreshing}
-            onRefresh={onRefresh}
-            colors={['#ea580c']}
-            tintColor="#ea580c"
-          />
-        }
-      >
-        {activeTab === 'list' ? (
-          // Shipper List
-          shippers.length === 0 ? (
-            <View style={styles.emptyContainer}>
-              <Text style={styles.emptyText}>Chưa có shipper nào</Text>
-            </View>
-          ) : (
-            shippers.map((item: Shipper) => (
-              <TouchableOpacity 
-                key={item.id} 
-                style={styles.card} 
-                onPress={() => navigation.navigate('ShipperDetailScreen', { shipper: item })}
-              >
-                <View style={styles.cardHeader}>
-                  <View style={styles.shipperInfo}>
-                    <Text style={styles.name}>{item.fullname || item.user?.fullname || 'Chưa có tên'}</Text>
-                    <View style={styles.phoneContainer}>
-                      <Text style={styles.phone}>{item.phone || item.user?.phone || 'Chưa có SĐT'}</Text>
-                      {(item.phone || item.user?.phone) && (
-                        <TouchableOpacity
-                          style={styles.callBtn}
-                          onPress={() => Linking.openURL(`tel:${item.phone || item.user?.phone}`)}
-                        >
-                          <Phone size={16} color="#fff" />
-                        </TouchableOpacity>
-                      )}
-                    </View>
-                    <Text style={styles.email}>{item.email || item.user?.email || 'Chưa có email'}</Text>
-                    <Text style={styles.address} numberOfLines={2}>
-                      {item.address || item.user?.address || 'Chưa có địa chỉ'}
-                    </Text>
-                  </View>
-                  <TouchableOpacity
-                    style={styles.editButton}
-                    onPress={() => navigation.navigate('ShipperEditScreen', { shipper: item })}
-                  >
-                    <Text style={styles.editButtonText}>Sửa</Text>
-                  </TouchableOpacity>
-                </View>
+      <View style={styles.foundWrap}>
+        <Text style={styles.foundText}>
+          Tìm thấy <Text style={styles.foundNum}>{totalFound}</Text>{' '}
+          {activeTab === 'list' ? 'shipper' : 'đơn đăng ký'}
+        </Text>
+      </View>
 
-                <View style={styles.statsRow}>
-                  <View style={styles.statBox}>
-                    <Text style={styles.statValue}>0</Text>
-                    <Text style={styles.statLabel}>Đã giao</Text>
-                  </View>
-                  <View style={styles.statBox}>
-                    <Text style={styles.statValue}>0</Text>
-                    <Text style={styles.statLabel}>Đánh giá</Text>
-                  </View>
-                  <View style={styles.statBox}>
-                    <Text style={[styles.status, styles.active]}>Sẵn sàng</Text>
-                  </View>
-                </View>
-              </TouchableOpacity>
-            ))
-          )
-        ) : (
-          // Applications List
-          applications.length === 0 ? (
-            <View style={styles.emptyContainer}>
-              <Text style={styles.emptyText}>Chưa có đơn đăng ký nào</Text>
-            </View>
-          ) : (
-            applications.map((item: ShipperApplication) => (
-              <View key={item.id} style={styles.applicationCard}>
-                <View style={styles.cardHeader}>
-                  <View style={styles.shipperInfo}>
-                    <Text style={styles.name}>{item.fullname || 'Chưa có tên'}</Text>
-                    <View style={styles.phoneContainer}>
-                      <Text style={styles.phone}>{item.phone_number || 'Chưa có SĐT'}</Text>
-                      {item.phone_number && (
-                        <TouchableOpacity
-                          style={styles.callBtn}
-                          onPress={() => Linking.openURL(`tel:${item.phone_number}`)}
-                        >
-                          <Phone size={16} color="#fff" />
-                        </TouchableOpacity>
-                      )}
-                    </View>
-                    <Text style={styles.email}>{item.email || 'Chưa có email'}</Text>
-                    <Text style={styles.address} numberOfLines={2}>
-                      {item.address || 'Chưa có địa chỉ'}
-                    </Text>
-                    <Text style={styles.applicationDate}>
-                      Đăng ký: {new Date(item.created_date).toLocaleDateString('vi-VN')}
-                    </Text>
-                  </View>
-                </View>
-
-                <View style={styles.actionRow}>
-                  <TouchableOpacity
-                    style={styles.approveButton}
-                    onPress={() => handleApproveApplication(item.id, item.fullname)}
-                    disabled={loading}
-                  >
-                    <UserCheck size={16} color="#fff" />
-                    <Text style={styles.approveButtonText}>Chấp nhận</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    style={styles.rejectButton}
-                    onPress={() => handleRejectApplication(item.id, item.fullname)}
-                    disabled={loading}
-                  >
-                    <UserX size={16} color="#fff" />
-                    <Text style={styles.rejectButtonText}>Từ chối</Text>
-                  </TouchableOpacity>
-                </View>
-              </View>
-            ))
-          )
-        )}
-      </ScrollView>
-    </View>
+      {/* LIST + REFRESH giữ nguyên logic */}
+      {loading &&
+      (activeTab === 'list' ? filteredShippers : filteredApplications).length ===
+        0 ? (
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color="#ea580c" />
+          <Text style={styles.loadingText}>
+            {activeTab === 'list'
+              ? 'Đang tải shipper...'
+              : 'Đang tải đơn đăng ký...'}
+          </Text>
+        </View>
+      ) : error &&
+        !refreshing &&
+        (activeTab === 'list'
+          ? filteredShippers
+          : filteredApplications
+        ).length === 0 ? (
+        <View style={styles.errorContainer}>
+          <Ionicons name="alert-circle-outline" size={64} color="#ef4444" />
+          <Text style={styles.errorText}>{error}</Text>
+          <TouchableOpacity
+            style={styles.retryButton}
+            onPress={() =>
+              activeTab === 'list' ? fetchShippers() : fetchApplications()
+            }
+          >
+            <Ionicons name="refresh-outline" size={18} color="#fff" />
+            <Text style={styles.retryButtonText}>Thử lại</Text>
+          </TouchableOpacity>
+        </View>
+      ) : (
+        <FlatList<any>
+          data={activeTab === 'list' ? filteredShippers : filteredApplications}
+          keyExtractor={(item) => item.id.toString()}
+          renderItem={
+            activeTab === 'list'
+              ? (info) => renderShipperItem(info as any)
+              : (info) => renderApplicationItem(info as any)
+          }
+          contentContainerStyle={styles.listContent}
+          showsVerticalScrollIndicator={false}
+          ListEmptyComponent={renderEmpty}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={onRefresh}
+              colors={['#ea580c']}
+              tintColor="#ea580c"
+            />
+          }
+          initialNumToRender={10}
+          maxToRenderPerBatch={10}
+          windowSize={5}
+          removeClippedSubviews={true}
+        />
+      )}
+    </SafeAreaView>
+    </>
   );
 };
 
 const styles = StyleSheet.create({
-  container: { 
-    flex: 1, 
-    backgroundColor: '#fff7ed', 
-    padding: 16 
+  safeArea: {
+    flex: 1,
+    backgroundColor: '#ffffff',
   },
-  centered: {
-    justifyContent: 'center',
-    alignItems: 'center',
+
+
+  headerWrap: {
+    backgroundColor: '#f5cb58',
+    paddingTop: 0,
+    paddingBottom: 12,
   },
-  header: {
+  headerTopRow: {
     flexDirection: 'row',
+    alignItems: 'center',
     justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    marginBottom: 16,
+    marginTop: 20,
+    marginBottom: 20,
+    paddingHorizontal: 16,
   },
-  title: { 
-    fontSize: 20, 
-    fontWeight: 'bold', 
-    color: '#1f2937'
+  roundIconBtn: {
+    backgroundColor: '#FFFFFF',
+    padding: 10,
+    borderRadius: 999,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.06,
+    shadowRadius: 2,
+    elevation: 1,
   },
-  subtitle: {
+  headerTitle: {
+    fontSize: 20,
+    color: '#ffffff',
+    fontFamily: Fonts.LeagueSpartanExtraBold,
+  },
+
+  searchRow: {
+    paddingBottom: 8,
+    paddingHorizontal: 16,
+  },
+  // chỉnh lại giống StoreListScreen
+  searchBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#fff',
+    borderRadius: 999,
+    paddingLeft: 16,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+  },
+  searchInput: {
+    flex: 1,
+    height: 42,
     fontSize: 14,
+    color: '#111827',
+    fontFamily: Fonts.LeagueSpartanRegular,
+  },
+  clearBtn: {
+    paddingHorizontal: 4,
+  },
+  searchBtn: {
+    height: 42,
+    width: 42,
+    borderRadius: 999,
+    backgroundColor: '#EB552D',
+    alignItems: 'center',
+    justifyContent: 'center',
+    margin: 4,
+  },
+
+  // FILTER / TABS giống restaurants/index.tsx
+  tabs: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 10,
+    paddingHorizontal: 16,
+    paddingTop: 12,
+    backgroundColor: '#fff',
+  },
+  tab: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 999,
+    backgroundColor: '#F2F3F5',
+  },
+  tabActive: {
+    backgroundColor: '#EB552D',
+    shadowColor: '#000',
+    shadowOpacity: 0.06,
+    shadowRadius: 2,
+    shadowOffset: { width: 0, height: 1 },
+    elevation: 1,
+  },
+  tabText: {
+    color: '#6B7280',
+    fontFamily: Fonts.LeagueSpartanMedium,
+    fontSize: 14,
+  },
+  tabTextActive: {
+    color: '#FFFFFF',
+    fontFamily: Fonts.LeagueSpartanSemiBold,
+    fontSize: 14,
+  },
+  countBadge: {
+    marginLeft: 8,
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 999,
+    backgroundColor: '#e5e7eb',
+  },
+  countBadgeActive: {
+    backgroundColor: 'rgba(255,255,255,0.3)',
+  },
+  countText: {
+    fontSize: 11,
     color: '#6b7280',
-    marginTop: 4,
+    fontFamily: Fonts.LeagueSpartanBold,
   },
-  scrollView: { 
-    flex: 1 
+  countTextActive: {
+    color: '#fff',
   },
-  card: { 
-    backgroundColor: '#fff', 
-    borderRadius: 12, 
-    padding: 16, 
-    marginBottom: 16, 
-    borderWidth: 1, 
-    borderColor: '#e5e7eb', 
-    elevation: 2,
+
+  // LIST CONTENT
+  listContent: {
+    paddingHorizontal: 16,
+    paddingTop: 8,
+    paddingBottom: 16,
+  },
+
+  // Shipper Card
+  card: {
+    backgroundColor: '#ffffff',
+    borderRadius: 24,
+    padding: 16,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: '#e5e7eb',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 3,
+    shadowOpacity: 0.08,
+    shadowRadius: 6,
+    elevation: 3,
   },
   cardHeader: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'flex-start',
+    marginBottom: 12,
+  },
+  shipperIcon: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: '#ea580c',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 12,
+  },
+  shipperIconText: {
+    color: '#fff',
+    fontSize: 20,
+    fontFamily: Fonts.LeagueSpartanBold,
   },
   shipperInfo: {
     flex: 1,
-    paddingRight: 12,
   },
-  name: { 
-    fontSize: 16, 
-    fontWeight: 'bold', 
-    color: '#ea580c',
+  shipperName: {
+    fontSize: 16,
+    fontFamily: Fonts.LeagueSpartanBold,
+    color: '#1f2937',
     marginBottom: 4,
   },
-  phoneContainer: {
+  phoneRow: {
     flexDirection: 'row',
     alignItems: 'center',
     marginBottom: 4,
   },
-  phone: { 
-    fontSize: 13, 
-    color: '#6b7280'
-  },
-  email: {
+  shipperPhone: {
     fontSize: 13,
     color: '#6b7280',
+    fontFamily: Fonts.LeagueSpartanRegular,
+    marginRight: 8,
+  },
+  callButton: {
+    backgroundColor: '#10b981',
+    padding: 4,
+    borderRadius: 6,
+  },
+  shipperEmail: {
+    fontSize: 13,
+    color: '#6b7280',
+    fontFamily: Fonts.LeagueSpartanRegular,
     marginBottom: 4,
   },
-  address: {
+  shipperAddress: {
     fontSize: 13,
     color: '#6b7280',
-    marginBottom: 8,
+    fontFamily: Fonts.LeagueSpartanRegular,
   },
   editButton: {
     backgroundColor: '#22c55e',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 6,
+    padding: 8,
+    borderRadius: 8,
+    marginLeft: 8,
   },
-  editButtonText: {
-    color: '#fff',
-    fontWeight: 'bold',
-    fontSize: 12,
-  },
-  callBtn: { 
-    marginLeft: 8, 
-    backgroundColor: '#22c55e', 
-    borderRadius: 6, 
-    paddingHorizontal: 8, 
-    paddingVertical: 4 
-  },
-  statsRow: { 
-    flexDirection: 'row', 
-    justifyContent: 'space-between', 
-    marginTop: 12,
+  statsRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
     paddingTop: 12,
     borderTopWidth: 1,
     borderTopColor: '#f3f4f6',
   },
-  statBox: { 
-    alignItems: 'center', 
-    flex: 1 
+  statBox: {
+    alignItems: 'center',
+    flex: 1,
   },
-  statValue: { 
-    fontSize: 16, 
-    fontWeight: 'bold', 
-    color: '#1f2937' 
+  statValue: {
+    fontSize: 16,
+    fontFamily: Fonts.LeagueSpartanBold,
+    color: '#1f2937',
   },
-  statLabel: { 
-    fontSize: 12, 
+  statLabel: {
+    fontSize: 12,
     color: '#6b7280',
+    fontFamily: Fonts.LeagueSpartanRegular,
     marginTop: 2,
   },
-  status: { 
-    fontSize: 12, 
-    fontWeight: 'bold', 
-    paddingVertical: 4, 
-    paddingHorizontal: 8, 
-    borderRadius: 12,
-    textAlign: 'center',
+  statusBadge: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 999,
   },
-  active: { 
-    color: '#22c55e', 
-    backgroundColor: '#dcfce7' 
+  statusBadgeActive: {
+    backgroundColor: '#dcfce7',
   },
-  busy: { 
-    color: '#f59e0b', 
-    backgroundColor: '#fef3c7' 
+  statusBadgeLocked: {
+    backgroundColor: '#fee2e2',
   },
-  
-  // Loading states
-  loadingText: {
-    fontSize: 14,
-    color: '#6b7280',
-    marginTop: 12,
+  statusText: {
+    fontSize: 11,
+    fontFamily: Fonts.LeagueSpartanBold,
   },
-  
-  // Error states
-  errorText: {
-    fontSize: 14,
+  statusTextActive: {
+    color: '#22c55e',
+  },
+  statusTextLocked: {
     color: '#ef4444',
-    textAlign: 'center',
-    marginBottom: 16,
   },
-  retryButton: {
-    backgroundColor: '#ea580c',
-    paddingHorizontal: 20,
-    paddingVertical: 10,
-    borderRadius: 8,
-  },
-  retryButtonText: {
-    color: '#fff',
-    fontWeight: 'bold',
-    fontSize: 14,
-  },
-  
-  // Empty states
-  emptyContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingVertical: 40,
-  },
-  emptyText: {
-    fontSize: 16,
-    color: '#6b7280',
-    textAlign: 'center',
-    marginBottom: 16,
-  },
-  
-  // Tab styles
-  tabContainer: {
+  shipperMetaRow: {
     flexDirection: 'row',
-    backgroundColor: '#f3f4f6',
-    borderRadius: 8,
-    marginBottom: 16,
-    padding: 4,
-  },
-  tab: {
-    flex: 1,
-    paddingVertical: 12,
-    paddingHorizontal: 16,
-    borderRadius: 6,
     alignItems: 'center',
+    gap: 8,
+    marginBottom: 6,
   },
-  activeTab: {
-    backgroundColor: '#ea580c',
+  toggleBtn: {
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 10,
+    borderWidth: 1,
   },
-  tabText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#6b7280',
+  toggleBtnActive: {
+    borderColor: '#ef4444',
+    backgroundColor: '#fff5f5',
   },
-  activeTabText: {
-    color: '#fff',
+  toggleBtnLocked: {
+    borderColor: '#22c55e',
+    backgroundColor: '#ecfdf3',
   },
-  
-  // Application styles
+  toggleBtnDisabled: {
+    opacity: 0.6,
+  },
+  toggleBtnText: {
+    fontSize: 12,
+    fontFamily: Fonts.LeagueSpartanSemiBold,
+  },
+  toggleBtnTextActive: {
+    color: '#ef4444',
+  },
+  toggleBtnTextLocked: {
+    color: '#16a34a',
+  },
+  toggleStatBox: {
+    justifyContent: 'center',
+  },
+
+  // Application Card
   applicationCard: {
-    backgroundColor: '#fff', 
-    borderRadius: 12, 
-    padding: 16, 
-    marginBottom: 16, 
-    borderWidth: 1, 
-    borderColor: '#fbbf24',
+    backgroundColor: '#ffffff',
+    borderRadius: 24,
+    padding: 16,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: '#e5e7eb',
     borderLeftWidth: 4,
     borderLeftColor: '#f59e0b',
-    elevation: 2,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 3,
+    shadowOpacity: 0.08,
+    shadowRadius: 6,
+    elevation: 3,
+  },
+  applicationIcon: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: '#f59e0b',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 12,
+  },
+  applicationIconText: {
+    color: '#fff',
+    fontSize: 20,
+    fontFamily: Fonts.LeagueSpartanBold,
+  },
+  applicationInfo: {
+    flex: 1,
+  },
+  applicationName: {
+    fontSize: 16,
+    fontFamily: Fonts.LeagueSpartanBold,
+    color: '#1f2937',
+    marginBottom: 4,
+  },
+  applicationPhone: {
+    fontSize: 13,
+    color: '#6b7280',
+    fontFamily: Fonts.LeagueSpartanRegular,
+    marginRight: 8,
+  },
+  applicationEmail: {
+    fontSize: 13,
+    color: '#6b7280',
+    fontFamily: Fonts.LeagueSpartanRegular,
+    marginBottom: 4,
+  },
+  applicationAddress: {
+    fontSize: 13,
+    color: '#6b7280',
+    fontFamily: Fonts.LeagueSpartanRegular,
+    marginBottom: 4,
   },
   applicationDate: {
     fontSize: 12,
-    color: '#f59e0b',
-    fontWeight: '500',
-    marginTop: 4,
+    color: '#9ca3af',
+    fontFamily: Fonts.LeagueSpartanRegular,
+    fontStyle: 'italic',
   },
   actionRow: {
     flexDirection: 'row',
@@ -634,35 +1089,123 @@ const styles = StyleSheet.create({
   },
   approveButton: {
     flex: 1,
+    backgroundColor: '#10b981',
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#22c55e',
     paddingVertical: 10,
-    paddingHorizontal: 16,
-    borderRadius: 8,
+    borderRadius: 12,
     gap: 6,
+    shadowColor: '#10b981',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    elevation: 3,
   },
   approveButtonText: {
     color: '#fff',
-    fontWeight: 'bold',
     fontSize: 14,
+    fontFamily: Fonts.LeagueSpartanSemiBold,
   },
   rejectButton: {
     flex: 1,
+    backgroundColor: '#ef4444',
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#ef4444',
     paddingVertical: 10,
-    paddingHorizontal: 16,
-    borderRadius: 8,
+    borderRadius: 12,
     gap: 6,
+    shadowColor: '#ef4444',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    elevation: 3,
   },
   rejectButtonText: {
     color: '#fff',
-    fontWeight: 'bold',
     fontSize: 14,
+    fontFamily: Fonts.LeagueSpartanSemiBold,
+  },
+
+  // Loading / Error / Empty
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingVertical: 40,
+  },
+  loadingText: {
+    fontSize: 14,
+    color: '#6b7280',
+    marginTop: 12,
+    fontFamily: Fonts.LeagueSpartanRegular,
+  },
+  errorContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 32,
+  },
+  errorText: {
+    fontSize: 14,
+    color: '#ef4444',
+    textAlign: 'center',
+    marginTop: 16,
+    marginBottom: 20,
+    fontFamily: Fonts.LeagueSpartanRegular,
+  },
+  retryButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: '#ea580c',
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    borderRadius: 999,
+    shadowColor: '#ea580c',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  retryButtonText: {
+    fontSize: 14,
+    color: '#fff',
+    fontFamily: Fonts.LeagueSpartanSemiBold,
+  },
+  emptyContainer: {
+    alignItems: 'center',
+    paddingVertical: 60,
+  },
+  emptyText: {
+    marginTop: 16,
+    fontSize: 16,
+    color: '#6b7280',
+    fontFamily: Fonts.LeagueSpartanRegular,
+    textAlign: 'center',
+  },
+
+  foundWrap: {
+    marginTop: 12,
+    backgroundColor: '#F6F7F8',
+    paddingVertical: 14,
+    paddingHorizontal: 14,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 3,
+    elevation: 2,
+  },
+  foundText: {
+    color: '#6B7280',
+    marginLeft: 6,
+    fontSize: 15,
+    fontFamily: Fonts.LeagueSpartanRegular,
+  },
+  foundNum: {
+    color: '#111827',
+    fontFamily: Fonts.LeagueSpartanBold,
   },
 });
 

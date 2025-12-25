@@ -73,7 +73,19 @@ def refresh_view(request):
 @permission_classes([IsAuthenticated])
 def profile_view(request):
     serializer = UserSerializer(request.user)
-    return Response(serializer.data)
+    data = serializer.data
+    
+    # Debug logging
+    import logging
+    logger = logging.getLogger(__name__)
+    logger.info(f"=== Profile Request ===")
+    logger.info(f"User ID: {request.user.id}")
+    logger.info(f"Username: {request.user.username}")
+    logger.info(f"Role: {request.user.role.role_name if request.user.role else None}")
+    logger.info(f"Role ID: {request.user.role.id if request.user.role else None}")
+    logger.info(f"Serialized data: {data}")
+    
+    return Response(data)
 
 
 @api_view(['PUT'])
@@ -87,6 +99,32 @@ def update_profile_view(request):
     
     return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def change_password_view(request):
+    """Change password for authenticated user after verifying old password."""
+    old_password = request.data.get('old_password')
+    new_password = request.data.get('new_password')
+    confirm = request.data.get('new_password_confirm')
+
+    if not old_password or not new_password or not confirm:
+        return Response({'error': 'Vui lòng điền đầy đủ thông tin'}, status=status.HTTP_400_BAD_REQUEST)
+
+    if not request.user.check_password(old_password):
+        return Response({'error': 'Mật khẩu cũ không đúng'}, status=status.HTTP_400_BAD_REQUEST)
+
+    if new_password != confirm:
+        return Response({'error': 'Mật khẩu xác nhận không khớp'}, status=status.HTTP_400_BAD_REQUEST)
+
+    if len(new_password) < 6:
+        return Response({'error': 'Mật khẩu phải có ít nhất 6 ký tự'}, status=status.HTTP_400_BAD_REQUEST)
+
+    request.user.set_password(new_password)
+    request.user.save(update_fields=['password'])
+
+    return Response({'message': 'Đổi mật khẩu thành công'}, status=status.HTTP_200_OK)
+
 @api_view(['POST'])
 @permission_classes([AllowAny])
 def reset_password_view(request):
@@ -94,10 +132,22 @@ def reset_password_view(request):
     identifier = request.data.get('identifier')
     new_password = request.data.get('new_password')
     confirm = request.data.get('new_password_confirm')
+    
     if not identifier or not new_password or not confirm:
-        return Response({'error': 'Vui lòng điền đầy đủ thông tin'}, status=status.HTTP_400_BAD_REQUEST)
+        return Response({
+            'error': 'Vui lòng điền đầy đủ thông tin'
+        }, status=status.HTTP_400_BAD_REQUEST)
+    
     if new_password != confirm:
-        return Response({'error': 'Mật khẩu xác nhận không khớp'}, status=status.HTTP_400_BAD_REQUEST)
+        return Response({
+            'error': 'Mật khẩu xác nhận không khớp'
+        }, status=status.HTTP_400_BAD_REQUEST)
+    
+    if len(new_password) < 6:
+        return Response({
+            'error': 'Mật khẩu phải có ít nhất 6 ký tự'
+        }, status=status.HTTP_400_BAD_REQUEST)
+    
     try:
         user = User.objects.get(
             Q(email__iexact=identifier) |
@@ -105,11 +155,21 @@ def reset_password_view(request):
             Q(phone_number__iexact=identifier)
         )
     except User.DoesNotExist:
-        return Response({'error': 'Không tìm thấy người dùng'}, status=status.HTTP_404_NOT_FOUND)
-    # Update plaintext password
-    user.password = new_password
+        return Response({
+            'error': 'Không tìm thấy người dùng với thông tin này'
+        }, status=status.HTTP_404_NOT_FOUND)
+    
+    # IMPORTANT: Use set_password() to properly hash the password
+    user.set_password(new_password)
     user.save()
-    return Response({'message': 'Đặt lại mật khẩu thành công'})
+    
+    return Response({
+        'message': 'Đặt lại mật khẩu thành công',
+        'user': {
+            'email': user.email,
+            'username': user.username
+        }
+    }, status=status.HTTP_200_OK)
 
 
 # Admin-only views (require role_id = 2)
@@ -123,8 +183,8 @@ def admin_customers_list(request):
     if not is_admin(request.user):
         return Response({'error': 'Admin access required'}, status=status.HTTP_403_FORBIDDEN)
     
-    # Get all customers (role_id = 1) and apply search filter if provided
-    customers = User.objects.filter(role_id=1)
+    # Get all admin-manageable users (roles 2, 3, 4) and apply search filter if provided
+    customers = User.objects.filter(role_id__in=[1, 3, 4])
     search = request.GET.get('search')
     if search:
         customers = customers.filter(
@@ -134,9 +194,24 @@ def admin_customers_list(request):
         )
     customers = customers.order_by('-created_date')
     
-    # Pagination
+    # Pagination with optional page_size override; allow page_size=all to fetch everything
+    page_size_param = request.GET.get('page_size')
+    if page_size_param and str(page_size_param).lower() == 'all':
+        serializer = UserSerializer(customers, many=True)
+        return Response({
+            'customers': serializer.data,
+            'total_pages': 1,
+            'current_page': 1,
+            'total_customers': len(serializer.data)
+        })
+
+    try:
+        page_size = int(page_size_param) if page_size_param else 10
+    except ValueError:
+        page_size = 10
+
     page = request.GET.get('page', 1)
-    paginator = Paginator(customers, 10)  # 10 customers per page
+    paginator = Paginator(customers, 50)
     page_obj = paginator.get_page(page)
     
     serializer = UserSerializer(page_obj, many=True)
@@ -145,7 +220,8 @@ def admin_customers_list(request):
         'customers': serializer.data,
         'total_pages': paginator.num_pages,
         'current_page': int(page),
-        'total_customers': paginator.count
+        'total_customers': paginator.count,
+        'page_size': page_size
     })
 
 
@@ -156,7 +232,7 @@ def admin_customer_detail(request, customer_id):
         return Response({'error': 'Admin access required'}, status=status.HTTP_403_FORBIDDEN)
     
     try:
-        customer = User.objects.get(id=customer_id, role_id=1)
+        customer = User.objects.get(id=customer_id, role_id__in=[2, 3, 4])
     except User.DoesNotExist:
         return Response({'error': 'Customer not found'}, status=status.HTTP_404_NOT_FOUND)
     
@@ -184,7 +260,7 @@ def admin_toggle_customer_status(request, customer_id):
         return Response({'error': 'Admin access required'}, status=status.HTTP_403_FORBIDDEN)
     
     try:
-        customer = User.objects.get(id=customer_id, role_id=1)
+        customer = User.objects.get(id=customer_id, role_id__in=[2, 3, 4])
     except User.DoesNotExist:
         return Response({'error': 'Customer not found'}, status=status.HTTP_404_NOT_FOUND)
     
@@ -443,6 +519,9 @@ def approve_store_application(request, user_id):
                     store_name=user.fullname or f"Cửa hàng {user.username}",
                     image="assets/store-icon.png",
                     description=user.address or "Chưa cập nhật địa chỉ",
+                    address=user.address or "",
+                    latitude=getattr(user, 'latitude', None),
+                    longitude=getattr(user, 'longitude', None),
                     manager=user
                 )
             

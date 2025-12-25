@@ -1,1 +1,1 @@
-# Migration file for shipper app
+# Shipper app migrations

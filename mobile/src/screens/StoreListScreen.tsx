@@ -1,11 +1,15 @@
-import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, FlatList, TouchableOpacity, Image, ActivityIndicator, Alert, TextInput } from 'react-native';
-import { IMAGE_MAP } from '../assets/imageMap';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { View, Text, StyleSheet, FlatList, TouchableOpacity, Image, ActivityIndicator, Alert, TextInput, RefreshControl } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Star, Plus, UserCheck, UserX } from 'lucide-react-native';
+import { Star, Plus, UserCheck, UserX, Menu, BarChart3, ShoppingBag, Package, Users } from 'lucide-react-native';
 import { useNavigation } from '@react-navigation/native';
 import { apiClient, authApi } from '@/services/api';
+import { useAdmin } from '@/contexts/AdminContext';
+import Sidebar from '@/components/sidebar';
 import { API_CONFIG } from "@/constants";
+import { getImageSource } from '@/utils/imageUtils';
+import { Ionicons } from '@expo/vector-icons';
+import { Fonts } from '../constants/Fonts';
 
 type Store = {
   id: number;
@@ -13,14 +17,14 @@ type Store = {
   image: string;
   description: string;
   manager: string;
-  // Additional fields for UI compatibility
   name?: string;
   rating?: number;
   address?: string;
   foods?: any[];
-  // New statistics fields
   foodCount?: number;
   totalReviews?: number;
+  manager_id?: number; // backend may expose the manager user id
+  is_active?: boolean; // manager account status
 };
 
 interface StoreApplication {
@@ -34,15 +38,52 @@ interface StoreApplication {
   is_store_registered: boolean;
 }
 
-const StoreListScreen = () => {
+const menuItems = [
+  { title: 'Trang chủ', icon: BarChart3, section: 'dashboard' },
+  // { title: 'Mua hàng', icon: ShoppingBag, section: 'buy' },
+  { title: 'Quản lý tài khoản', icon: Users, section: 'customers' },
+  { title: 'Quản lý cửa hàng', icon: ShoppingBag, section: 'stores' },
+  { title: 'Quản lý đơn hàng', icon: Package, section: 'orders' },
+  { title: 'Quản lý shipper', icon: Users, section: 'shippers' },
+  { title: 'Khuyến mãi hệ thống', icon: Star, section: 'promotions' },
+];
+
+type StoreListScreenProps = {
+  onMenuPress?: () => void;
+};
+
+const StoreListScreen = ({ onMenuPress }: StoreListScreenProps = {}) => {
   const navigation = useNavigation<any>();
   const [activeTab, setActiveTab] = useState<'list' | 'applications'>('list');
   const [stores, setStores] = useState<Store[]>([]);
   const [applications, setApplications] = useState<StoreApplication[]>([]);
   const [loading, setLoading] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
   const [searchText, setSearchText] = useState('');
+  const [togglingStoreId, setTogglingStoreId] = useState<number | null>(null);
+
+  // Try to use admin context if available
+  let adminContext: ReturnType<typeof useAdmin> | undefined;
+  try {
+    adminContext = useAdmin();
+  } catch (e) {
+    // Not in admin context
+    adminContext = undefined;
+  }
+
+  const handleMenuPress = () => {
+    if (onMenuPress) {
+      onMenuPress();
+    } else if (adminContext) {
+      adminContext.openSidebar();
+    } else if (navigation.canGoBack()) {
+      navigation.goBack();
+    }
+  };
 
   // Fetch store statistics (rating, review count, food count) from API
+  // NOTE: Currently disabled to prevent spam requests on initial load
+  // Can be re-enabled for lazy loading when user clicks on a specific store
   const fetchStoreStatistics = async (storeId: number) => {
     try {
       console.log(`Fetching statistics for store ${storeId}...`);
@@ -50,66 +91,32 @@ const StoreListScreen = () => {
       const url = '/menu/items/';
       const params = { 
         store: storeId,
-        page_size: 1000 // Set large page size to get all foods
+        page_size: 50  // Reduced from 1000 to avoid huge payloads
       };
       
-      console.log(`Making API call: ${url} with params:`, params);
-      console.log(`Full URL would be: ${API_CONFIG.BASE_URL}${url}?store=${storeId}&page_size=1000`);
-      
-      // Fetch foods for this store to calculate statistics
       const response: any = await apiClient.get('/menu/items/', {
         params: params
       });
       
-      console.log(`Store ${storeId} API response received:`, {
-        status: 'success',
-        dataType: typeof response,
-        hasData: !!response?.data,
-        hasResults: !!response?.data?.results,
-        isArray: Array.isArray(response?.data),
-        responseStructure: Object.keys(response || {}),
-        dataStructure: response?.data ? Object.keys(response.data) : 'no data'
-      });
-      
-      // Log the actual response to see the exact structure
-      console.log(`Store ${storeId} FULL response:`, JSON.stringify(response, null, 2));
-      
       let foodsData = [];
       if (response?.data?.results && Array.isArray(response.data.results)) {
         foodsData = response.data.results;
-        console.log(`Store ${storeId}: Using response.data.results (${foodsData.length} items)`);
       } else if (Array.isArray(response?.data)) {
         foodsData = response.data;
-        console.log(`Store ${storeId}: Using response.data directly (${foodsData.length} items)`);
       } else if (Array.isArray(response)) {
         foodsData = response;
-        console.log(`Store ${storeId}: Using response directly (${foodsData.length} items)`);
       } else if (response?.results && Array.isArray(response.results)) {
         foodsData = response.results;
-        console.log(`Store ${storeId}: Using response.results directly (${foodsData.length} items)`);
-      } else {
-        console.log(`Store ${storeId}: No valid data structure found. Response:`, response);
-      }
-      
-      console.log(`Store ${storeId}: Found ${foodsData.length} foods`);
-      if (foodsData.length > 0) {
-        console.log(`Store ${storeId} foods sample:`, foodsData.slice(0, 2).map((f: any) => ({
-          id: f.id, 
-          title: f.title, 
-          average_rating: f.average_rating, 
-          rating_count: f.rating_count
-        })));
       }
       
       // Calculate store statistics from foods data
       const stats = {
-        foodCount: foodsData.length,
+        foodCount: response?.data?.count || foodsData.length,  // Use API count if available
         averageRating: 0,
         totalReviews: 0
       };
       
       if (foodsData.length > 0) {
-        // Calculate weighted average rating and total reviews
         let totalRatingPoints = 0;
         let totalReviews = 0;
         
@@ -117,38 +124,19 @@ const StoreListScreen = () => {
           const foodRating = parseFloat(food.average_rating) || 0;
           const foodReviewCount = parseInt(food.rating_count) || 0;
           
-          if (foodRating > 0 || foodReviewCount > 0) {
-            console.log(`Food ${food.title}: rating=${foodRating}, count=${foodReviewCount}`);
-          }
-          
-          // Add to weighted calculation
           totalRatingPoints += foodRating * foodReviewCount;
           totalReviews += foodReviewCount;
         });
         
-        // Calculate weighted average rating
         stats.averageRating = totalReviews > 0 ? 
           parseFloat((totalRatingPoints / totalReviews).toFixed(1)) : 0;
         stats.totalReviews = totalReviews;
-        
-        console.log(`Store ${storeId} calculation: totalRatingPoints=${totalRatingPoints}, totalReviews=${totalReviews}`);
       }
       
-      console.log(`Store ${storeId} final stats:`, stats);
       return stats;
       
     } catch (error: any) {
       console.error(`Error fetching statistics for store ${storeId}:`, error);
-      console.error('Error details:', {
-        message: error.message,
-        response: error.response?.data,
-        status: error.response?.status,
-        config: {
-          url: error.config?.url,
-          params: error.config?.params,
-          baseURL: error.config?.baseURL
-        }
-      });
       
       // Return default stats on error
       return {
@@ -160,9 +148,11 @@ const StoreListScreen = () => {
   };
 
   // Fetch stores from API
-  const fetchStores = async () => {
+  const fetchStores = async (showLoading = true) => {
     try {
-      setLoading(true);
+      if (showLoading) {
+        setLoading(true);
+      }
       console.log('Fetching stores...');
       
       const response: any = await apiClient.get('/stores/public/');
@@ -175,24 +165,40 @@ const StoreListScreen = () => {
       
       if (Array.isArray(data)) {
         // Map API data and fetch statistics for each store
-        const storesWithStats = await Promise.all(
-          data.map(async (store: any) => {
-            const stats = await fetchStoreStatistics(store.id);
-            
-            return {
-              ...store,
-              name: store.store_name, // Map store_name to name for UI compatibility
-              rating: stats.averageRating, // Real calculated rating
-              address: store.description || 'Chưa cập nhật địa chỉ', // Use description as address
-              foods: [], // Empty foods array, will be loaded separately if needed
-              foodCount: stats.foodCount, // Real food count
-              totalReviews: stats.totalReviews, // Real review count
-            };
-          })
-        );
+        const storesDataPromises = data.map(async (store: any) => {
+          // Fetch statistics for this store
+          const stats = await fetchStoreStatistics(store.id);
+          
+          const managerActive =
+            store.manager_is_active !== undefined
+              ? store.manager_is_active
+              : (store.manager?.is_active ?? store.is_active ?? true);
+
+          const managerId =
+            store.manager_id ??
+            store.managerId ??
+            store.manager_user_id ??
+            store.managerUserId ??
+            store.manager_userId ??
+            store.manager?.id;
+
+          return {
+            ...store,
+            name: store.store_name, // Map store_name to name for UI compatibility
+            rating: stats.averageRating, // Use fetched rating
+            address: store.description || 'Chưa cập nhật địa chỉ', // Use description as address
+            foods: [], // Empty foods array, will be loaded separately if needed
+            foodCount: stats.foodCount, // Use fetched food count
+            totalReviews: stats.totalReviews, // Use fetched total reviews
+            is_active: managerActive,
+            manager_id: managerId,
+          };
+        });
         
-        console.log('Stores with statistics:', storesWithStats);
-        setStores(storesWithStats);
+        const storesData = await Promise.all(storesDataPromises);
+        
+        console.log('Stores loaded with statistics:', storesData);
+        setStores(storesData);
       } else {
         console.error('Unexpected API response structure:', data);
         setStores([]);
@@ -222,6 +228,9 @@ const StoreListScreen = () => {
       setStores([]);
     } finally {
       setLoading(false);
+      if (refreshing) {
+        setRefreshing(false);
+      }
     }
   };
 
@@ -259,6 +268,9 @@ const StoreListScreen = () => {
       if (showLoading) {
         setLoading(false);
       }
+      if (refreshing) {
+        setRefreshing(false);
+      }
     }
   };
 
@@ -267,6 +279,16 @@ const StoreListScreen = () => {
       fetchStores();
     } else {
       fetchApplications();
+    }
+  }, [activeTab]);
+
+  // Refresh handler
+  const onRefresh = useCallback(() => {
+    setRefreshing(true);
+    if (activeTab === 'list') {
+      fetchStores(false);
+    } else {
+      fetchApplications(false);
     }
   }, [activeTab]);
 
@@ -325,6 +347,57 @@ const StoreListScreen = () => {
     );
   };
 
+  const handleToggleStoreStatus = async (store: Store) => {
+    // try to resolve the manager's user id from multiple possible keys
+    const managerId =
+      (store as any).manager_id ||
+      (store as any).managerId ||
+      (store as any).manager_user_id ||
+      (store as any).managerUserId ||
+      (store as any).manager_userId;
+
+    if (!managerId) {
+      Alert.alert('Lỗi', 'Không tìm thấy ID quản lý cửa hàng để khoá/mở tài khoản');
+      return;
+    }
+
+    try {
+      setTogglingStoreId(store.id);
+      const response: any = await apiClient.post(
+        `/auth/admin/customers/${managerId}/toggle-status/`,
+      );
+
+      // Determine next is_active flag from response or fallback to toggling current
+      const updatedCustomer = response?.data?.customer || response?.data;
+      const nextActive =
+        updatedCustomer?.is_active !== undefined
+          ? updatedCustomer.is_active
+          : !(store as any).is_active;
+
+      setStores((prev) =>
+        prev.map((s) => (s.id === store.id ? { ...s, is_active: nextActive } : s)),
+      );
+
+      Alert.alert(
+        'Thành công',
+        response?.data?.message || 'Đã thay đổi trạng thái tài khoản cửa hàng',
+      );
+    } catch (error: any) {
+      console.error('Error toggling store status:', error);
+
+      let errorMessage = 'Không thể thay đổi trạng thái tài khoản cửa hàng';
+      if (error?.response?.data?.message) {
+        errorMessage = error.response.data.message;
+      } else if (error?.message) {
+        errorMessage += ': ' + error.message;
+      }
+
+      Alert.alert('Lỗi', errorMessage);
+    } finally {
+      setTogglingStoreId(null);
+    }
+  };
+
   // Search functionality
   const filteredStores = stores.filter(store => 
     store.name?.toLowerCase().includes(searchText.toLowerCase()) ||
@@ -338,92 +411,109 @@ const StoreListScreen = () => {
     app.phone_number?.toLowerCase().includes(searchText.toLowerCase())
   );
 
-  const renderItem = ({ item }: any) => {
-    // Create full image URL from API
-    const getImageSource = () => {
-      if (!item.image) {
-        return require('../assets/images/placeholder.png');
-      }
-      
-      // If image is already a full URL
-      if (item.image.startsWith('http')) {
-        return { uri: item.image };
-      }
-      
-      // Construct full URL from media path
-      const baseUrl = API_CONFIG.BASE_URL.replace("/api", ""); // Remove /api from base URL
-      const fullUrl = `${baseUrl}/media/${item.image}`;
-      console.log('Store image URL:', fullUrl);
-      return { uri: fullUrl };
+  const renderStoreItem = ({ item }: any) => {
+    const getImage = () => {
+      if (!item.image) return require('../assets/images/placeholder.png');
+      return getImageSource(item.image as any);
     };
 
+    const isActive = (item as any).is_active !== undefined ? (item as any).is_active : true;
+    const isToggling = togglingStoreId === item.id;
+
     return (
-      <TouchableOpacity
-        style={styles.card}
-        onPress={() => navigation.navigate('StoreDetailScreenV2', {
-          storeId: item.id,
-          name: item.name || item.store_name,
-          address: item.address,
-          image: item.image,
-          foods: item.foods,
-          rating: item.rating || 0, // Real calculated rating
-          delivery: 'Miễn phí',
-          time: '20 phút',
-          vouchers: [
-            {
-              id: 'v1',
-              percent: 20,
-              minOrder: '200.000 VND',
-              code: 'SAVE20',
-              desc: 'Giảm 20% cho đơn hàng từ 200.000 VND',
-            },
-          ],
-        })}
-      >
-        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-          <View style={{ marginRight: 12 }}>
+      <View style={styles.card}>
+        <View style={styles.cardContent}>
+          <TouchableOpacity
+            style={styles.cardMain}
+            activeOpacity={0.9}
+            onPress={() =>
+              navigation.navigate('StoreDetailScreenV2', {
+                storeId: item.id,
+                name: item.name || item.store_name,
+                address: item.address,
+                image: item.image,
+                foods: item.foods,
+                rating: item.rating || 0,
+                delivery: 'Miễn phí',
+                time: '20 phút',
+                vouchers: [
+                  {
+                    id: 'v1',
+                    percent: 20,
+                    minOrder: '200.000 VND',
+                    code: 'SAVE20',
+                    desc: 'Giảm 20% cho đơn hàng từ 200.000 VND',
+                  },
+                ],
+              })
+            }
+          >
             <Image
-              source={getImageSource()}
-              style={{ width: 54, height: 54, borderRadius: 12 }}
+              source={getImage()}
+              style={styles.storeImage}
               onError={() => console.log('Image load error for store:', item.store_name)}
             />
-          </View>
-          <View style={{ flex: 1 }}>
-            <Text style={styles.name}>{item.name || item.store_name}</Text>
-            <View style={styles.row}>
-              <Star size={16} color="#f59e0b" />
-              <Text style={styles.rating}>
-                {item.rating && item.rating > 0 ? item.rating.toFixed(1) : 'Chưa có'}
+            <View style={styles.storeInfo}>
+              <Text style={styles.storeName} numberOfLines={1}>
+                {item.name || item.store_name}
               </Text>
-              <Text style={styles.reviewCount}>
-                ({item.totalReviews || 0} đánh giá)
+              <View style={styles.ratingRow}>
+                <Star size={14} color="#f59e0b" fill="#f59e0b" />
+                <Text style={styles.rating}>
+                  {item.rating && item.rating > 0 ? item.rating.toFixed(1) : 'N/A'}
+                </Text>
+                <Text style={styles.reviewCount}>
+                  ({item.totalReviews || 0})
+                </Text>
+                <Text style={styles.foodCount}>• {item.foodCount || 0} món</Text>
+              </View>
+              <Text style={styles.address} numberOfLines={1}>
+                📍 {item.address}
               </Text>
-              <Text style={styles.foodCount}>• {item.foodCount || 0} món</Text>
             </View>
-            <Text style={styles.address}>{item.address}</Text>
-          </View>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[
+              styles.toggleButton,
+              isActive ? styles.toggleActive : styles.toggleLocked,
+              isToggling && styles.toggleDisabled,
+            ]}
+            onPress={() => handleToggleStoreStatus(item)}
+            disabled={isToggling}
+            activeOpacity={0.8}
+          >
+            <Text
+              style={[
+                styles.toggleText,
+                isActive ? styles.toggleTextActive : styles.toggleTextLocked,
+              ]}
+            >
+              {isToggling ? 'Đang xử lý...' : isActive ? 'Đang mở' : 'Đã khoá'}
+            </Text>
+          </TouchableOpacity>
         </View>
-      </TouchableOpacity>
+      </View>
     );
   };
 
   const renderApplicationItem = ({ item }: { item: StoreApplication }) => (
     <View style={styles.applicationCard}>
-      <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-        <View style={{ marginRight: 12 }}>
-          <View style={styles.applicationIcon}>
-            <Text style={styles.applicationIconText}>{item.fullname.charAt(0).toUpperCase()}</Text>
-          </View>
+      <View style={styles.applicationHeader}>
+        <View style={styles.applicationIcon}>
+          <Text style={styles.applicationIconText}>
+            {item.fullname.charAt(0).toUpperCase()}
+          </Text>
         </View>
-        <View style={{ flex: 1 }}>
-          <Text style={styles.name}>{item.fullname}</Text>
-          <View style={styles.row}>
-            <Text style={styles.email}>{item.email}</Text>
-          </View>
-          <Text style={styles.phone}>📞 {item.phone_number || 'Chưa có SĐT'}</Text>
-          <Text style={styles.address}>{item.address || 'Chưa có địa chỉ'}</Text>
+        <View style={styles.applicationInfo}>
+          <Text style={styles.applicationName}>{item.fullname}</Text>
+          <Text style={styles.applicationEmail}>✉️ {item.email}</Text>
+          <Text style={styles.applicationPhone}>📞 {item.phone_number || 'Chưa có SĐT'}</Text>
+          <Text style={styles.applicationAddress} numberOfLines={1}>
+            📍 {item.address || 'Chưa có địa chỉ'}
+          </Text>
           <Text style={styles.applicationDate}>
-            Đăng ký: {new Date(item.created_date).toLocaleDateString('vi-VN')}
+            🕒 Đăng ký: {new Date(item.created_date).toLocaleDateString('vi-VN')}
           </Text>
         </View>
       </View>
@@ -433,6 +523,7 @@ const StoreListScreen = () => {
           style={styles.approveButton}
           onPress={() => handleApproveApplication(item.id, item.fullname)}
           disabled={loading}
+          activeOpacity={0.8}
         >
           <UserCheck size={16} color="#fff" />
           <Text style={styles.approveButtonText}>Chấp nhận</Text>
@@ -441,226 +532,505 @@ const StoreListScreen = () => {
           style={styles.rejectButton}
           onPress={() => handleRejectApplication(item.id, item.fullname)}
           disabled={loading}
+          activeOpacity={0.8}
         >
-          <UserX size={16} color="#fff" />
+          <UserX size={24} color="#fff" />
           <Text style={styles.rejectButtonText}>Từ chối</Text>
         </TouchableOpacity>
       </View>
     </View>
   );
 
-  return (
-    <SafeAreaView style={styles.container}>
-      {/* Search Box */}
-      <View style={styles.searchContainer}>
-        <TextInput
-          style={styles.searchInput}
-          placeholder="Tìm kiếm cửa hàng..."
-          value={searchText}
-          onChangeText={setSearchText}
-          returnKeyType="search"
+  const renderEmpty = () => {
+    if (loading) return null;
+
+    return (
+      <View style={styles.emptyContainer}>
+        <Ionicons 
+          name={activeTab === 'list' ? "storefront-outline" : "document-text-outline"} 
+          size={64} 
+          color="#d1d5db" 
         />
-        <TouchableOpacity onPress={fetchStores} style={styles.searchButton} disabled={loading}>
-          <Text style={styles.buttonText}>Làm mới</Text>
-        </TouchableOpacity>
+        <Text style={styles.emptyText}>
+          {searchText 
+            ? `Không tìm thấy ${activeTab === 'list' ? 'cửa hàng' : 'đơn đăng ký'} nào` 
+            : `Chưa có ${activeTab === 'list' ? 'cửa hàng' : 'đơn đăng ký'} nào`
+          }
+        </Text>
+      </View>
+    );
+  };
+
+  return (
+    <>
+      <Sidebar
+        isOpen={adminContext?.isSidebarOpen || false}
+        onClose={() => adminContext?.closeSidebar()}
+        menuItems={menuItems}
+        hitSlop={{ top: 50, bottom: 10, left: 10, right: 10 }}
+        onMenuItemPress={(section) => {
+          adminContext?.closeSidebar();
+          
+          if (section === 'buy') {
+            navigation.reset({ index: 0, routes: [{ name: 'MainTabs' }] });
+          } else if (section === 'dashboard') {
+            navigation.navigate('AdminDashboard');
+          } else if (section === 'customers') {
+            navigation.navigate('CustomerListScreen');
+          } else if (section === 'stores') {
+            // Stay on current screen
+          } else if (section === 'orders') {
+            navigation.navigate('OrderListScreen');
+          } else if (section === 'shippers') {
+            navigation.navigate('ShipperListScreen');
+          } else if (section === 'promotions') {
+            navigation.navigate('VoucherManagementScreen');
+          }
+        }}
+      />
+      <SafeAreaView style={styles.safeArea} edges={['top']}>
+      <View style={styles.headerWrap}>
+        <View style={styles.headerTopRow}>
+          <TouchableOpacity onPress={handleMenuPress} style={styles.roundIconBtn}>
+            <Menu size={24} color="#eb552d" />
+          </TouchableOpacity>
+
+          <Text style={styles.headerTitle}>Quản lý cửa hàng</Text>
+
+          <View style={{ width: 40 }} />
+        </View>
+
+        <View style={styles.searchRow}>
+          <View style={styles.searchBox}>
+            <TextInput
+              placeholder={
+                activeTab === 'list'
+                  ? 'Tìm theo tên cửa hàng, địa chỉ...'
+                  : 'Tìm theo tên, email, SĐT...'
+              }
+              placeholderTextColor="#9CA3AF"
+              value={searchText}
+              onChangeText={setSearchText}
+              style={styles.searchInput}
+              returnKeyType="search"
+            />
+            <TouchableOpacity style={styles.searchBtn}>
+              <Ionicons name="search" size={16} color="#fff" />
+            </TouchableOpacity>
+          </View>
+        </View>
       </View>
 
-      {/* Tab Container */}
-      <View style={styles.tabContainer}>
+      <View style={styles.tabs}>
         <TouchableOpacity
-          style={[styles.tabButton, activeTab === 'list' && styles.activeTab]}
-          onPress={() => setActiveTab('list')}
+          style={[styles.tab, activeTab === 'list' && styles.tabActive]}
+          onPress={() => {
+            setActiveTab('list');
+            setSearchText('');
+          }}
+          activeOpacity={0.7}
         >
-          <Text style={[styles.tabText, activeTab === 'list' && styles.activeTabText]}>
+          <Text style={[styles.tabText, activeTab === 'list' && styles.tabTextActive]}>
             Danh sách
           </Text>
+          <View style={[styles.countBadge, activeTab === 'list' && styles.countBadgeActive]}>
+            <Text style={[styles.countText, activeTab === 'list' && styles.countTextActive]}>
+              {stores.length}
+            </Text>
+          </View>
         </TouchableOpacity>
+
         <TouchableOpacity
-          style={[styles.tabButton, activeTab === 'applications' && styles.activeTab]}
-          onPress={() => setActiveTab('applications')}
+          style={[styles.tab, activeTab === 'applications' && styles.tabActive]}
+          onPress={() => {
+            setActiveTab('applications');
+            setSearchText('');
+          }}
+          activeOpacity={0.7}
         >
-          <Text style={[styles.tabText, activeTab === 'applications' && styles.activeTabText]}>
-            Đơn đăng ký ({applications.length})
+          <Text style={[styles.tabText, activeTab === 'applications' && styles.tabTextActive]}>
+            Đơn đăng ký
           </Text>
+          <View
+            style={[
+              styles.countBadge,
+              activeTab === 'applications' && styles.countBadgeActive,
+            ]}
+          >
+            <Text
+              style={[
+                styles.countText,
+                activeTab === 'applications' && styles.countTextActive,
+              ]}
+            >
+              {applications.length}
+            </Text>
+          </View>
         </TouchableOpacity>
       </View>
 
-      {loading && (
+      <View style={styles.foundWrap}>
+        <Text style={styles.foundText}>
+          Tìm thấy{' '}
+          <Text style={styles.foundNum}>
+            {activeTab === 'list' ? filteredStores.length : filteredApplications.length}
+          </Text>{' '}
+          {activeTab === 'list' ? 'cửa hàng' : 'đơn đăng ký'}
+        </Text>
+      </View>
+
+      {loading && (activeTab === 'list' ? filteredStores : filteredApplications).length === 0 ? (
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color="#ea580c" />
-          <Text>Đang tải cửa hàng...</Text>
+          <Text style={styles.loadingText}>
+            {activeTab === 'list' ? 'Đang tải cửa hàng...' : 'Đang tải đơn đăng ký...'}
+          </Text>
         </View>
-      )}
-
-      {activeTab === 'list' ? (
-        <FlatList
-          data={filteredStores}
-          keyExtractor={item => item.id.toString()}
-          renderItem={renderItem}
-          contentContainerStyle={{ padding: 16, paddingBottom: 20 }}
-          ListHeaderComponent={<Text style={styles.header}>Danh sách cửa hàng</Text>}
-          ListEmptyComponent={
-            !loading ? (
-              <View style={styles.emptyContainer}>
-                <Text style={styles.emptyText}>
-                  {searchText ? 'Không tìm thấy cửa hàng nào' : 'Không có cửa hàng nào'}
-                </Text>
-              </View>
-            ) : null
-          }
-        />
       ) : (
-        <FlatList
-          data={filteredApplications}
-          keyExtractor={item => item.id.toString()}
-          renderItem={renderApplicationItem}
-          contentContainerStyle={{ padding: 16, paddingBottom: 20 }}
-          ListHeaderComponent={<Text style={styles.header}>Đơn đăng ký cửa hàng</Text>}
-          ListEmptyComponent={
-            !loading ? (
-              <View style={styles.emptyContainer}>
-                <Text style={styles.emptyText}>
-                  {searchText ? 'Không tìm thấy đơn đăng ký nào' : 'Không có đơn đăng ký nào'}
-                </Text>
-              </View>
-            ) : null
+        <FlatList<any>
+          data={activeTab === 'list' ? filteredStores : filteredApplications}
+          keyExtractor={(item) => item.id.toString()}
+          renderItem={activeTab === 'list' ? renderStoreItem : renderApplicationItem}
+          contentContainerStyle={styles.listContent}
+          showsVerticalScrollIndicator={false}
+          ListEmptyComponent={renderEmpty}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={onRefresh}
+              colors={['#ea580c']}
+              tintColor="#ea580c"
+            />
           }
+          initialNumToRender={10}
+          maxToRenderPerBatch={10}
+          windowSize={5}
+          removeClippedSubviews={true}
         />
       )}
     </SafeAreaView>
+    </>
   );
 };
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#fff7ed' },
-  header: { fontSize: 20, fontWeight: 'bold', color: '#ea580c', marginBottom: 16, marginTop: -20 },
-  card: {
-    backgroundColor: '#fff',
-    borderRadius: 10,
-    padding: 16,
-    marginBottom: 12,
-    borderWidth: 1,
-    borderColor: '#fed7aa',
-  },
-  name: { fontSize: 16, fontWeight: 'bold', color: '#1f2937', marginBottom: 4 },
-  row: { flexDirection: 'row', alignItems: 'center', marginBottom: 4 },
-  rating: { marginLeft: 4, fontSize: 14, color: '#f59e0b', fontWeight: 'bold' },
-  reviewCount: { marginLeft: 4, fontSize: 12, color: '#6b7280', fontWeight: '500' },
-  foodCount: { marginLeft: 8, fontSize: 12, color: '#6b7280', fontWeight: 'bold' },
-  address: { fontSize: 12, color: '#6b7280' },
-  searchContainer: { 
-    flexDirection: 'row', 
-    gap: 8, 
-    marginBottom: 16,
-    paddingHorizontal: 16,
-    paddingTop: 16 
-  },
-  searchInput: { 
-    flex: 1, 
-    borderWidth: 1, 
-    borderColor: '#e5e7eb', 
-    borderRadius: 6, 
-    padding: 10,
-    backgroundColor: '#fff',
-    fontSize: 14
-  },
-  searchButton: { 
-    backgroundColor: '#ea580c', 
-    padding: 10, 
-    borderRadius: 6, 
-    justifyContent: 'center',
-    paddingHorizontal: 16
-  },
-  buttonText: { 
-    color: '#fff',
-    fontWeight: '600',
-    fontSize: 14
-  },
-  loadingContainer: { 
-    alignItems: 'center', 
-    padding: 20 
-  },
-  emptyContainer: {
-    alignItems: 'center',
-    padding: 40
-  },
-  emptyText: {
-    fontSize: 16,
-    color: '#6b7280',
-    fontStyle: 'italic'
-  },
-  tabContainer: {
-    flexDirection: 'row',
-    backgroundColor: '#f3f4f6',
-    marginHorizontal: 16,
-    marginBottom: 16,
-    borderRadius: 8,
-    padding: 4,
-  },
-  tabButton: {
+  safeArea: {
     flex: 1,
-    paddingVertical: 12,
-    paddingHorizontal: 16,
-    borderRadius: 6,
-    alignItems: 'center',
+    backgroundColor: '#ffffff',
   },
-  activeTab: {
-    backgroundColor: '#ea580c',
+
+  headerWrap: {
+    backgroundColor: '#f5cb58',
+    paddingTop: 0,
+    paddingBottom: 12,
+  },
+  headerTopRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: 20,
+    marginBottom: 20,
+    paddingHorizontal: 16,
+  },
+  roundIconBtn: {
+    backgroundColor: '#FFFFFF',
+    padding: 10,
+    borderRadius: 999,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.06,
+    shadowRadius: 2,
+    elevation: 1,
+  },
+  headerTitle: {
+    fontSize: 20,
+    color: '#ffffff',
+    fontFamily: Fonts.LeagueSpartanExtraBold,
+  },
+  searchRow: {
+    paddingBottom: 8,
+    paddingHorizontal: 16,
+  },
+  searchBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#fff',
+    borderRadius: 999,
+    paddingLeft: 16,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+  },
+  searchInput: {
+    flex: 1,
+    height: 42,
+    fontSize: 14,
+    color: '#111827',
+    fontFamily: Fonts.LeagueSpartanRegular,
+  },
+  searchBtn: {
+    height: 42,
+    width: 42,
+    borderRadius: 999,
+    backgroundColor: '#EB552D',
+    alignItems: 'center',
+    justifyContent: 'center',
+    margin: 4,
+  },
+
+
+  tabs: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 10,
+    paddingHorizontal: 16,
+    paddingTop: 12,
+    backgroundColor: '#fff',
+  },
+  tab: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 999,
+    backgroundColor: '#F2F3F5',
+  },
+  tabActive: {
+    backgroundColor: '#EB552D',
+    shadowColor: '#000',
+    shadowOpacity: 0.06,
+    shadowRadius: 2,
+    shadowOffset: { width: 0, height: 1 },
+    elevation: 1,
   },
   tabText: {
+    color: '#6B7280',
+    fontFamily: Fonts.LeagueSpartanMedium,
     fontSize: 14,
-    fontWeight: '500',
+  },
+  tabTextActive: {
+    color: '#FFFFFF',
+    fontFamily: Fonts.LeagueSpartanSemiBold,
+    fontSize: 14,
+  },
+  countBadge: {
+    marginLeft: 8,
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 999,
+    backgroundColor: '#e5e7eb',
+  },
+  countBadgeActive: {
+    backgroundColor: 'rgba(255,255,255,0.3)',
+  },
+  countText: {
+    fontSize: 11,
     color: '#6b7280',
+    fontFamily: Fonts.LeagueSpartanBold,
   },
-  activeTabText: {
+  countTextActive: {
     color: '#fff',
-    fontWeight: '600',
   },
-  applicationCard: {
-    backgroundColor: '#fff',
-    borderRadius: 12,
+
+  // FOUND BAR
+  foundWrap: {
+    marginTop: 12,
+    backgroundColor: '#F6F7F8',
+    paddingVertical: 14,
+    paddingHorizontal: 14,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 3,
+    elevation: 2,
+  },
+  foundText: {
+    color: '#6B7280',
+    marginLeft: 6,
+    fontSize: 15,
+    fontFamily: Fonts.LeagueSpartanRegular,
+  },
+  foundNum: {
+    color: '#111827',
+    fontFamily: Fonts.LeagueSpartanBold,
+  },
+
+  // LIST CONTENT (giữ như cũ hoặc tương tự)
+  listContent: {
+    paddingHorizontal: 16,
+    paddingTop: 8,
+    paddingBottom: 16,
+  },
+
+  // Store Card
+  card: {
+    backgroundColor: '#ffffff',
+    borderRadius: 24,
     padding: 16,
     marginBottom: 12,
     borderWidth: 1,
     borderColor: '#e5e7eb',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
+    shadowOpacity: 0.08,
+    shadowRadius: 6,
     elevation: 3,
   },
-  applicationIcon: {
-    width: 48,
-    height: 48,
+  cardContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  cardMain: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginRight: 12,
+  },
+  storeImage: {
+    width: 64,
+    height: 64,
+    borderRadius: 16,
+    marginRight: 12,
+    borderWidth: 1,
+    borderColor: '#e5e7eb',
+  },
+  storeInfo: {
+    flex: 1,
+  },
+  storeName: {
+    fontSize: 16,
+    fontFamily: Fonts.LeagueSpartanBold,
+    color: '#1f2937',
+    marginBottom: 4,
+  },
+  ratingRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 4,
+  },
+  rating: {
+    marginLeft: 4,
+    fontSize: 14,
+    color: '#f59e0b',
+    fontFamily: Fonts.LeagueSpartanBold,
+  },
+  reviewCount: {
+    marginLeft: 4,
+    fontSize: 12,
+    color: '#6b7280',
+    fontFamily: Fonts.LeagueSpartanRegular,
+  },
+  foodCount: {
+    marginLeft: 8,
+    fontSize: 12,
+    color: '#6b7280',
+    fontFamily: Fonts.LeagueSpartanMedium,
+  },
+  address: {
+    fontSize: 13,
+    color: '#6b7280',
+    fontFamily: Fonts.LeagueSpartanRegular,
+  },
+
+  toggleButton: {
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#e5e7eb',
+    minWidth: 90,
+    alignItems: 'center',
+  },
+  toggleActive: {
+    backgroundColor: 'rgba(16,185,129,0.08)',
+    borderColor: '#10b981',
+  },
+  toggleLocked: {
+    backgroundColor: 'rgba(239,68,68,0.08)',
+    borderColor: '#ef4444',
+  },
+  toggleDisabled: {
+    opacity: 0.6,
+  },
+  toggleText: {
+    fontSize: 13,
+    fontFamily: Fonts.LeagueSpartanSemiBold,
+  },
+  toggleTextActive: {
+    color: '#047857',
+  },
+  toggleTextLocked: {
+    color: '#b91c1c',
+  },
+
+  // Application Card
+  applicationCard: {
+    backgroundColor: '#ffffff',
     borderRadius: 24,
+    padding: 16,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: '#e5e7eb',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 6,
+    elevation: 3,
+  },
+  applicationHeader: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    marginBottom: 12,
+  },
+  applicationIcon: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
     backgroundColor: '#ea580c',
     alignItems: 'center',
     justifyContent: 'center',
+    marginRight: 12,
   },
   applicationIconText: {
     color: '#fff',
-    fontSize: 18,
-    fontWeight: 'bold',
+    fontSize: 20,
+    fontFamily: Fonts.LeagueSpartanBold,
   },
-  email: {
-    fontSize: 14,
-    color: '#6b7280',
+  applicationInfo: {
+    flex: 1,
+  },
+  applicationName: {
+    fontSize: 16,
+    fontFamily: Fonts.LeagueSpartanBold,
+    color: '#1f2937',
     marginBottom: 4,
   },
-  phone: {
-    fontSize: 14,
-    color: '#4b5563',
+  applicationEmail: {
+    fontSize: 13,
+    color: '#6b7280',
+    fontFamily: Fonts.LeagueSpartanRegular,
+    marginBottom: 2,
+  },
+  applicationPhone: {
+    fontSize: 13,
+    color: '#6b7280',
+    fontFamily: Fonts.LeagueSpartanRegular,
+    marginBottom: 2,
+  },
+  applicationAddress: {
+    fontSize: 13,
+    color: '#6b7280',
+    fontFamily: Fonts.LeagueSpartanRegular,
     marginBottom: 4,
   },
   applicationDate: {
     fontSize: 12,
     color: '#9ca3af',
+    fontFamily: Fonts.LeagueSpartanRegular,
     fontStyle: 'italic',
   },
   actionRow: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginTop: 12,
     gap: 12,
   },
   approveButton: {
@@ -670,13 +1040,18 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     paddingVertical: 10,
-    borderRadius: 8,
+    borderRadius: 12,
     gap: 6,
+    shadowColor: '#10b981',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    elevation: 3,
   },
   approveButtonText: {
     color: '#fff',
     fontSize: 14,
-    fontWeight: '600',
+    fontFamily: Fonts.LeagueSpartanSemiBold,
   },
   rejectButton: {
     flex: 1,
@@ -685,13 +1060,43 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     paddingVertical: 10,
-    borderRadius: 8,
+    borderRadius: 12,
     gap: 6,
+    shadowColor: '#ef4444',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    elevation: 3,
   },
   rejectButtonText: {
     color: '#fff',
     fontSize: 14,
-    fontWeight: '600',
+    fontFamily: Fonts.LeagueSpartanSemiBold,
+  },
+
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingVertical: 40,
+  },
+  loadingText: {
+    fontSize: 14,
+    color: '#6b7280',
+    marginTop: 12,
+    fontFamily: Fonts.LeagueSpartanRegular,
+  },
+
+  emptyContainer: {
+    alignItems: 'center',
+    paddingVertical: 60,
+  },
+  emptyText: {
+    marginTop: 16,
+    fontSize: 16,
+    color: '#6b7280',
+    fontFamily: Fonts.LeagueSpartanRegular,
+    textAlign: 'center',
   },
 });
 

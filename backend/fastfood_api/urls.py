@@ -19,6 +19,8 @@ def api_root(request):
             'ratings': '/api/ratings/',
             'stores': '/api/stores/',
             'shipper': '/api/shipper/',
+            'chatbot': '/api/chatbot/',
+            'admin_dashboard': '/api/admin/dashboard/',
             'admin': '/admin/',
         }
     })
@@ -35,6 +37,9 @@ urlpatterns = [
     path('api/ratings/', include('apps.ratings.urls')),
     path('api/stores/', include('apps.stores.urls')),
     path('api/shipper/', include('apps.shipper.urls')),
+    path('api/chatbot/', include('apps.chatbot.urls')),
+    path('api/admin/dashboard/', include('apps.dashboard.urls_admin')),
+    path('api/dashboard/', include('apps.dashboard.urls')),
 ]
 
 if settings.DEBUG:

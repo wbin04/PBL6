@@ -6,10 +6,103 @@ from rest_framework import status
 from django.core.paginator import Paginator
 from django.db.models import Q, Avg, Count, Value
 from django.db.models.functions import Coalesce
+from django.conf import settings
 from .models import Category, Food, FoodSize
 from .serializers import CategorySerializer, FoodSerializer, FoodListSerializer, FoodSizeSerializer
 from apps.stores.models import Store
 from apps.stores.serializers import StoreSerializer
+
+
+def _build_media_url(request, file_field):
+    if not file_field:
+        return None
+    try:
+        # Support both FileField objects and plain string paths stored in DB
+        if hasattr(file_field, 'url'):
+            path = file_field.url
+        else:
+            path = str(file_field)
+
+        if not path:
+            return None
+
+        # If already an absolute URL, return as-is
+        if str(path).startswith('http'):
+            return str(path)
+
+        normalized = str(path).lstrip('/')
+        normalized = normalized.replace('\\', '/')
+
+        # Strip leading media/ if present and ensure assets/ prefix for consistency
+        if normalized.startswith('media/'):
+            normalized = normalized[len('media/'):]
+        if not normalized.startswith('assets/'):
+            normalized = f'assets/{normalized}'
+
+        full_path = f"{settings.MEDIA_URL}{normalized}"
+        if request:
+            return request.build_absolute_uri(full_path)
+        return f"http://localhost:8000{full_path}"
+    except Exception:
+        return None
+
+
+@api_view(['GET'])
+@permission_classes([AllowAny])
+def search_foods_grouped(request):
+    """Search foods by keyword and group results by store."""
+    query = request.GET.get('q') or request.GET.get('search')
+    category_id = request.GET.get('category')
+
+    if not query and not category_id:
+        return Response({'error': 'Vui lòng nhập từ khóa tìm kiếm'}, status=status.HTTP_400_BAD_REQUEST)
+
+    foods = Food.objects.select_related('store', 'category')
+
+    if query:
+        foods = foods.filter(
+            Q(title__icontains=query) | Q(description__icontains=query)
+        )
+
+    if category_id:
+        try:
+            foods = foods.filter(category_id=int(category_id))
+        except ValueError:
+            pass
+
+    grouped = {}
+    total_foods = 0
+    for food in foods:
+        if not food.store:
+            continue
+
+        total_foods += 1
+        store = food.store
+        if store.id not in grouped:
+            grouped[store.id] = {
+                'store_id': store.id,
+                'store_name': store.store_name,
+                'store_image': _build_media_url(request, store.image),
+                'foods': [],
+            }
+
+        grouped[store.id]['foods'].append({
+            'id': food.id,
+            'title': food.title,
+            'price': food.price,
+            'image': _build_media_url(request, food.image),
+            'category_id': food.category_id,
+            'category_name': food.category.cate_name if getattr(food, 'category', None) else None,
+        })
+
+    results = list(grouped.values())
+
+    return Response({
+        'query': query,
+        'total_stores': len(results),
+        'total_foods': total_foods,
+        'results': results,
+    })
 
 
 @api_view(['GET'])
@@ -17,7 +110,7 @@ from apps.stores.serializers import StoreSerializer
 def category_list(request):
     """Get all categories"""
     categories = Category.objects.all()
-    serializer = CategorySerializer(categories, many=True)
+    serializer = CategorySerializer(categories, many=True, context={'request': request})
     # Return in paginated response format for frontend compatibility
     return Response({
         'count': categories.count(),
@@ -105,7 +198,9 @@ def food_list(request):
         except ValueError:
             page_size = 12
 
-        paginator = Paginator(foods, page_size)
+        # Convert to list to preserve annotations before pagination
+        foods_list = list(foods)
+        paginator = Paginator(foods_list, page_size)
         page_obj = paginator.get_page(page)
 
         serializer = FoodListSerializer(page_obj, many=True, context={'request': request})
@@ -159,7 +254,9 @@ def category_foods(request, category_id):
         # Pagination
         page = int(request.GET.get('page', 1)) if request.GET.get('page') else 1
         page_size = int(request.GET.get('page_size', 12)) if request.GET.get('page_size') else 12
-        paginator = Paginator(foods, page_size)
+        # Convert to list to preserve annotations before pagination
+        foods_list = list(foods)
+        paginator = Paginator(foods_list, page_size)
         page_obj = paginator.get_page(page)
 
         serializer = FoodListSerializer(page_obj, many=True, context={'request': request})
@@ -220,8 +317,10 @@ def store_foods_list(request):
         page_size = int(request.GET.get('page_size', 12))
     except ValueError:
         page_size = 12
-        
-    paginator = Paginator(foods, page_size)
+    
+    # Convert to list to preserve annotations before pagination
+    foods_list = list(foods)
+    paginator = Paginator(foods_list, page_size)
     page_obj = paginator.get_page(page)
     
     serializer = FoodListSerializer(page_obj, many=True, context={'request': request})
@@ -371,8 +470,10 @@ def admin_foods_list(request):
             page_size = int(request.GET.get('page_size', 10))
         except ValueError:
             page_size = 10
-            
-        paginator = Paginator(foods, page_size)
+        
+        # Convert to list to preserve annotations before pagination
+        foods_list = list(foods)
+        paginator = Paginator(foods_list, page_size)
         page_obj = paginator.get_page(page)
         
         serializer = FoodSerializer(page_obj, many=True)

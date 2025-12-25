@@ -1,8 +1,23 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, TouchableOpacity, ScrollView, StyleSheet, SafeAreaView, TextInput, Alert, ActivityIndicator } from 'react-native';
+import {
+  View,
+  Text,
+  TouchableOpacity,
+  ScrollView,
+  StyleSheet,
+  TextInput,
+  Alert,
+  ActivityIndicator,
+} from 'react-native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useNavigation } from '@react-navigation/native';
 import { apiClient } from '@/services/api';
+import { Fonts } from '@/constants/Fonts';
+import { Ionicons } from '@expo/vector-icons';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { Menu, BarChart3, ShoppingBag, Package, Users, Star } from 'lucide-react-native';
+import { useAdmin } from '@/contexts/AdminContext';
+import Sidebar from '@/components/sidebar';
 
 type Customer = {
   id: number;
@@ -26,89 +41,125 @@ type RootStackParamList = {
 
 const initialCustomers: Customer[] = [];
 
-export default function CustomerListScreen() {
-  const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
+const menuItems = [
+  { title: 'Trang chủ', icon: BarChart3, section: 'dashboard' },
+  // { title: 'Mua hàng', icon: ShoppingBag, section: 'buy' },
+  { title: 'Quản lý tài khoản', icon: Users, section: 'customers' },
+  { title: 'Quản lý cửa hàng', icon: ShoppingBag, section: 'stores' },
+  { title: 'Quản lý đơn hàng', icon: Package, section: 'orders' },
+  { title: 'Quản lý shipper', icon: Users, section: 'shippers' },
+  { title: 'Khuyến mãi hệ thống', icon: Star, section: 'promotions' },
+];
+
+type CustomerListScreenProps = {
+  searchQuery?: string;
+  onMenuPress?: () => void;
+};
+
+export default function CustomerListScreen({ searchQuery = '', onMenuPress }: CustomerListScreenProps) {
+  const navigation = useNavigation<any>();
   const [customers, setCustomers] = useState<Customer[]>(initialCustomers);
+  const [allCustomers, setAllCustomers] = useState<Customer[]>([]);
   const [editId, setEditId] = useState<number | null>(null);
   const [editName, setEditName] = useState('');
   const [editPhone, setEditPhone] = useState('');
   const [editEmail, setEditEmail] = useState('');
   const [editAddress, setEditAddress] = useState('');
   const [loading, setLoading] = useState(false);
-  const [searchText, setSearchText] = useState('');
+  const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'locked'>('all');
+  const [localSearchText, setLocalSearchText] = useState('');
+
+  // Try to use admin context if available
+  let adminContext: ReturnType<typeof useAdmin> | undefined;
+  try {
+    adminContext = useAdmin();
+  } catch (e) {
+    // Not in admin context
+    adminContext = undefined;
+  }
+
+  const handleMenuPress = () => {
+    if (onMenuPress) {
+      onMenuPress();
+    } else if (adminContext) {
+      adminContext.openSidebar();
+    } else if (navigation.canGoBack()) {
+      navigation.goBack();
+    }
+  };
 
   // Fetch customers from API
   const fetchCustomers = async () => {
     try {
       setLoading(true);
-      console.log('Fetching customers...');
-      
+
+      const params: any = {};
+      const searchTerm = localSearchText || searchQuery;
+      if (searchTerm) params.search = searchTerm;
+
       const response: any = await apiClient.get('/auth/admin/customers/', {
-        params: searchText ? { search: searchText } : {}
+        params,
+        timeout: 10000,
       });
-      
-      console.log('Full API Response:', response);
-      
-      // Kiểm tra xem response có phải là data trực tiếp không
+
       let data = response.data || response;
-      console.log('Actual data:', data);
-      
-      // Xử lý dữ liệu trả về dựa trên cấu trúc thực tế
+
       if (data) {
-        console.log('Processing data...');
-        
-        // Kiểm tra nhiều cấu trúc có thể
         if (Array.isArray(data)) {
-          // Nếu data là array
-          console.log('Data is array, setting customers');
-          setCustomers(data);
+          setAllCustomers(data);
         } else if (data.customers && Array.isArray(data.customers)) {
-          // Nếu có customers field và là array
-          console.log('Data has customers array, setting customers');
-          setCustomers(data.customers);
+          setAllCustomers(data.customers);
         } else if (data.results && Array.isArray(data.results)) {
-          // Nếu có results field (pagination)
-          console.log('Data has results array, setting customers');
-          setCustomers(data.results);
+          setAllCustomers(data.results);
         } else {
-          // Nếu không có cấu trúc mong đợi, log và hiển thị lỗi
-          console.error('Unexpected API response structure:', data);
-          setCustomers([]);
+          if (__DEV__) console.error('Unexpected API response structure:', data);
+          setAllCustomers([]);
           Alert.alert('Lưu ý', 'Dữ liệu có cấu trúc không như mong đợi');
         }
       } else {
-        console.error('Empty API response or missing data');
-        setCustomers([]);
+        if (__DEV__) console.error('Empty API response or missing data');
+        setAllCustomers([]);
       }
     } catch (error: any) {
-      console.error('Error fetching customers:', error);
-      console.error('Error details:', {
-        message: error.message,
-        response: error.response?.data,
-        status: error.response?.status,
-        statusText: error.response?.statusText
-      });
-      
+      if (__DEV__) {
+        console.error('Error fetching customers:', error.message);
+      }
+
       let errorMessage = 'Không thể tải danh sách khách hàng';
       if (error.response?.status === 401) {
         errorMessage = 'Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.';
       } else if (error.response?.status === 403) {
         errorMessage = 'Không có quyền truy cập.';
+      } else if (error.code === 'ECONNABORTED') {
+        errorMessage = 'Kết nối quá chậm. Vui lòng thử lại.';
       } else if (error.message) {
         errorMessage += ': ' + error.message;
       }
-      
+
       Alert.alert('Lỗi', errorMessage);
     } finally {
       setLoading(false);
     }
   };
 
+  // Filter customers based on status
+  useEffect(() => {
+    let filtered = [...allCustomers];
+
+    // Apply status filter
+    if (statusFilter === 'active') {
+      filtered = filtered.filter((c) => c.is_active === true);
+    } else if (statusFilter === 'locked') {
+      filtered = filtered.filter((c) => c.is_active === false);
+    }
+
+    setCustomers(filtered);
+  }, [allCustomers, statusFilter]);
+
   useEffect(() => {
     fetchCustomers();
-  }, []);
+  }, [searchQuery, localSearchText]);
 
-  // Search customers
   const handleSearch = () => {
     fetchCustomers();
   };
@@ -123,48 +174,46 @@ export default function CustomerListScreen() {
 
   const saveEdit = async () => {
     if (!editId) return;
-    
-    // Validate input
+
     if (!editName.trim()) {
       Alert.alert('Lỗi', 'Tên không được để trống');
       return;
     }
-    
+
     if (!editPhone.trim()) {
       Alert.alert('Lỗi', 'Số điện thoại không được để trống');
       return;
     }
-    
+
     try {
       setLoading(true);
       const response: any = await apiClient.put(`/auth/admin/customers/${editId}/`, {
         fullname: editName.trim(),
         phone_number: editPhone.trim(),
-        address: editAddress.trim()
+        address: editAddress.trim(),
       });
-      
-      // Update customer in local state
-      setCustomers(prev =>
-        prev.map(c => (c.id === editId ? { ...c, ...response.data } : c))
+
+      setAllCustomers((prev) =>
+        prev.map((c) => (c.id === editId ? { ...c, ...response.data } : c)),
       );
-      
+
       setEditId(null);
       setEditName('');
       setEditPhone('');
       setEditEmail('');
       setEditAddress('');
-      
+
       Alert.alert('Thành công', 'Cập nhật thông tin khách hàng thành công');
     } catch (error: any) {
       console.error('Error updating customer:', error);
-      
+
       let errorMessage = 'Không thể cập nhật thông tin khách hàng';
       if (error.response?.data?.message) {
         errorMessage = error.response.data.message;
       } else if (error.message) {
         errorMessage += ': ' + error.message;
       }
-      
+
       Alert.alert('Lỗi', errorMessage);
     } finally {
       setLoading(false);
@@ -182,332 +231,693 @@ export default function CustomerListScreen() {
   const toggleCustomerStatus = async (customerId: number) => {
     try {
       setLoading(true);
-      const response: any = await apiClient.post(`/auth/admin/customers/${customerId}/toggle-status/`);
-      
-      console.log('Toggle status response:', response); // Debug log
-      
-      // Update customer in local state - handle different response structures
+      const response: any = await apiClient.post(
+        `/auth/admin/customers/${customerId}/toggle-status/`,
+      );
+
+      console.log('Toggle status response:', response);
+
       if (response && response.data && response.data.customer) {
-        // Server returns updated customer object
-        setCustomers(prev =>
-          prev.map(c => (c.id === customerId ? response.data.customer : c))
+        setAllCustomers((prev) =>
+          prev.map((c) => (c.id === customerId ? response.data.customer : c)),
         );
       } else if (response && response.data) {
-        // Server might return customer data directly or just success message
-        // Try to find customer in response.data or toggle locally
         if (response.data.id === customerId) {
-          // response.data is the customer object
-          setCustomers(prev =>
-            prev.map(c => (c.id === customerId ? response.data : c))
+          setAllCustomers((prev) =>
+            prev.map((c) => (c.id === customerId ? response.data : c)),
           );
         } else {
-          // Fallback: toggle is_active locally
-          setCustomers(prev =>
-            prev.map(c => (c.id === customerId ? { ...c, is_active: !c.is_active } : c))
+          setAllCustomers((prev) =>
+            prev.map((c) =>
+              c.id === customerId ? { ...c, is_active: !c.is_active } : c,
+            ),
           );
         }
       } else {
-        // No useful response data, toggle locally
-        setCustomers(prev =>
-          prev.map(c => (c.id === customerId ? { ...c, is_active: !c.is_active } : c))
+        setAllCustomers((prev) =>
+          prev.map((c) =>
+            c.id === customerId ? { ...c, is_active: !c.is_active } : c,
+          ),
         );
       }
-      
-      const message = response?.data?.message || 'Đã thay đổi trạng thái khách hàng thành công';
+
+      const message =
+        response?.data?.message || 'Đã thay đổi trạng thái khách hàng thành công';
       Alert.alert('Thành công', message);
     } catch (error: any) {
       console.error('Error toggling customer status:', error);
       console.error('Error response:', error.response?.data);
-      
+
       let errorMessage = 'Không thể thay đổi trạng thái khách hàng';
       if (error.response?.data?.message) {
         errorMessage = error.response.data.message;
       } else if (error.message) {
         errorMessage += ': ' + error.message;
       }
-      
+
       Alert.alert('Lỗi', errorMessage);
     } finally {
       setLoading(false);
     }
   };
 
+  const totalFound = customers.length;
+
   return (
-    <SafeAreaView style={styles.safeArea}>
-      <View style={styles.container}>
-        <Text style={styles.title}>Danh sách khách hàng</Text>
-        
-        {/* Search Box */}
-        <View style={styles.searchContainer}>
-          <TextInput
-            style={styles.searchInput}
-            placeholder="Tìm kiếm theo tên, SĐT, email..."
-            value={searchText}
-            onChangeText={setSearchText}
-            onSubmitEditing={handleSearch}
-            returnKeyType="search"
-          />
-          <TouchableOpacity onPress={handleSearch} style={styles.searchButton} disabled={loading}>
-            <Text style={styles.buttonText}>Tìm</Text>
+    <>
+      <Sidebar
+        isOpen={adminContext?.isSidebarOpen || false}
+        onClose={() => adminContext?.closeSidebar()}
+        menuItems={menuItems}
+        hitSlop={{ top: 50, bottom: 10, left: 10, right: 10 }}
+        onMenuItemPress={(section) => {
+          adminContext?.closeSidebar();
+          
+          if (section === 'buy') {
+            navigation.reset({ index: 0, routes: [{ name: 'MainTabs' }] });
+          } else if (section === 'dashboard') {
+            navigation.navigate('AdminDashboard');
+          } else if (section === 'customers') {
+            // Stay on current screen
+          } else if (section === 'stores') {
+            navigation.navigate('StoreListScreen');
+          } else if (section === 'orders') {
+            navigation.navigate('OrderListScreen');
+          } else if (section === 'shippers') {
+            navigation.navigate('ShipperListScreen');
+          } else if (section === 'promotions') {
+            navigation.navigate('VoucherManagementScreen');
+          }
+        }}
+      />
+      <SafeAreaView style={styles.safeArea} edges={['top']}>
+      <View style={styles.headerWrap}>
+        <View style={styles.headerTopRow}>
+          <TouchableOpacity
+            onPress={handleMenuPress}
+            style={styles.roundIconBtn}
+          >
+            <Menu size={24} color="#eb552d" />
           </TouchableOpacity>
+
+          <Text style={styles.headerTitle}>Khách hàng</Text>
+
+          <View style={{ width: 40 }} />
         </View>
 
-        {loading && (
-          <View style={styles.loadingContainer}>
-            <ActivityIndicator size="large" color="#ea580c" />
-            <Text>Đang tải...</Text>
+        {/* Thanh tìm kiếm trong header - đổi UI như StoreListScreen */}
+        <View style={styles.searchRow}>
+          <View style={styles.searchBox}>
+            <TextInput
+              style={styles.searchInput}
+              placeholder="Tìm theo tên, SĐT, email..."
+              placeholderTextColor="#9ca3af"
+              value={localSearchText}
+              onChangeText={setLocalSearchText}
+              returnKeyType="search"
+              onSubmitEditing={handleSearch}
+            />
+            {localSearchText.length > 0 && (
+              <TouchableOpacity
+                onPress={() => {
+                  setLocalSearchText('');
+                  handleSearch();
+                }}
+                style={styles.clearBtn}
+              >
+                <Ionicons name="close-circle" size={16} color="#9ca3af" />
+              </TouchableOpacity>
+            )}
+            <TouchableOpacity
+              style={styles.searchBtn}
+              onPress={handleSearch}
+              activeOpacity={0.8}
+            >
+              <Ionicons name="search" size={16} color="#fff" />
+            </TouchableOpacity>
           </View>
-        )}
+        </View>
+      </View>
 
-        <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
-          {customers.length === 0 && !loading ? (
-            <View style={styles.emptyContainer}>
-              <Text style={styles.emptyText}>Không có khách hàng nào</Text>
-            </View>
-          ) : (
-            customers.map(c => (
-              <View key={c.id} style={styles.card}>
-                {editId === c.id ? (
-                  <View>
-                    <Text style={styles.editLabel}>Cập nhật thông tin</Text>
-                    <Text style={styles.inputLabel}>Tên:</Text>
-                    <TextInput 
-                      value={editName} 
-                      onChangeText={setEditName} 
-                      style={styles.input}
-                      placeholder="Nhập tên khách hàng"
-                    />
-                    <Text style={styles.inputLabel}>SĐT:</Text>
-                    <TextInput 
-                      value={editPhone} 
-                      onChangeText={setEditPhone} 
-                      style={styles.input}
-                      placeholder="Nhập số điện thoại"
-                      keyboardType="phone-pad"
-                    />
-                    <Text style={styles.inputLabel}>Địa chỉ:</Text>
-                    <TextInput 
-                      value={editAddress} 
-                      onChangeText={setEditAddress} 
-                      style={styles.input}
-                      placeholder="Nhập địa chỉ"
-                      multiline
-                    />
-                    <View style={styles.buttonRow}>
-                      <TouchableOpacity 
-                        onPress={saveEdit} 
-                        style={[styles.saveButton, loading && styles.disabledButton]} 
-                        disabled={loading}
-                      >
-                        <Text style={styles.buttonText}>{loading ? 'Đang lưu...' : 'Lưu'}</Text>
-                      </TouchableOpacity>
-                      <TouchableOpacity 
-                        onPress={cancelEdit} 
-                        style={styles.cancelButton}
-                        disabled={loading}
-                      >
-                        <Text style={styles.buttonText}>Hủy</Text>
-                      </TouchableOpacity>
-                    </View>
+      {/* FILTER PILLS như restaurants/index.tsx */}
+      <View style={styles.filterRow}>
+        <TouchableOpacity
+          style={[
+            styles.filterPill,
+            statusFilter === 'all' && styles.filterPillActive,
+          ]}
+          onPress={() => setStatusFilter('all')}
+        >
+          <Text
+            style={[
+              styles.filterPillText,
+              statusFilter === 'all' && styles.filterPillTextActive,
+            ]}
+          >
+            Tất cả
+          </Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[
+            styles.filterPill,
+            statusFilter === 'active' && styles.filterPillActive,
+          ]}
+          onPress={() => setStatusFilter('active')}
+        >
+          <Text
+            style={[
+              styles.filterPillText,
+              statusFilter === 'active' && styles.filterPillTextActive,
+            ]}
+          >
+            Hoạt động
+          </Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[
+            styles.filterPill,
+            statusFilter === 'locked' && styles.filterPillActive,
+          ]}
+          onPress={() => setStatusFilter('locked')}
+        >
+          <Text
+            style={[
+              styles.filterPillText,
+              statusFilter === 'locked' && styles.filterPillTextActive,
+            ]}
+          >
+            Đã khóa
+          </Text>
+        </TouchableOpacity>
+      </View>
+
+      {/* Thanh kết quả giống restaurants/index.tsx */}
+      <View style={styles.foundWrap}>
+        <Text style={styles.foundText}>
+          Tìm thấy <Text style={styles.foundNum}>{totalFound}</Text> khách hàng
+        </Text>
+      </View>
+
+      {loading && (
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color="#EB552D" />
+          <Text style={styles.loadingText}>Đang tải...</Text>
+        </View>
+      )}
+
+      <ScrollView
+        style={styles.scrollView}
+        showsVerticalScrollIndicator={false}
+      >
+        {customers.length === 0 && !loading ? (
+          <View style={styles.emptyContainer}>
+            <Text style={styles.emptyText}>Không có khách hàng nào</Text>
+          </View>
+        ) : (
+          customers.map((c) => (
+            <View key={c.id} style={styles.card}>
+              {editId === c.id ? (
+                <View>
+                  <Text style={styles.editLabel}>Cập nhật thông tin</Text>
+
+                  <Text style={styles.inputLabel}>Tên khách hàng</Text>
+                  <TextInput
+                    value={editName}
+                    onChangeText={setEditName}
+                    style={styles.input}
+                    placeholder="Nhập tên khách hàng"
+                  />
+
+                  <Text style={styles.inputLabel}>Số điện thoại</Text>
+                  <TextInput
+                    value={editPhone}
+                    onChangeText={setEditPhone}
+                    style={styles.input}
+                    placeholder="Nhập số điện thoại"
+                    keyboardType="phone-pad"
+                  />
+
+                  <Text style={styles.inputLabel}>Địa chỉ</Text>
+                  <TextInput
+                    value={editAddress}
+                    onChangeText={setEditAddress}
+                    style={[styles.input, styles.inputMultiline]}
+                    placeholder="Nhập địa chỉ"
+                    multiline
+                  />
+
+                  <View style={styles.buttonRow}>
+                    <TouchableOpacity
+                      onPress={saveEdit}
+                      style={[
+                        styles.saveButton,
+                        loading && styles.disabledButton,
+                      ]}
+                      disabled={loading}
+                    >
+                      <Text style={styles.buttonText}>
+                        {loading ? 'Đang lưu...' : 'Lưu thay đổi'}
+                      </Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      onPress={cancelEdit}
+                      style={styles.cancelButton}
+                      disabled={loading}
+                    >
+                      <Text style={styles.buttonText}>Hủy</Text>
+                    </TouchableOpacity>
                   </View>
-                ) : (
-                  <View>
-                    <Text style={styles.name}>{c.fullname}</Text>
-                    <Text style={styles.info}>SĐT: {c.phone_number}</Text>
-                    <Text style={styles.info}>Email: {c.email}</Text>
-                    <Text style={styles.info}>Địa chỉ: {c.address || 'Chưa cập nhật'}</Text>
-                    <Text style={styles.info}>
-                      Quyền: <Text style={styles.role}>{c.role || 'Khách hàng'}</Text>
-                    </Text>
-                    <Text style={styles.info}>
-                      Tình trạng:{' '}
-                      <Text style={c.is_active ? styles.active : styles.locked}>
+                </View>
+              ) : (
+                <View>
+                  <View style={styles.cardHeader}>
+                    <View style={styles.cardHeaderLeft}>
+                      <Text style={styles.name}>{c.fullname}</Text>
+                      {!!c.username && (
+                        <Text style={styles.username}>@{c.username}</Text>
+                      )}
+                    </View>
+                    <View
+                      style={[
+                        styles.statusBadge,
+                        c.is_active
+                          ? styles.statusBadgeActive
+                          : styles.statusBadgeLocked,
+                      ]}
+                    >
+                      <Text
+                        style={[
+                          styles.statusText,
+                          c.is_active
+                            ? styles.statusTextActive
+                            : styles.statusTextLocked,
+                        ]}
+                      >
                         {c.is_active ? 'Đang hoạt động' : 'Đã khóa'}
                       </Text>
-                    </Text>
-                    <View style={styles.buttonRow}>
-                      <TouchableOpacity 
-                        onPress={() => startEdit(c)} 
-                        style={[styles.updateButton, loading && styles.disabledButton]}
-                        disabled={loading}
-                      >
-                        <Text style={styles.buttonText}>Cập nhật</Text>
-                      </TouchableOpacity>
-                      <TouchableOpacity 
-                        onPress={() => toggleCustomerStatus(c.id)} 
-                        style={[styles.lockButton, loading && styles.disabledButton]}
-                        disabled={loading}
-                      >
-                        <Text style={styles.buttonText}>
-                          {c.is_active ? 'Khóa tài khoản' : 'Mở tài khoản'}
-                        </Text>
-                      </TouchableOpacity>
                     </View>
                   </View>
-                )}
-              </View>
-            ))
-          )}
-        </ScrollView>
-      </View>
+
+                  <View style={styles.cardBody}>
+                    <View style={styles.infoLine}>
+                      <View style={styles.iconCircle}>
+                        <Ionicons
+                          name="call-outline"
+                          size={18}
+                          color="#e95322"
+                        />
+                      </View>
+                      <Text style={styles.infoText}>
+                        {c.phone_number || 'Chưa có số điện thoại'}
+                      </Text>
+                    </View>
+
+                    <View style={styles.infoLine}>
+                      <View style={styles.iconCircle}>
+                        <Ionicons
+                          name="mail-outline"
+                          size={18}
+                          color="#e95322"
+                        />
+                      </View>
+                      <Text style={styles.infoText}>
+                        {c.email || 'Chưa cập nhật email'}
+                      </Text>
+                    </View>
+
+                    <View style={styles.infoLine}>
+                      <View style={styles.iconCircle}>
+                        <Ionicons
+                          name="location-outline"
+                          size={18}
+                          color="#e95322"
+                        />
+                      </View>
+                      <Text style={styles.infoText} numberOfLines={2}>
+                        {c.address || 'Chưa cập nhật địa chỉ'}
+                      </Text>
+                    </View>
+
+                    <View style={styles.infoLine}>
+                      <View style={[styles.iconCircle, styles.iconCircleMuted]}>
+                        <Ionicons
+                          name="time-outline"
+                          size={18}
+                          color="#6b7280"
+                        />
+                      </View>
+                      <Text style={styles.infoSubText}>
+                        Tạo tài khoản: {c.created_date}
+                      </Text>
+                    </View>
+                  </View>
+
+                  <View style={styles.buttonRow}>
+                    <TouchableOpacity
+                      onPress={() => startEdit(c)}
+                      style={[
+                        styles.updateButton,
+                        loading && styles.disabledButton,
+                      ]}
+                      disabled={loading}
+                    >
+                      <Text style={styles.buttonText}>Cập nhật</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      onPress={() => toggleCustomerStatus(c.id)}
+                      style={[
+                        styles.lockButton,
+                        loading && styles.disabledButton,
+                      ]}
+                      disabled={loading}
+                    >
+                      <Text style={styles.buttonText}>
+                        {c.is_active ? 'Khóa tài khoản' : 'Mở tài khoản'}
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              )}
+            </View>
+          ))
+        )}
+      </ScrollView>
     </SafeAreaView>
+    </>
   );
 }
 
 const styles = StyleSheet.create({
-  safeArea: { 
-    flex: 1, 
-    backgroundColor: '#fff7ed', 
-    paddingTop: 12 
+  safeArea: {
+    flex: 1,
+    backgroundColor: '#ffffff',
   },
-  container: { 
-    flex: 1, 
-    backgroundColor: '#fff7ed', 
-    padding: 16 
+
+  headerWrap: {
+    backgroundColor: '#f5cb58',
+    paddingTop: 0,
+    paddingBottom: 12,
   },
-  title: { 
-    fontSize: 20, 
-    fontWeight: 'bold', 
-    marginBottom: 16,
-    textAlign: 'center',
-    color: '#ea580c'
+  headerTopRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: 20,
+    marginBottom: 20,
+    paddingHorizontal: 16,
   },
-  scrollView: { 
-    flex: 1 
+  roundIconBtn: {
+    backgroundColor: '#FFFFFF',
+    padding: 10,
+    borderRadius: 999,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.06,
+    shadowRadius: 2,
+    elevation: 1,
   },
-  card: { 
-    backgroundColor: '#fff', 
-    borderRadius: 8, 
-    padding: 12, 
-    marginBottom: 12, 
-    borderWidth: 1, 
+  headerTitle: {
+    fontSize: 20,
+    color: '#ffffff',
+    fontFamily: Fonts.LeagueSpartanExtraBold,
+  },
+  searchRow: {
+    paddingBottom: 8,
+    paddingHorizontal: 16,
+  },
+  // chỉnh lại giống StoreListScreen (nút tìm nền cam bên phải)
+  searchBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#fff',
+    borderRadius: 999,
+    paddingLeft: 16,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+  },
+  searchInput: {
+    flex: 1,
+    height: 42,
+    fontSize: 14,
+    color: '#111827',
+    fontFamily: Fonts.LeagueSpartanRegular,
+  },
+  clearBtn: {
+    paddingHorizontal: 4,
+  },
+  searchBtn: {
+    height: 42,
+    width: 42,
+    borderRadius: 999,
+    backgroundColor: '#EB552D',
+    alignItems: 'center',
+    justifyContent: 'center',
+    margin: 4,
+  },
+
+  filterRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 10,
+    paddingHorizontal: 16,
+    paddingTop: 12,
+    backgroundColor: '#fff',
+  },
+  filterPill: {
+    paddingHorizontal: 18,
+    paddingVertical: 8,
+    borderRadius: 999,
+    backgroundColor: '#F2F3F5',
+  },
+  filterPillActive: {
+    backgroundColor: '#EB552D',
+    shadowColor: '#000',
+    shadowOpacity: 0.06,
+    shadowRadius: 2,
+    shadowOffset: { width: 0, height: 1 },
+    elevation: 1,
+  },
+  filterPillText: {
+    color: '#6B7280',
+    fontFamily: Fonts.LeagueSpartanMedium,
+    fontSize: 14,
+  },
+  filterPillTextActive: {
+    color: '#FFFFFF',
+    fontFamily: Fonts.LeagueSpartanSemiBold,
+    fontSize: 14,
+  },
+
+  // Found bar
+  foundWrap: {
+    marginTop: 12,
+    backgroundColor: '#F6F7F8',
+    paddingVertical: 14,
+    paddingHorizontal: 14,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 3,
+    elevation: 2,
+  },
+  foundText: {
+    color: '#6B7280',
+    marginLeft: 6,
+    fontSize: 15,
+    fontFamily: Fonts.LeagueSpartanRegular,
+  },
+  foundNum: {
+    color: '#111827',
+    fontFamily: Fonts.LeagueSpartanBold,
+  },
+
+  scrollView: {
+    flex: 1,
+    paddingHorizontal: 16,
+    paddingTop: 8,
+  },
+
+  card: {
+    backgroundColor: '#ffffff',
+    borderRadius: 24,
+    padding: 16,
+    marginBottom: 14,
+    borderWidth: 1,
     borderColor: '#e5e7eb',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 3.84,
-    elevation: 5
+    shadowOpacity: 0.08,
+    shadowRadius: 6,
+    elevation: 3,
   },
-  name: { 
-    fontWeight: 'bold', 
+  cardHeader: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    marginBottom: 10,
+  },
+  cardHeaderLeft: {
+    flex: 1,
+    paddingRight: 8,
+  },
+  name: {
     fontSize: 16,
-    marginBottom: 4,
-    color: '#1f2937'
-  },
-  info: {
-    fontSize: 14,
     marginBottom: 2,
-    color: '#4b5563'
+    color: '#391713',
+    fontFamily: Fonts.LeagueSpartanBold,
   },
-  role: { 
-    color: '#ea580c', 
-    fontWeight: 'bold' 
+  username: {
+    fontSize: 13,
+    color: '#9CA3AF',
+    fontFamily: Fonts.LeagueSpartanMedium,
   },
-  buttonRow: { 
-    flexDirection: 'row', 
+  statusBadge: {
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 999,
+    alignSelf: 'flex-start',
+    borderWidth: 1,
+  },
+  statusBadgeActive: {
+    backgroundColor: 'rgba(16,185,129,0.06)',
+    borderColor: '#10b981',
+  },
+  statusBadgeLocked: {
+    backgroundColor: 'rgba(239,68,68,0.06)',
+    borderColor: '#ef4444',
+  },
+  statusText: {
+    fontSize: 11,
+    fontFamily: Fonts.LeagueSpartanSemiBold,
+  },
+  statusTextActive: {
+    color: '#047857',
+  },
+  statusTextLocked: {
+    color: '#b91c1c',
+  },
+  cardBody: {
+    borderTopWidth: 1,
+    borderTopColor: '#f3f4f6',
+    paddingTop: 10,
+  },
+  infoLine: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  iconCircle: {
+    width: 32,
+    height: 32,
+    borderRadius: 999,
+    backgroundColor: 'rgba(233,83,34,0.08)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  iconCircleMuted: {
+    backgroundColor: '#e5e7eb',
+  },
+  infoText: {
+    flex: 1,
+    marginLeft: 10,
+    fontSize: 14,
+    color: '#111827',
+    fontFamily: Fonts.LeagueSpartanRegular,
+  },
+  infoSubText: {
+    flex: 1,
+    marginLeft: 10,
+    fontSize: 12,
+    color: '#6b7280',
+    fontFamily: Fonts.LeagueSpartanRegular,
+  },
+  buttonRow: {
+    flexDirection: 'row',
     justifyContent: 'space-between',
-    gap: 8, 
-    marginTop: 12
+    gap: 8,
+    marginTop: 12,
   },
-  updateButton: { 
-    backgroundColor: '#10b981', 
-    padding: 10, 
-    borderRadius: 6,
+  updateButton: {
+    backgroundColor: '#10b981',
+    paddingVertical: 10,
+    borderRadius: 999,
     flex: 1,
-    alignItems: 'center'
+    alignItems: 'center',
   },
-  saveButton: { 
-    backgroundColor: '#10b981', 
-    padding: 10, 
-    borderRadius: 6,
+  saveButton: {
+    backgroundColor: '#10b981',
+    paddingVertical: 10,
+    borderRadius: 999,
     flex: 1,
-    alignItems: 'center'
+    alignItems: 'center',
   },
-  cancelButton: { 
-    backgroundColor: '#ef4444', 
-    padding: 10, 
-    borderRadius: 6,
+  cancelButton: {
+    backgroundColor: '#ef4444',
+    paddingVertical: 10,
+    borderRadius: 999,
     flex: 1,
-    alignItems: 'center'
+    alignItems: 'center',
   },
-  lockButton: { 
-    backgroundColor: '#ea580c', 
-    padding: 10, 
-    borderRadius: 6,
+  lockButton: {
+    backgroundColor: '#e95322',
+    paddingVertical: 10,
+    borderRadius: 999,
     flex: 1,
-    alignItems: 'center'
+    alignItems: 'center',
   },
-  buttonText: { 
-    color: '#fff',
-    fontWeight: '600',
-    fontSize: 14
+  buttonText: {
+    color: '#ffffff',
+    fontSize: 14,
+    fontFamily: Fonts.LeagueSpartanSemiBold,
   },
-  editLabel: { 
-    fontWeight: 'bold', 
+  editLabel: {
     marginBottom: 8,
     fontSize: 16,
-    color: '#ea580c'
+    color: '#e95322',
+    fontFamily: Fonts.LeagueSpartanBold,
   },
   inputLabel: {
-    fontSize: 14,
-    fontWeight: '500',
+    fontSize: 13,
     marginBottom: 4,
     marginTop: 8,
-    color: '#374151'
+    color: '#374151',
+    fontFamily: Fonts.LeagueSpartanMedium,
   },
-  input: { 
-    borderWidth: 1, 
-    borderColor: '#e5e7eb', 
-    borderRadius: 6, 
-    padding: 10, 
+  input: {
+    borderWidth: 1,
+    borderColor: '#e5e7eb',
+    borderRadius: 16,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
     marginBottom: 4,
     backgroundColor: '#f9fafb',
-    fontSize: 14
+    fontSize: 14,
+    fontFamily: Fonts.LeagueSpartanRegular,
   },
-  disabledButton: { 
+  inputMultiline: {
+    minHeight: 64,
+    textAlignVertical: 'top',
+  },
+  disabledButton: {
     backgroundColor: '#d1d5db',
-    opacity: 0.6
+    opacity: 0.7,
   },
-  active: { 
-    color: '#10b981', 
-    fontWeight: 'bold' 
+  loadingContainer: {
+    alignItems: 'center',
+    padding: 20,
   },
-  locked: { 
-    color: '#ef4444', 
-    fontWeight: 'bold' 
-  },
-  searchContainer: { 
-    flexDirection: 'row', 
-    gap: 8, 
-    marginBottom: 16 
-  },
-  searchInput: { 
-    flex: 1, 
-    borderWidth: 1, 
-    borderColor: '#e5e7eb', 
-    borderRadius: 6, 
-    padding: 10,
-    backgroundColor: '#fff',
-    fontSize: 14
-  },
-  searchButton: { 
-    backgroundColor: '#ea580c', 
-    padding: 10, 
-    borderRadius: 6, 
-    justifyContent: 'center',
-    paddingHorizontal: 16
-  },
-  loadingContainer: { 
-    alignItems: 'center', 
-    padding: 20 
+  loadingText: {
+    marginTop: 8,
+    fontSize: 14,
+    color: '#6B7280',
+    fontFamily: Fonts.LeagueSpartanRegular,
   },
   emptyContainer: {
     alignItems: 'center',
-    padding: 40
+    padding: 40,
   },
   emptyText: {
     fontSize: 16,
     color: '#6b7280',
-    fontStyle: 'italic'
-  }
+    fontFamily: Fonts.LeagueSpartanRegular,
+  },
 });

@@ -214,3 +214,182 @@ def delete_promo(request, promo_id):
             'success': False,
             'error': 'Internal server error'
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+# Admin CRUD Operations (role_id = 2 - Quản lý)
+def is_admin(user):
+    """Check if user is admin (Quản lý)"""
+    return user.is_authenticated and user.role_id and user.role_id == 2
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def admin_promo_list(request):
+    """Get system-wide promotions only (store_id=0)"""
+    import logging
+    from django.db import connection
+    logger = logging.getLogger(__name__)
+    
+    if not is_admin(request.user):
+        return Response({'error': 'Admin access required'}, status=status.HTTP_403_FORBIDDEN)
+    
+    # Get system-wide promotions where store_id = 0 in database
+    # Use filter with store__id=0 to specifically target the system store
+    promos = Promo.objects.filter(store__id=0).order_by('-id')
+    
+    # Log the actual SQL query being executed
+    logger.info(f"=== ADMIN PROMO LIST DEBUG ===")
+    logger.info(f"User: {request.user.id}, Role: {request.user.role_id}")
+    logger.info(f"SQL Query: {promos.query}")
+    logger.info(f"Found {promos.count()} system-wide promotions (store_id=0)")
+    
+    # Log all promotions returned
+    for promo in promos:
+        store_id_value = promo.store.id if promo.store else None
+        logger.info(f"  Promo {promo.id}: {promo.name}, store_id={store_id_value}, scope={promo.scope}")
+    
+    serializer = PromoSerializer(promos, many=True)
+    result_data = serializer.data
+    
+    # Log serialized data
+    logger.info(f"Serialized data count: {len(result_data)}")
+    for item in result_data:
+        logger.info(f"  Returning: ID={item.get('id')}, Name={item.get('name')}, store_id={item.get('store_id')}")
+    
+    return Response(result_data)
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def admin_create_promo(request):
+    """Create system-wide promotion (Admin only) - store_id will be 0 in DB"""
+    import logging
+    logger = logging.getLogger(__name__)
+    
+    if not is_admin(request.user):
+        return Response({'error': 'Admin access required'}, status=status.HTTP_403_FORBIDDEN)
+    
+    # For system-wide promotions, we need to handle store_id = 0
+    # Since store is a ForeignKey, we need to get or create a dummy store with id=0
+    from apps.stores.models import Store
+    
+    data = request.data.copy()
+    # Remove store field from data
+    if 'store' in data:
+        del data['store']
+    
+    logger.info(f"Admin creating global promotion with data: {data}")
+    
+    serializer = PromoSerializer(data=data)
+    if serializer.is_valid():
+        # Get or create a system-wide "store" with id=0
+        # This is a special placeholder for global promotions
+        system_store, created = Store.objects.get_or_create(
+            id=0,
+            defaults={
+                'store_name': 'System-Wide Promotions',
+                'address': 'N/A',
+                'phone_number': 'N/A',
+                'manager_id': None
+            }
+        )
+        if created:
+            logger.info("Created system-wide store placeholder (id=0)")
+        
+        # Save with store_id = 0
+        promo = serializer.save(store=system_store)
+        logger.info(f"Created global promotion {promo.id}: {promo.name}, store_id={promo.store.id if promo.store else 'None'}, scope={promo.scope}")
+        return Response(PromoSerializer(promo).data, status=status.HTTP_201_CREATED)
+    
+    logger.error(f"Validation errors: {serializer.errors}")
+    return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def admin_promo_detail(request, promo_id):
+    """Get promotion detail (Admin only)"""
+    if not is_admin(request.user):
+        return Response({'error': 'Admin access required'}, status=status.HTTP_403_FORBIDDEN)
+    
+    promo = get_object_or_404(Promo, id=promo_id)
+    serializer = PromoSerializer(promo)
+    return Response(serializer.data)
+
+
+@api_view(['PUT', 'PATCH'])
+@permission_classes([IsAuthenticated])
+def admin_update_promo(request, promo_id):
+    """Update promotion (Admin only)"""
+    import logging
+    logger = logging.getLogger(__name__)
+    
+    if not is_admin(request.user):
+        return Response({'error': 'Admin access required'}, status=status.HTTP_403_FORBIDDEN)
+    
+    promo = get_object_or_404(Promo, id=promo_id)
+    
+    # For system-wide promotions, ensure store_id remains 0
+    from apps.stores.models import Store
+    data = request.data.copy()
+    # Remove store field
+    if 'store' in data:
+        del data['store']
+    
+    logger.info(f"Admin updating promotion {promo_id} with data: {data}")
+    
+    serializer = PromoSerializer(promo, data=data, partial=True)
+    if serializer.is_valid():
+        # Ensure system store exists
+        system_store, _ = Store.objects.get_or_create(
+            id=0,
+            defaults={
+                'store_name': 'System-Wide Promotions',
+                'address': 'N/A',
+                'phone_number': 'N/A',
+                'manager_id': None
+            }
+        )
+        
+        # Keep store_id = 0 for global promotions
+        updated_promo = serializer.save(store=system_store)
+        logger.info(f"Updated promotion {promo_id}: {updated_promo.name}, store_id={updated_promo.store.id if updated_promo.store else 'None'}, scope={updated_promo.scope}")
+        return Response(PromoSerializer(updated_promo).data)
+    
+    logger.error(f"Validation errors: {serializer.errors}")
+    return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+@api_view(['DELETE'])
+@permission_classes([IsAuthenticated])
+def admin_delete_promo(request, promo_id):
+    """Delete promotion (Admin only)"""
+    import logging
+    logger = logging.getLogger(__name__)
+    
+    if not is_admin(request.user):
+        return Response({'error': 'Admin access required'}, status=status.HTTP_403_FORBIDDEN)
+    
+    try:
+        promo = Promo.objects.get(id=promo_id)
+        promo_name = promo.name
+        promo.delete()
+        
+        logger.info(f"Admin deleted promotion {promo_id}: {promo_name}")
+        return Response({
+            'success': True,
+            'message': f'Promotion "{promo_name}" deleted successfully'
+        }, status=status.HTTP_200_OK)
+        
+    except Promo.DoesNotExist:
+        logger.error(f"Promo {promo_id} not found for deletion")
+        return Response({
+            'success': False,
+            'error': f'Promotion with ID {promo_id} not found'
+        }, status=status.HTTP_404_NOT_FOUND)
+    except Exception as e:
+        logger.error(f"Error deleting promo {promo_id}: {str(e)}")
+        return Response({
+            'success': False,
+            'error': 'Internal server error'
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)

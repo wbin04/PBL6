@@ -8,9 +8,10 @@ import {
   Dimensions,
 } from 'react-native';
 import { Store } from '@/types';
-import { COLORS, SPACING, BORDER_RADIUS, SHADOWS, API_CONFIG } from '@/constants';
+import { COLORS, SPACING, BORDER_RADIUS, SHADOWS } from '@/constants';
 import { getImageSource } from '@/utils/imageUtils';
 import { Ionicons } from '@expo/vector-icons';
+import { Fonts } from '@/constants/Fonts';
 
 interface StoreCardProps {
   store: Store;
@@ -18,58 +19,71 @@ interface StoreCardProps {
 }
 
 const { width } = Dimensions.get('window');
-const CARD_WIDTH = width * 0.85;
+const CARD_WIDTH = width * 0.9;
+const RADIUS = 18;
 
 export const StoreCard: React.FC<StoreCardProps> = ({ store, onPress }) => {
   return (
     <TouchableOpacity
-      style={styles.container}
+      style={styles.wrap}
       onPress={onPress}
-      activeOpacity={0.8}
+      activeOpacity={0.9}
     >
-      <View style={styles.imageContainer}>
-        <Image
-          source={getImageSource(store.image)}
-          style={styles.image}
-          resizeMode="cover"
-          onError={(error) => {
-            console.log('StoreCard - Image load error:', error.nativeEvent.error);
-          }}
-          defaultSource={require('@/assets/images/placeholder.png')}
-        />
-        <View style={styles.overlay}>
-          <View style={styles.badge}>
+      <View style={styles.card}>
+        {/* Cover image giống bố cục RestaurantCard1 */}
+        <View style={styles.coverWrap}>
+          <Image
+            source={getImageSource(store.image)}
+            style={styles.cover}
+            resizeMode="cover"
+            onError={(error) => {
+              console.log('StoreCard - Image load error:', error.nativeEvent.error);
+            }}
+            defaultSource={require('@/assets/images/placeholder.png')}
+          />
+
+          <View style={styles.badgePill}>
             <Ionicons name="storefront" size={12} color={COLORS.white} />
             <Text style={styles.badgeText}>Cửa hàng</Text>
           </View>
         </View>
-      </View>
-      
-      <View style={styles.content}>
-        <Text style={styles.name} numberOfLines={1}>
-          {store.store_name}
-        </Text>
-        
-        <Text style={styles.description} numberOfLines={2}>
-          {store.description || 'Cửa hàng thực phẩm chất lượng'}
-        </Text>
-        
-        <View style={styles.footer}>
-          <View style={styles.ratingContainer}>
-            <Ionicons name="star" size={14} color="#FFB800" />
-            <Text style={styles.rating}>
-              {store.average_rating ? store.average_rating.toFixed(1) : '0.0'}
+
+        {/* Thân card */}
+        <View style={styles.body}>
+          {/* Title + rating giống titleRow của RestaurantCard1 */}
+          <View style={styles.titleRow}>
+            <Text style={styles.name} numberOfLines={1}>
+              {store.store_name}
             </Text>
+            <View style={styles.ratingWrap}>
+              <Ionicons name="star" size={18} color="#F59E0B" />
+              <Text style={styles.ratingText}>
+                {store.average_rating ? store.average_rating.toFixed(1) : '0.0'}
+              </Text>
+            </View>
+          </View>
+
+          {/* Description 1 dòng / 2 dòng */}
+          <Text style={styles.description} numberOfLines={2}>
+            {store.description || 'Cửa hàng thực phẩm chất lượng'}
+          </Text>
+
+          {/* Meta row: số đánh giá + số món, bố cục giống metaRow */}
+          <View style={styles.metaRow}>
             <Text style={styles.reviews}>
               ({store.total_ratings || 0} đánh giá)
             </Text>
-          </View>
-          
-          <View style={styles.deliveryInfo}>
-            <Ionicons name="storefront-outline" size={14} color={COLORS.gray500} />
-            <Text style={styles.deliveryTime}>
-              {store.total_foods || 0} món
-            </Text>
+
+            <View style={styles.foodMeta}>
+              <Ionicons
+                name="storefront-outline"
+                size={14}
+                color={COLORS.gray500}
+              />
+              <Text style={styles.foodCount}>
+                {store.total_foods || 0} món
+              </Text>
+            </View>
           </View>
         </View>
       </View>
@@ -78,104 +92,110 @@ export const StoreCard: React.FC<StoreCardProps> = ({ store, onPress }) => {
 };
 
 const styles = StyleSheet.create({
-  container: {
-    backgroundColor: COLORS.white,
-    borderRadius: BORDER_RADIUS.lg,
+  wrap: {
     width: CARD_WIDTH,
-    marginRight: SPACING.md,
-    ...SHADOWS.md,
+    alignSelf: 'center',
+    marginVertical: 10,
   },
-  
-  imageContainer: {
-    position: 'relative',
-    height: 120,
-    borderTopLeftRadius: BORDER_RADIUS.lg,
-    borderTopRightRadius: BORDER_RADIUS.lg,
+  card: {
+    borderRadius: RADIUS,
+    backgroundColor: COLORS.white,
+    borderWidth: 1,
+    borderColor: '#EEF0F2',
     overflow: 'hidden',
+    ...SHADOWS.sm,
   },
-  
-  image: {
+
+  // Cover giống RestaurantCard1
+  coverWrap: {
+    overflow: 'hidden',
+    borderTopLeftRadius: RADIUS,
+    borderTopRightRadius: RADIUS,
+  },
+  cover: {
     width: '100%',
-    height: '100%',
+    height: 190,
+    borderTopLeftRadius: RADIUS,
+    borderTopRightRadius: RADIUS,
   },
-  
-  overlay: {
+
+  badgePill: {
     position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    backgroundColor: 'rgba(0,0,0,0.1)',
-    justifyContent: 'flex-start',
-    alignItems: 'flex-end',
-    padding: SPACING.sm,
-  },
-  
-  badge: {
+    left: 12,
+    top: 12,
     backgroundColor: COLORS.primary,
-    borderRadius: BORDER_RADIUS.md,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 999,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
+    gap: 6,
   },
-  
   badgeText: {
-    color: COLORS.white,
-    fontSize: 10,
-    fontWeight: '600',
+    color: '#fff',
+    fontSize: 13,
+    fontFamily: Fonts.LeagueSpartanBold,
   },
-  
-  content: {
-    padding: SPACING.md,
+
+  // Body
+  body: {
+    paddingHorizontal: 18,
+    paddingTop: 14,
+    paddingBottom: 18,
+    gap: 8,
+    backgroundColor: '#fff',
   },
-  
+
+  titleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
   name: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: COLORS.text,
-    marginBottom: SPACING.xs,
+    flex: 1,
+    marginRight: 8,
+    fontSize: 20,
+    color: '#3A1A12',
+    fontFamily: Fonts.LeagueSpartanExtraBold,
   },
-  
+
+  ratingWrap: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  ratingText: {
+    fontFamily: Fonts.LeagueSpartanBold,
+    fontSize: 16,
+    color: '#3A1A12',
+  },
+
   description: {
-    fontSize: 14,
+    fontSize: 14.5,
     color: COLORS.textSecondary,
     lineHeight: 20,
-    marginBottom: SPACING.sm,
+    fontFamily: Fonts.LeagueSpartanMedium,
   },
-  
-  footer: {
+
+  metaRow: {
     flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 4,
     justifyContent: 'space-between',
-    alignItems: 'center',
   },
-  
-  ratingContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-  },
-  
-  rating: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: COLORS.text,
-  },
-  
   reviews: {
-    fontSize: 12,
+    fontSize: 13,
     color: COLORS.gray500,
+    fontFamily: Fonts.LeagueSpartanMedium,
   },
-  
-  deliveryInfo: {
+  foodMeta: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
+    gap: 6,
   },
-  
-  deliveryTime: {
-    fontSize: 12,
+  foodCount: {
+    fontSize: 14,
     color: COLORS.gray500,
+    fontFamily: Fonts.LeagueSpartanMedium,
   },
 });

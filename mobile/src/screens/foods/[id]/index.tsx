@@ -8,7 +8,7 @@ import {
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   Dimensions, FlatList, Image, ScrollView, StatusBar,
-  StyleSheet, Text, TouchableOpacity, View,
+  StyleSheet, Text, TouchableOpacity, View, Modal,
 } from "react-native";
 
 import { Fonts } from "@/constants/Fonts";
@@ -40,6 +40,13 @@ export default function FoodDetailScreen() {
   const [toppings, setToppings] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadingToppings, setLoadingToppings] = useState(false);
+  const [menuVisible, setMenuVisible] = useState(false);
+
+  const goHome = () => {
+    setMenuVisible(false);
+    navigation.navigate("MainTabs");
+  };
+
 
   // Fetch food data from API
   useEffect(() => {
@@ -482,10 +489,31 @@ export default function FoodDetailScreen() {
                 fill={isFavorite ? ORANGE : "transparent"}
               />
             </TouchableOpacity>
-            <TouchableOpacity style={styles.circleBtn} activeOpacity={0.8}>
+            <TouchableOpacity
+              style={styles.circleBtn}
+              activeOpacity={0.8}
+              onPress={() => setMenuVisible(true)}
+            >
               <MoreHorizontal size={20} color="#391713" />
             </TouchableOpacity>
+
           </View>
+
+          {/* ===== MENU POPUP ===== */}
+          <Modal transparent visible={menuVisible} animationType="fade">
+            <TouchableOpacity
+              style={styles.menuOverlay}
+              activeOpacity={1}
+              onPress={() => setMenuVisible(false)}
+            >
+              <View style={styles.menuBox}>
+                <TouchableOpacity style={styles.menuItem} onPress={goHome}>
+                  <Text style={styles.menuText}>Về trang chủ</Text>
+                </TouchableOpacity>
+              </View>
+            </TouchableOpacity>
+          </Modal>
+
 
           <View style={styles.dots}>
             {gallery.map((_, i) => (
@@ -703,6 +731,10 @@ export default function FoodDetailScreen() {
 
           <TouchableOpacity
             onPress={async () => {
+              if (!food) {
+                return;
+              }
+
               const toppingsPrice = Object.entries(selectedToppings).reduce((acc, [toppingIdStr, toppingQuantity]) => {
                 const toppingId = parseInt(toppingIdStr);
                 const topping = toppings.find(t => t.id === toppingId);
@@ -715,6 +747,9 @@ export default function FoodDetailScreen() {
                 return topping ? `${topping.title} (x${toppingQuantity})` : '';
               }).filter(name => name);
               
+              const selectedSize = getSelectedSize();
+              const subtotal = totalPrice;
+
               const checkoutItem = {
                 id: food?.id, 
                 name: food?.title, 
@@ -730,7 +765,48 @@ export default function FoodDetailScreen() {
                 totalPrice,
               };
               await AsyncStorage.setItem("checkoutItem", JSON.stringify(checkoutItem));
-              navigation.navigate("Checkout");
+
+              const storePayload = food.store ? {
+                id: food.store.id ?? 0,
+                store_name: food.store.store_name ?? 'Nhà hàng',
+                address: food.store.address ?? null,
+                latitude: food.store.latitude ?? null,
+                longitude: food.store.longitude ?? null,
+              } : {
+                id: 0,
+                store_name: 'Nhà hàng',
+                address: null,
+                latitude: null,
+                longitude: null,
+              };
+
+              const buyNowPayload = {
+                id: Date.now(),
+                food_id: food.id,
+                food_option_id: selectedSizeId ?? undefined,
+                quantity,
+                item_note: null,
+                subtotal,
+                food: {
+                  id: food.id,
+                  title: food.title,
+                  price: parseFloat(String(food.price ?? 0)),
+                  image: food.image,
+                  store: storePayload,
+                },
+                size: selectedSize ? {
+                  id: selectedSize.id,
+                  size_name: selectedSize.size_name,
+                  price: parseFloat(String(selectedSize.price ?? 0)),
+                } : undefined,
+                customToppings: toppingNames,
+              };
+
+              navigation.navigate("Checkout", {
+                selectedIds: [food.id],
+                selectedCartItems: [buyNowPayload],
+                fromBuyNow: true,
+              });
             }}
             activeOpacity={0.9}
             style={styles.btnOrange}
@@ -777,6 +853,33 @@ const styles = StyleSheet.create({
     elevation: 2,
   },
   navRight: { position: "absolute", top: 16, right: 16, flexDirection: "row", gap: 8 },
+
+  menuOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.15)',
+    justifyContent: 'flex-start',
+    paddingTop: 60,
+    paddingRight: 16,
+    alignItems: 'flex-end',
+  },
+  menuBox: {
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    width: 180,
+    paddingVertical: 8,
+    elevation: 4,
+  },
+  menuItem: {
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+  },
+  menuText: {
+    fontSize: 14,
+    fontFamily: Fonts.LeagueSpartanSemiBold,
+    color: '#391713',
+  },
+
+
   circleBtn: { backgroundColor: "#fff", padding: 10, borderRadius: 999, elevation: 2 },
   dots: {
     position: "absolute",

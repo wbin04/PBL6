@@ -20,6 +20,7 @@ import { useToast } from "@/components/use-toast";
 import VoucherCard from "@/components/VoucherCard";
 import { Fonts } from "@/constants/Fonts";
 import db from "@/assets/database.json";
+import { SafeAreaView } from "react-native-safe-area-context";
 
 type Restaurant = {
   id: number;
@@ -137,7 +138,7 @@ export default function RestaurantDetail() {
   }, [tab]);
 
   return (
-    <View style={{ flex: 1, backgroundColor: "#fff" }}>
+    <SafeAreaView style={{ flex: 1, backgroundColor: "#fff" }}>
       <FlatList
         ref={listRef}
         data={foods}
@@ -277,7 +278,7 @@ export default function RestaurantDetail() {
   />
 )}
 
-    </View>
+    </SafeAreaView>
   );
 }
 

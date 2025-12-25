@@ -1,13 +1,18 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { View, Text, TouchableOpacity, ScrollView, Modal, KeyboardAvoidingView, Platform, StyleSheet, Image, ActivityIndicator, RefreshControl, Alert, Animated } from 'react-native';
+import { View, Text, TouchableOpacity, FlatList, ScrollView, Modal, KeyboardAvoidingView, Platform, StyleSheet, Image, ActivityIndicator, RefreshControl, Alert, Animated, TextInput } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { IMAGE_MAP } from '../assets/imageMap';
-import { X } from 'lucide-react-native';
+import { X, Menu } from 'lucide-react-native';
 import { Fonts } from '../constants/Fonts';
 import { ordersApi, apiClient } from '@/services/api';
 import { API_CONFIG } from "@/constants";
 import * as SecureStore from 'expo-secure-store';
 import { STORAGE_KEYS } from '@/constants';
+import { Ionicons } from '@expo/vector-icons';
+import { useNavigation } from '@react-navigation/native';
+import { useAdmin } from '@/contexts/AdminContext';
+import Sidebar from '@/components/sidebar';
+import { BarChart3, ShoppingBag, Package, Users, Star } from 'lucide-react-native';
 
 const getStatusColor = (status: string) => {
   switch (status) {
@@ -18,7 +23,6 @@ const getStatusColor = (status: string) => {
     case 'Đang chuẩn bị': return '#f97316';
     case 'Sẵn sàng': return '#06b6d4';
     case 'Đã lấy hàng': return '#84cc16';
-    case 'Đã huỷ': return '#ef4444';
     case 'Đã huỷ': return '#ef4444';
     default: return '#6b7280';
   }
@@ -44,28 +48,32 @@ const getImageSource = (imageValue: any) => {
     return require('../assets/images/placeholder.png');
   }
 
-  // If image is already a full URL
   if (typeof imageValue === 'string' && imageValue.startsWith('http')) {
     return { uri: imageValue };
   }
 
-  // If it's a string path from API
   if (typeof imageValue === 'string') {
-    // Check if it's an IMAGE_MAP key first (for backward compatibility)
     if (IMAGE_MAP[imageValue]) {
       return IMAGE_MAP[imageValue];
     }
 
-    // Otherwise, construct full URL from media path
-    const baseUrl = API_CONFIG.BASE_URL.replace("/api", ""); // Remove /api from base URL
+    const baseUrl = API_CONFIG.BASE_URL.replace("/api", "");
     const fullUrl = `${baseUrl}/media/${imageValue}`;
     return { uri: fullUrl };
   }
 
-  // If it's already an object (local require) or number
   return imageValue;
 };
 
+const menuItems = [
+  { title: 'Trang chủ', icon: BarChart3, section: 'dashboard' },
+  // { title: 'Mua hàng', icon: ShoppingBag, section: 'buy' },
+  { title: 'Quản lý tài khoản', icon: Users, section: 'customers' },
+  { title: 'Quản lý cửa hàng', icon: ShoppingBag, section: 'stores' },
+  { title: 'Quản lý đơn hàng', icon: Package, section: 'orders' },
+  { title: 'Quản lý shipper', icon: Users, section: 'shippers' },
+  { title: 'Khuyến mãi hệ thống', icon: Star, section: 'promotions' },
+];
 
 const statusTabs = [
   { key: 'all', label: 'Tất cả' },
@@ -79,45 +87,61 @@ const statusTabs = [
   { key: 'Đã huỷ', label: 'Đã huỷ' },
 ];
 
+type OrderListScreenProps = {
+  onMenuPress?: () => void;
+};
 
-
-export default function OrderListScreen() {
+export default function OrderListScreen({ onMenuPress }: OrderListScreenProps = {}) {
+  const navigation = useNavigation<any>();
   const [orders, setOrders] = useState<any[]>([]);
-  const [orderFilter, setOrderFilter] = useState('Tất cả');
+  const [allOrders, setAllOrders] = useState<any[]>([]);
+  const [orderFilter, setOrderFilter] = useState('all');
   const [orderDetailModalVisible, setOrderDetailModalVisible] = useState(false);
   const [selectedOrder, setSelectedOrder] = useState<any>(null);
   const [loading, setLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [currentUser, setCurrentUser] = useState<any>(null);
   const [statusCounts, setStatusCounts] = useState<Record<string, number>>({});
-  const scrollViewRef = useRef<ScrollView>(null);
-  const fadeAnim = useRef(new Animated.Value(1)).current;
+  const [localSearchText, setLocalSearchText] = useState('');
 
-  // Get current user info
+  // Try to use admin context if available
+  let adminContext: ReturnType<typeof useAdmin> | undefined;
+  try {
+    adminContext = useAdmin();
+  } catch (e) {
+    // Not in admin context
+    adminContext = undefined;
+  }
+
+  const handleMenuPress = () => {
+    if (onMenuPress) {
+      onMenuPress();
+    } else if (adminContext) {
+      adminContext.openSidebar();
+    } else if (navigation.canGoBack()) {
+      navigation.goBack();
+    }
+  };
+
+  const ITEMS_PER_LOAD = 10;
+  const [displayCount, setDisplayCount] = useState(ITEMS_PER_LOAD);
+
   const getCurrentUser = useCallback(async () => {
     try {
       const userStr = await SecureStore.getItemAsync(STORAGE_KEYS.USER);
       if (userStr) {
         const user = JSON.parse(userStr);
         setCurrentUser(user);
-        console.log('Current user:', user);
-        console.log('User role:', user.role);
       }
     } catch (error) {
       console.error('Error getting current user:', error);
     }
   }, []);
 
-  // Check if current user is manager (role = "Quản lý")
   const isManager = currentUser?.role === 'Quản lý';
 
-  console.log('=== Role Check ===');
-  console.log('Current user role:', currentUser?.role);
-  console.log('Is manager:', isManager);
-  console.log('==================');
-
-  // Fetch orders from API with pagination
   const fetchOrders = useCallback(async (showLoading = true) => {
     try {
       if (showLoading) {
@@ -125,109 +149,61 @@ export default function OrderListScreen() {
       }
       setError(null);
 
-      console.log('=== Fetching Orders ===');
-      console.log('Current filter:', orderFilter);
+      const params: any = {
+        page: 1,
+        per_page: 50  // Increase to get more initial results
+      };
 
-      // Fetch all orders from all pages
-      let allOrders: any[] = [];
-      let currentPage = 1;
-      let totalPages = 1;
+      if (localSearchText) {
+        params.search = localSearchText;
+      }
 
-      do {
-        const params: any = {
-          page: currentPage,
-          per_page: 20 // Increase per_page to reduce API calls
-        };
+      const response = await ordersApi.admin.getOrders(params) as any;
 
-        console.log(`Fetching page ${currentPage}...`);
-        const response = await ordersApi.admin.getOrders(params) as any;
-        console.log(`Page ${currentPage} response:`, response);
-        console.log(`Page ${currentPage} orders array:`, response.orders);
-        console.log(`Page ${currentPage} total_pages:`, response.total_pages);
+      let ordersData: any[] = [];
+      if (response.orders && Array.isArray(response.orders)) {
+        ordersData = response.orders;
+      } else if (Array.isArray(response)) {
+        ordersData = response;
+      }
 
-        if (response.orders && Array.isArray(response.orders)) {
-          allOrders = [...allOrders, ...response.orders];
-          totalPages = response.total_pages || 1;
-          console.log(`Page ${currentPage}: got ${response.orders.length} orders, total pages: ${totalPages}`);
-        } else if (Array.isArray(response)) {
-          allOrders = [...allOrders, ...response];
-          break; // No pagination info, assume single page
-        } else {
-          console.log(`No orders in page ${currentPage}`);
-          break;
-        }
+      setAllOrders(ordersData);
 
-        currentPage++;
-      } while (currentPage <= totalPages);
-
-      console.log('=== Final Results ===');
-      console.log('Total orders loaded:', allOrders.length);
-
-      // Store ALL orders
-      setOrders(allOrders);
-
-      // Calculate status counts from ALL orders
-      const counts: Record<string, number> = { all: allOrders.length };
-      allOrders.forEach((order: any) => {
+      const counts: Record<string, number> = { all: ordersData.length };
+      ordersData.forEach((order: any) => {
         const status = order.order_status;
         counts[status] = (counts[status] || 0) + 1;
       });
       setStatusCounts(counts);
-      console.log('Status counts calculated:', counts);
 
     } catch (error: any) {
       console.error('Error fetching orders:', error);
       setError(error.message || 'Không thể tải danh sách đơn hàng');
-      setOrders([]);
+      setAllOrders([]);
     } finally {
       setLoading(false);
       if (refreshing) {
         setRefreshing(false);
       }
     }
-  }, [refreshing]); // Remove orderFilter dependency
-
-  // Filter orders for display based on selected tab
-  const getStatusKeyForFilter = (filter: string): string => {
-    switch (filter) {
-      case 'Đang chờ': return 'Chờ xác nhận';
-      case 'Đã xác nhận': return 'confirmed';
-      case 'Đang chuẩn bị': return 'preparing';
-      case 'Sẵn sàng': return 'ready';
-      case 'Đang giao': return 'delivering';
-      case 'Đã hoàn thành': return 'Đã giao';
-      case 'Đã huỷ': return 'Đã huỷ';
-      default: return '';
-    }
-  };
+  }, [refreshing, localSearchText]);
 
   const getFilteredOrders = () => {
-    console.log('=== Filtering Orders ===');
-    console.log('Current filter:', orderFilter);
-    console.log('Total orders available:', orders.length);
-
-    if (orderFilter === 'Tất cả') {
-      console.log('Showing all orders:', orders.length);
-      return orders;
+    if (orderFilter === 'all') {
+      return allOrders;
     }
 
-    const statusKey = getStatusKeyForFilter(orderFilter);
-    console.log('Status key for filter:', statusKey);
-
-    const filtered = orders.filter(order => {
-      console.log(`Order ${order.id}: status="${order.order_status}" vs filter="${statusKey}"`);
-      return order.order_status === statusKey;
-    });
-
-    console.log('Filtered orders count:', filtered.length);
-    console.log('======================');
-    return filtered;
+    return allOrders.filter(order => order.order_status === orderFilter);
   };
 
-  // Get filtered orders for display
   const filteredOrdersForDisplay = getFilteredOrders();
+  const displayedOrders = filteredOrdersForDisplay.slice(0, displayCount);
 
-  // Load user and orders when component mounts or filter changes
+  useEffect(() => {
+    const filtered = getFilteredOrders();
+    setOrders(filtered);
+  }, [allOrders, orderFilter]);
+
   useEffect(() => {
     getCurrentUser();
   }, [getCurrentUser]);
@@ -236,23 +212,46 @@ export default function OrderListScreen() {
     if (currentUser) {
       fetchOrders();
     }
-  }, [fetchOrders, currentUser]);
+  }, [currentUser, fetchOrders]);
 
-  // Refresh handler
+  useEffect(() => {
+    setDisplayCount(ITEMS_PER_LOAD);
+  }, [orderFilter]);
+
+  useEffect(() => {
+    const debounceTimer = setTimeout(() => {
+      if (currentUser) {
+        fetchOrders();
+      }
+    }, 500);
+
+    return () => clearTimeout(debounceTimer);
+  }, [localSearchText, currentUser, fetchOrders]);
+
   const onRefresh = useCallback(() => {
     setRefreshing(true);
+    setDisplayCount(ITEMS_PER_LOAD);
     fetchOrders(false);
   }, [fetchOrders]);
+
+  const loadMore = useCallback(() => {
+    if (loadingMore) return;
+
+    const hasMore = displayCount < filteredOrdersForDisplay.length;
+    if (hasMore) {
+      setLoadingMore(true);
+
+      setTimeout(() => {
+        setDisplayCount(prev => prev + ITEMS_PER_LOAD);
+        setLoadingMore(false);
+      }, 300);
+    }
+  }, [displayCount, filteredOrdersForDisplay.length, loadingMore]);
 
   const openOrderDetailModal = async (order: any) => {
     try {
       setLoading(true);
-      console.log('Fetching order detail for ID:', order.id);
-
-      // Fetch detailed order data
       const detailedOrder = await ordersApi.admin.getOrder(order.id) as any;
-      console.log('Detailed order:', detailedOrder);
-
       setSelectedOrder(detailedOrder);
       setOrderDetailModalVisible(true);
     } catch (error: any) {
@@ -271,9 +270,7 @@ export default function OrderListScreen() {
   const updateOrderStatus = async (orderId: number, newStatus: string, cancelReason?: string) => {
     try {
       setLoading(true);
-      console.log('Updating order status:', { orderId, newStatus, cancelReason, isManager });
 
-      // For managers, only allow cancellation
       if (isManager && newStatus !== 'Đã huỷ') {
         Alert.alert(
           'Hạn chế quyền hạn',
@@ -288,18 +285,20 @@ export default function OrderListScreen() {
         data.cancel_reason = cancelReason;
       }
 
-      // For managers cancelling orders, the backend will automatically set cancelled_by_role to "Quản lý"
       const updatedOrder = await ordersApi.admin.updateOrderStatus(orderId, data) as any;
-      console.log('Order status updated:', updatedOrder);
 
-      // Update orders list
       setOrders(prevOrders =>
         prevOrders.map(order =>
           order.id === orderId ? { ...order, order_status: newStatus, cancel_reason: cancelReason } : order
         )
       );
 
-      // Update selected order if it's the same
+      setAllOrders(prevOrders =>
+        prevOrders.map(order =>
+          order.id === orderId ? { ...order, order_status: newStatus, cancel_reason: cancelReason } : order
+        )
+      );
+
       if (selectedOrder && selectedOrder.id === orderId) {
         setSelectedOrder({ ...selectedOrder, order_status: newStatus, cancel_reason: cancelReason });
       }
@@ -315,55 +314,232 @@ export default function OrderListScreen() {
     }
   };
 
+  const renderOrderItem = ({ item: order }: { item: any }) => (
+    <TouchableOpacity
+      style={styles.orderCard}
+      activeOpacity={0.9}
+      onPress={() => openOrderDetailModal(order)}
+      disabled={loading}
+    >
+      <View style={styles.orderCardHeader}>
+        <Image
+          source={getImageSource(order.store_image)}
+          style={styles.orderImage}
+          onError={() => console.log('Order image load error:', order.id)}
+        />
+        <View style={styles.orderCardInfo}>
+          <Text style={styles.orderCardId}>#{order.id}</Text>
+          <Text style={styles.orderCardCustomer}>{order.user?.fullname || 'Khách hàng'}</Text>
+          <Text style={styles.orderCardPhone}>📞 {order.phone_number || 'Chưa có SĐT'}</Text>
+          <Text style={styles.orderCardAddress} numberOfLines={2}>
+            📍 {order.ship_address || 'Chưa có địa chỉ'}
+          </Text>
+          <Text style={styles.orderCardStore} numberOfLines={1}>
+            🏪 {order.store_name || 'Chưa xác định cửa hàng'}
+          </Text>
+          <Text style={styles.orderCardItems} numberOfLines={1}>
+            {order.items?.map((item: any) =>
+              `${item.food?.title}${item.food_option ? ` (${item.food_option.size_name})` : ''} x${item.quantity}`
+            ).join(', ') || 'Đang tải món ăn...'}
+          </Text>
+        </View>
+        <View style={styles.orderActions}>
+          {order.order_status !== 'Đã giao' && order.order_status !== 'Đã huỷ' && (
+            <TouchableOpacity
+              style={styles.cancelOrderButton}
+              onPress={(e) => {
+                e.stopPropagation();
+                updateOrderStatus(order.id, 'Đã huỷ', isManager ? 'Hủy bởi quản lý' : 'Hủy bởi cửa hàng');
+              }}
+              disabled={loading}
+            >
+              <X size={16} color="#ef4444" />
+            </TouchableOpacity>
+          )}
+        </View>
+      </View>
+      <View style={styles.orderCardFooter}>
+        <Text style={styles.orderCardTotal}>{formatPrice(order.total_money)}</Text>
+        <View style={[styles.statusBadge, { backgroundColor: getStatusColor(order.order_status) }]}>
+          <Text style={styles.statusText}>{order.order_status}</Text>
+        </View>
+      </View>
+    </TouchableOpacity>
+  );
+
+  const renderFooter = () => {
+    if (!loadingMore) return null;
+
+    return (
+      <View style={styles.loadingMoreContainer}>
+        <ActivityIndicator size="small" color="#ea580c" />
+        <Text style={styles.loadingMoreText}>Đang tải thêm...</Text>
+      </View>
+    );
+  };
+
+  const renderEmpty = () => {
+    if (loading) return null;
+
+    return (
+      <View style={styles.emptyContainer}>
+        <Ionicons name="receipt-outline" size={64} color="#d1d5db" />
+        <Text style={styles.emptyText}>
+          {orderFilter === 'all' 
+            ? (localSearchText ? 'Không tìm thấy đơn hàng' : 'Chưa có đơn hàng nào')
+            : `Không có đơn hàng ${statusTabs.find(t => t.key === orderFilter)?.label}`
+          }
+        </Text>
+      </View>
+    );
+  };
+
+  const totalFound = filteredOrdersForDisplay.length;
+
   return (
-    <SafeAreaView style={styles.safeArea}>
-      <View style={styles.container}>
+    <>
+      <Sidebar
+        isOpen={adminContext?.isSidebarOpen || false}
+        onClose={() => adminContext?.closeSidebar()}
+        menuItems={menuItems}
+        hitSlop={{ top: 50, bottom: 10, left: 10, right: 10 }}
+        onMenuItemPress={(section) => {
+          adminContext?.closeSidebar();
+          
+          if (section === 'buy') {
+            navigation.reset({ index: 0, routes: [{ name: 'MainTabs' }] });
+          } else if (section === 'dashboard') {
+            navigation.navigate('AdminDashboard');
+          } else if (section === 'customers') {
+            navigation.navigate('CustomerListScreen');
+          } else if (section === 'stores') {
+            navigation.navigate('StoreListScreen');
+          } else if (section === 'orders') {
+            // Stay on current screen
+          } else if (section === 'shippers') {
+            navigation.navigate('ShipperListScreen');
+          } else if (section === 'promotions') {
+            navigation.navigate('VoucherManagementScreen');
+          }
+        }}
+      />
+      <SafeAreaView style={styles.safeArea} edges={['top']}>
+      <View style={styles.headerWrap}>
+        <View style={styles.headerTopRow}>
+          <TouchableOpacity
+            style={styles.roundIconBtn}
+            onPress={handleMenuPress}
+          >
+            <Menu size={24} color="#eb552d" />
+          </TouchableOpacity>
+
+          <Text style={styles.headerTitle}>Đơn hàng</Text>
+
+          <View style={{ width: 40 }} />
+        </View>
+
+        <View style={styles.searchRow}>
+          <View style={styles.searchBox}>
+            <TextInput
+              style={styles.searchInput}
+              placeholder="Tìm theo mã đơn, khách hàng, SĐT..."
+              placeholderTextColor="#9ca3af"
+              value={localSearchText}
+              onChangeText={setLocalSearchText}
+              returnKeyType="search"
+            />
+            {localSearchText.length > 0 && (
+              <TouchableOpacity
+                onPress={() => setLocalSearchText('')}
+                style={styles.clearBtn}
+              >
+                <Ionicons name="close-circle" size={16} color="#9ca3af" />
+              </TouchableOpacity>
+            )}
+            <TouchableOpacity
+              style={styles.searchBtn}
+              activeOpacity={0.8}
+            >
+              <Ionicons name="search" size={16} color="#fff" />
+            </TouchableOpacity>
+          </View>
+        </View>
+      </View>
+
+      <View style={styles.tabs}>
         <ScrollView
           horizontal
           showsHorizontalScrollIndicator={false}
-          style={styles.filterTabsContainer}
-          contentContainerStyle={styles.filterTabs}
+          contentContainerStyle={styles.tabsContent}
         >
-          {statusTabs.map((tab, index) => {
-            const count = statusCounts[tab.key] || 0;
+          {statusTabs.map((tab) => {
             const isActive = orderFilter === tab.key;
+            const count = tab.key === 'all' 
+              ? allOrders.length 
+              : allOrders.filter(order => order.order_status === tab.key).length;
 
             return (
               <TouchableOpacity
                 key={tab.key}
-                style={[
-                  styles.filterTab,
-                  isActive && styles.filterTabActive,
-                  { transform: [{ scale: isActive ? 1.05 : 1 }] }
-                ]}
-                onPress={() => {
-                  // Animate content fade out and in
-                  Animated.sequence([
-                    Animated.timing(fadeAnim, {
-                      toValue: 0.7,
-                      duration: 150,
-                      useNativeDriver: true,
-                    }),
-                    Animated.timing(fadeAnim, {
-                      toValue: 1,
-                      duration: 200,
-                      useNativeDriver: true,
-                    }),
-                  ]).start();
-
-                  setOrderFilter(tab.key);
-                }}
+                onPress={() => setOrderFilter(tab.key)}
+                style={[styles.tab, isActive && styles.tabActive]}
                 activeOpacity={0.7}
               >
-                <Text style={[styles.filterTabText, isActive && styles.filterTabTextActive]}>
-                  {tab.label}{count > 0 && ` (${count})`}
+                <Text style={[styles.tabText, isActive && styles.tabTextActive]}>
+                  {tab.label}
                 </Text>
+                <View
+                  style={[
+                    styles.countBadge,
+                    isActive && styles.countBadgeActive,
+                  ]}
+                >
+                  <Text
+                    style={[
+                      styles.countText,
+                      isActive && styles.countTextActive,
+                    ]}
+                  >
+                    {count}
+                  </Text>
+                </View>
               </TouchableOpacity>
             );
           })}
         </ScrollView>
-        <ScrollView
-          style={styles.scrollView}
+      </View>
+
+      <View style={styles.foundWrap}>
+        <Text style={styles.foundText}>
+          Tìm thấy <Text style={styles.foundNum}>{totalFound}</Text> đơn hàng
+        </Text>
+      </View>
+
+      {loading && displayedOrders.length === 0 ? (
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color="#ea580c" />
+          <Text style={styles.loadingText}>Đang tải đơn hàng...</Text>
+        </View>
+      ) : error ? (
+        <View style={styles.errorContainer}>
+          <Ionicons name="alert-circle-outline" size={64} color="#ef4444" />
+          <Text style={styles.errorText}>{error}</Text>
+          <TouchableOpacity style={styles.retryButton} onPress={() => fetchOrders()}>
+            <Ionicons name="refresh-outline" size={18} color="#fff" />
+            <Text style={styles.retryButtonText}>Thử lại</Text>
+          </TouchableOpacity>
+        </View>
+      ) : (
+        <FlatList
+          data={displayedOrders}
+          renderItem={renderOrderItem}
+          keyExtractor={(item) => item.id.toString()}
+          contentContainerStyle={styles.listContent}
+          showsVerticalScrollIndicator={false}
+          onEndReached={loadMore}
+          onEndReachedThreshold={0.3}
+          ListFooterComponent={renderFooter}
+          ListEmptyComponent={renderEmpty}
           refreshControl={
             <RefreshControl
               refreshing={refreshing}
@@ -372,84 +548,12 @@ export default function OrderListScreen() {
               tintColor="#ea580c"
             />
           }
-        >
-          {loading && !refreshing ? (
-            <View style={styles.loadingContainer}>
-              <ActivityIndicator size="large" color="#ea580c" />
-              <Text style={styles.loadingText}>Đang tải đơn hàng...</Text>
-            </View>
-          ) : error ? (
-            <View style={styles.errorContainer}>
-              <Text style={styles.errorText}>{error}</Text>
-              <TouchableOpacity style={styles.retryButton} onPress={() => fetchOrders()}>
-                <Text style={styles.retryButtonText}>Thử lại</Text>
-              </TouchableOpacity>
-            </View>
-          ) : filteredOrdersForDisplay.length === 0 ? (
-            <View style={styles.emptyContainer}>
-              <Text style={styles.emptyText}>
-                {orderFilter === 'Tất cả' ? 'Chưa có đơn hàng nào' : `Không có đơn hàng ${orderFilter}`}
-              </Text>
-            </View>
-          ) : (
-            <Animated.View style={{ opacity: fadeAnim }}>
-              {filteredOrdersForDisplay.map((order, idx) => (
-                <TouchableOpacity
-                  key={order.id}
-                  style={styles.orderCard}
-                  activeOpacity={0.9}
-                  onPress={() => openOrderDetailModal(order)}
-                  disabled={loading}
-                >
-                  <View style={styles.orderCardHeader}>
-                    <Image
-                      source={getImageSource(order.store_image)}
-                      style={styles.orderImage}
-                      onError={() => console.log('Order image load error:', order.id)}
-                    />
-                    <View style={styles.orderCardInfo}>
-                      <Text style={styles.orderCardId}>#{order.id}</Text>
-                      <Text style={styles.orderCardCustomer}>{order.user?.fullname || 'Khách hàng'}</Text>
-                      <Text style={styles.orderCardPhone}>📞 {order.phone_number || 'Chưa có SĐT'}</Text>
-                      <Text style={styles.orderCardAddress} numberOfLines={2}>
-                        📍 {order.ship_address || 'Chưa có địa chỉ'}
-                      </Text>
-                      <Text style={styles.orderCardStore} numberOfLines={1}>
-                        🏪 {order.store_name || 'Chưa xác định cửa hàng'}
-                      </Text>
-                      <Text style={styles.orderCardItems} numberOfLines={1}>
-                        {order.items?.map((item: any) =>
-                          `${item.food?.title}${item.food_option ? ` (${item.food_option.size_name})` : ''} x${item.quantity}`
-                        ).join(', ') || 'Đang tải món ăn...'}
-                      </Text>
-                    </View>
-                    <View style={styles.orderActions}>
-                      {order.order_status !== 'Đã giao' && order.order_status !== 'Đã huỷ' && (
-                        <TouchableOpacity
-                          style={styles.cancelOrderButton}
-                          onPress={(e) => {
-                            e.stopPropagation();
-                            updateOrderStatus(order.id, 'Đã huỷ', isManager ? 'Hủy bởi quản lý' : 'Hủy bởi cửa hàng');
-                          }}
-                          disabled={loading}
-                        >
-                          <X size={16} color="#ef4444" />
-                        </TouchableOpacity>
-                      )}
-                    </View>
-                  </View>
-                  <View style={styles.orderCardFooter}>
-                    <Text style={styles.orderCardTotal}>{formatPrice(order.total_money)}</Text>
-                    <View style={[styles.statusBadge, { backgroundColor: getStatusColor(order.order_status) }]}>
-                      <Text style={styles.statusText}>{order.order_status}</Text>
-                    </View>
-                  </View>
-                </TouchableOpacity>
-              ))}
-            </Animated.View>
-          )}
-        </ScrollView>
-      </View>
+          initialNumToRender={5}
+          maxToRenderPerBatch={5}
+          windowSize={5}
+          removeClippedSubviews={true}
+        />
+      )}
 
       <Modal
         animationType="slide"
@@ -493,7 +597,7 @@ export default function OrderListScreen() {
                       </View>
                       <View style={styles.orderDetailItem}>
                         <Text style={styles.orderDetailLabel}>Thời gian đặt:</Text>
-                        <Text style={styles.orderDetailValue}>{selectedOrder.created_date_display || 'Chưa xác định'}</Text>
+                        <Text style={styles.orderDetailValue}>{selectedOrder.created_date || 'Chưa xác định'}</Text>
                       </View>
                       <View style={styles.orderDetailItem}>
                         <Text style={styles.orderDetailLabel}>Trạng thái:</Text>
@@ -526,9 +630,38 @@ export default function OrderListScreen() {
                           <Text style={styles.orderDetailFoodPrice}>{formatPrice(item.subtotal)}</Text>
                         </View>
                       ))}
-                      <View style={styles.orderDetailTotal}>
-                        <Text style={styles.orderDetailTotalLabel}>Tổng cộng:</Text>
-                        <Text style={styles.orderDetailTotalValue}>{formatPrice(selectedOrder.total_money)}</Text>
+                      
+                      <View style={styles.orderDetailPriceBreakdown}>
+                        <View style={styles.orderDetailPriceRow}>
+                          <Text style={styles.orderDetailPriceLabel}>Tạm tính:</Text>
+                          <Text style={styles.orderDetailPriceValue}>{formatPrice(selectedOrder.total_money || 0)}</Text>
+                        </View>
+                        
+                        {(selectedOrder.shipping_fee || selectedOrder.ship_fee) && (
+                          <View style={styles.orderDetailPriceRow}>
+                            <Text style={styles.orderDetailPriceLabel}>Phí vận chuyển:</Text>
+                            <Text style={styles.orderDetailPriceValue}>{formatPrice(selectedOrder.shipping_fee || selectedOrder.ship_fee || 0)}</Text>
+                          </View>
+                        )}
+                        
+                        {(selectedOrder.promo_discount || selectedOrder.total_discount) && (
+                          <View style={styles.orderDetailPriceRow}>
+                            <Text style={styles.orderDetailPriceLabel}>Giảm giá:</Text>
+                            <Text style={[styles.orderDetailPriceValue, { color: '#10b981' }]}>-{formatPrice(selectedOrder.promo_discount || selectedOrder.total_discount || 0)}</Text>
+                          </View>
+                        )}
+                        
+                        <View style={styles.orderDetailTotal}>
+                          <Text style={styles.orderDetailTotalLabel}>Tổng cộng:</Text>
+                          <Text style={styles.orderDetailTotalValue}>
+                            {formatPrice(
+                              selectedOrder.total_after_discount || 
+                              (parseFloat(selectedOrder.total_money || 0) + 
+                               parseFloat(selectedOrder.shipping_fee || selectedOrder.ship_fee || 0) - 
+                               parseFloat(selectedOrder.promo_discount || selectedOrder.total_discount || 0))
+                            )}
+                          </Text>
+                        </View>
                       </View>
                     </View>
 
@@ -541,7 +674,6 @@ export default function OrderListScreen() {
 
                     {selectedOrder.order_status !== 'Đã giao' && selectedOrder.order_status !== 'Đã huỷ' && (
                       <View style={styles.orderDetailActions}>
-                        {/* Only show status transition buttons for store managers, not for general managers */}
                         {!isManager && (
                           <>
                             {selectedOrder.order_status === 'Chờ xác nhận' && (
@@ -591,7 +723,6 @@ export default function OrderListScreen() {
                             )}
                           </>
                         )}
-                        {/* Cancel button - available for both managers and store managers */}
                         <TouchableOpacity
                           style={styles.cancelOrderDetailButton}
                           onPress={() => updateOrderStatus(selectedOrder.id, 'Đã huỷ', isManager ? 'Hủy bởi quản lý' : 'Hủy bởi cửa hàng')}
@@ -609,83 +740,190 @@ export default function OrderListScreen() {
         </View>
       </Modal>
     </SafeAreaView>
+    </>
   );
 }
 
 const styles = StyleSheet.create({
-  safeArea: { flex: 1, backgroundColor: '#fff7ed', paddingTop: 12 },
-  container: { flex: 1, backgroundColor: '#fff7ed' },
+  safeArea: {
+    flex: 1,
+    backgroundColor: '#ffffff',
+  },
 
-  // Filter Tabs
-  // Filter Tabs
-  filterTabsContainer: {
-    marginVertical: 8,
-    backgroundColor: '#fff', // Đổi từ '#ccc' thành màu nền chính
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.08,
-    shadowRadius: 4,
-    elevation: 3,
-    borderBottomWidth: 1,
-    borderBottomColor: '#f1f5f9',
-    maxHeight: 60, // Giới hạn chiều cao
+  headerWrap: {
+    backgroundColor: '#f5cb58',
+    paddingTop: 0,
+    paddingBottom: 12,
   },
-  filterTabs: {
+  headerTopRow: {
     flexDirection: 'row',
-    gap: 12,
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: 20,
+    marginBottom: 20,
     paddingHorizontal: 16,
-    alignItems: 'center',
-    paddingVertical: 8,
-    flexWrap: 'nowrap', // Không cho wrap xuống dòng
   },
-  filterTab: {
-    paddingHorizontal: 10, // Giảm từ 12 xuống 10
-    paddingVertical: 6,
-    backgroundColor: '#f8fafc',
-    borderRadius: 20,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: '#e2e8f0',
+  roundIconBtn: {
+    backgroundColor: '#FFFFFF',
+    padding: 10,
+    borderRadius: 999,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
+    shadowOpacity: 0.06,
     shadowRadius: 2,
     elevation: 1,
-    flexShrink: 1, // Đổi từ 0 thành 1 để cho phép co lại
-    minWidth: 70, // Giảm minWidth
-    height: 36, // Cố định chiều cao cho tất cả tabs
   },
-  filterTabActive: {
-    backgroundColor: '#ea580c',
-    borderColor: '#c2410c',
-    shadowColor: '#ea580c',
-    shadowOpacity: 0.25,
-    shadowRadius: 6,
-    elevation: 4,
-    transform: [{ scale: 1.02 }],
+  headerTitle: {
+    fontSize: 20,
+    color: '#ffffff',
+    fontFamily: Fonts.LeagueSpartanExtraBold,
   },
-  filterTabText: {
-    fontSize: 13,
-    color: '#64748b',
-    fontFamily: Fonts.LeagueSpartanMedium,
-    textAlign: 'center',
-    lineHeight: 16,
-    fontWeight: '600',
+  searchRow: {
+    paddingBottom: 8,
+    paddingHorizontal: 16,
   },
-  filterTabTextActive: {
-    fontSize: 13,
-    color: '#fff',
-    fontFamily: Fonts.LeagueSpartanBold,
-    fontWeight: '700',
+  searchBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#fff',
+    borderRadius: 999,
+    paddingLeft: 16,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+  },
+  searchInput: {
+    flex: 1,
+    height: 42,
+    fontSize: 14,
+    color: '#111827',
+    fontFamily: Fonts.LeagueSpartanRegular,
+  },
+  clearBtn: {
+    paddingHorizontal: 4,
+  },
+  searchBtn: {
+    height: 42,
+    width: 42,
+    borderRadius: 999,
+    backgroundColor: '#EB552D',
+    alignItems: 'center',
+    justifyContent: 'center',
+    margin: 4,
   },
 
-  scrollView: { flex: 1, paddingHorizontal: 16, backgroundColor: '#fff7ed' },
+  tabs: {
+    backgroundColor: '#fff',
+    paddingTop: 12,
+    paddingBottom: 12,
+  },
+  tabsContent: {
+    paddingHorizontal: 16,
+    paddingRight: 24,
+    flexDirection: 'row',
+    alignItems: 'center',
+    columnGap: 10,
+  },
+  tab: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 999,
+    backgroundColor: '#F2F3F5',
+  },
+  tabActive: {
+    backgroundColor: '#EB552D',
+    shadowColor: '#000',
+    shadowOpacity: 0.06,
+    shadowRadius: 2,
+    shadowOffset: { width: 0, height: 1 },
+    elevation: 1,
+  },
+  tabText: {
+    color: '#6B7280',
+    fontFamily: Fonts.LeagueSpartanMedium,
+    fontSize: 14,
+  },
+  tabTextActive: {
+    color: '#FFFFFF',
+    fontFamily: Fonts.LeagueSpartanSemiBold,
+    fontSize: 14,
+  },
+  countBadge: {
+    marginLeft: 8,
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 999,
+    backgroundColor: '#e5e7eb',
+  },
+  countBadgeActive: {
+    backgroundColor: 'rgba(255,255,255,0.3)',
+  },
+  countText: {
+    fontSize: 11,
+    color: '#6b7280',
+    fontFamily: Fonts.LeagueSpartanBold,
+  },
+  countTextActive: {
+    color: '#fff',
+  },
+
+  foundWrap: {
+    marginTop: 4,
+    backgroundColor: '#F6F7F8',
+    paddingVertical: 14,
+    paddingHorizontal: 14,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 3,
+    elevation: 2,
+  },
+  foundText: {
+    color: '#6B7280',
+    marginLeft: 6,
+    fontSize: 15,
+    fontFamily: Fonts.LeagueSpartanRegular,
+  },
+  foundNum: {
+    color: '#111827',
+    fontFamily: Fonts.LeagueSpartanBold,
+  },
+
+  listContent: {
+    paddingHorizontal: 16,
+    paddingBottom: 16,
+  },
+
+  loadingMoreContainer: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingVertical: 16,
+    gap: 8,
+  },
+  loadingMoreText: {
+    fontSize: 13,
+    color: '#6b7280',
+    fontFamily: Fonts.LeagueSpartanRegular,
+  },
+
+  emptyContainer: {
+    alignItems: 'center',
+    paddingVertical: 60,
+  },
+  emptyText: {
+    marginTop: 16,
+    fontSize: 16,
+    color: '#6b7280',
+    fontFamily: Fonts.LeagueSpartanRegular,
+    textAlign: 'center',
+  },
 
   // Order Card
   orderCard: {
     backgroundColor: '#ffffff',
-    borderRadius: 12,
+    borderRadius: 24,
     padding: 16,
     marginBottom: 12,
     borderWidth: 1,
@@ -693,7 +931,7 @@ const styles = StyleSheet.create({
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.08,
-    shadowRadius: 4,
+    shadowRadius: 6,
     elevation: 3,
   },
   orderCardHeader: {
@@ -750,11 +988,37 @@ const styles = StyleSheet.create({
   orderCardFooter: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     marginTop: 8,
     paddingTop: 12,
     borderTopWidth: 1,
     borderTopColor: '#f3f4f6',
+  },
+  orderCardPriceLabel: {
+    fontSize: 13,
+    fontFamily: Fonts.LeagueSpartanMedium,
+    color: '#6b7280',
+    marginBottom: 4,
+  },
+  orderCardPrice: {
+    fontSize: 14,
+    fontFamily: Fonts.LeagueSpartanSemiBold,
+    color: '#1f2937',
+    marginBottom: 8,
+  },
+  orderCardTotalRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginTop: 4,
+    paddingTop: 8,
+    borderTopWidth: 1,
+    borderTopColor: '#e5e7eb',
+  },
+  orderCardTotalLabel: {
+    fontSize: 15,
+    fontFamily: Fonts.LeagueSpartanBold,
+    color: '#1f2937',
   },
   orderCardTotal: {
     fontSize: 18,
@@ -764,7 +1028,9 @@ const styles = StyleSheet.create({
   statusBadge: {
     paddingHorizontal: 12,
     paddingVertical: 6,
-    borderRadius: 16,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.2)',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.1,
@@ -772,7 +1038,7 @@ const styles = StyleSheet.create({
     elevation: 1,
   },
   statusText: {
-    fontSize: 12,
+    fontSize: 11,
     color: '#fff',
     fontFamily: Fonts.LeagueSpartanBold,
     fontWeight: '600',
@@ -822,16 +1088,34 @@ const styles = StyleSheet.create({
   orderDetailFoodSize: { fontSize: 12, color: '#6b7280', fontFamily: Fonts.LeagueSpartanRegular, marginLeft: 8 },
   orderDetailFoodQuantity: { fontSize: 14, fontFamily: Fonts.LeagueSpartanMedium, color: '#6b7280', marginHorizontal: 12 },
   orderDetailFoodPrice: { fontSize: 14, fontFamily: Fonts.LeagueSpartanBold, color: '#1f2937' },
+  
+  // Price breakdown
+  orderDetailPriceBreakdown: {
+    marginTop: 16,
+    paddingTop: 16,
+    borderTopWidth: 2,
+    borderTopColor: '#f3f4f6',
+  },
+  orderDetailPriceRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 6,
+  },
+  orderDetailPriceLabel: {
+    fontSize: 14,
+    fontFamily: Fonts.LeagueSpartanMedium,
+    color: '#6b7280',
+  },
+  orderDetailPriceValue: {
+    fontSize: 14,
+    fontFamily: Fonts.LeagueSpartanSemiBold,
+    color: '#1f2937',
+  },
+  
   orderDetailTotal: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 12, marginTop: 8, borderTopWidth: 2, borderTopColor: '#e5e7eb' },
   orderDetailTotalLabel: { fontSize: 16, fontFamily: Fonts.LeagueSpartanBold, color: '#1f2937' },
   orderDetailTotalValue: { fontSize: 16, fontFamily: Fonts.LeagueSpartanBold, color: '#dc2626' },
-
-  // Timeline
-  timelineItem: { flexDirection: 'row', alignItems: 'center', marginBottom: 16 },
-  timelineDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: '#10b981', marginRight: 12 },
-  timelineContent: { flex: 1 },
-  timelineTitle: { fontSize: 14, fontFamily: Fonts.LeagueSpartanBold, color: '#1f2937' },
-  timelineTime: { fontSize: 12, fontFamily: Fonts.LeagueSpartanRegular, color: '#6b7280', marginTop: 2 },
 
   // Modal Actions
   orderDetailActions: { padding: 20, borderTopWidth: 1, borderTopColor: '#f3f4f6', gap: 12 },
@@ -859,38 +1143,34 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    paddingVertical: 40
+    paddingHorizontal: 32,
   },
   errorText: {
     fontSize: 14,
     color: '#ef4444',
     textAlign: 'center',
-    marginBottom: 16,
-    fontFamily: Fonts.LeagueSpartanRegular
+    marginTop: 16,
+    marginBottom: 20,
+    fontFamily: Fonts.LeagueSpartanRegular,
   },
   retryButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
     backgroundColor: '#ea580c',
     paddingHorizontal: 20,
-    paddingVertical: 8,
-    borderRadius: 8
+    paddingVertical: 10,
+    borderRadius: 999,
+    shadowColor: '#ea580c',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    elevation: 3,
   },
   retryButtonText: {
     fontSize: 14,
     color: '#fff',
-    fontFamily: Fonts.LeagueSpartanMedium
+    fontFamily: Fonts.LeagueSpartanSemiBold
   },
 
-  // Empty states  
-  emptyContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingVertical: 40
-  },
-  emptyText: {
-    fontSize: 14,
-    color: '#6b7280',
-    textAlign: 'center',
-    fontFamily: Fonts.LeagueSpartanRegular
-  },
 });

@@ -7,6 +7,7 @@ from apps.stores.models import Store
 from apps.ratings.models import RatingFood
 from apps.menu.models import Food, FoodSize  # needed for raw SQL item fetching
 from django.utils import timezone
+from apps.utils import VietnamDateTimeField
 
 
 class OrderDetailSerializer(serializers.ModelSerializer):
@@ -73,23 +74,36 @@ class OrderSerializer(serializers.ModelSerializer):
     store_id = serializers.IntegerField(write_only=True, required=False, allow_null=True)
     store_info_id = serializers.IntegerField(source='store.id', read_only=True)
     store_image = serializers.CharField(source='store.image', read_only=True)
-    # Thêm trường created_date_display để hiển thị theo múi giờ Việt Nam
-    created_date_display = serializers.SerializerMethodField()
+    store_address = serializers.CharField(source='store.address', read_only=True, allow_null=True)
+    store_latitude = serializers.SerializerMethodField()
+    store_longitude = serializers.SerializerMethodField()
+    route_polyline = serializers.CharField(required=False, allow_blank=True, allow_null=True)
+    # Sử dụng VietnamDateTimeField để tự động convert sang múi giờ Việt Nam
+    created_date = VietnamDateTimeField(read_only=True)
+    cancelled_date = VietnamDateTimeField(read_only=True, required=False, allow_null=True)
+    # Thêm thông tin promotion discount
+    promo_discount = serializers.SerializerMethodField()
+    applied_promos = serializers.SerializerMethodField()
     
     class Meta:
         model = Order
         fields = [
             'id', 'user', 'user_id', 'order_status', 'delivery_status', 'total_money',
             'payment_method', 'receiver_name', 'phone_number',
-            'ship_address', 'note', 'promo', 'shipper', 'shipper_id', 
+            'ship_address', 'ship_latitude', 'ship_longitude', 'route_polyline', 'note', 'promo', 'shipper', 'shipper_id', 
             'shipping_fee', 'group_id', 'cancel_reason', 'cancelled_date', 'cancelled_by_role', 'store_id',
-            'store_name', 'store_info_id', 'store_image', 'items', 'is_rated', 
-            'created_date', 'created_date_display'
+            'store_name', 'store_info_id', 'store_image', 'store_address', 'store_latitude', 'store_longitude', 'items', 'is_rated', 
+            'created_date', 'promo_discount', 'applied_promos',
+            'total_before_discount', 'total_discount', 'total_after_discount',
+            'refund_requested', 'refund_status', 'bank_name', 'bank_account', 'proof_image'
         ]
-        read_only_fields = ['id', 'created_date', 'created_date_display']
+        read_only_fields = ['id', 'created_date']
+    
     
     def get_created_date_display(self, obj):
-        """Trả về thời gian đã được điều chỉnh theo múi giờ Việt Nam"""
+        """DEPRECATED: Use created_date field directly (already in Vietnam timezone)"""
+        # This method is kept for backward compatibility but is no longer needed
+        # The created_date field is now automatically converted to Vietnam timezone
         if not obj.created_date:
             return None
             
@@ -183,34 +197,49 @@ class OrderSerializer(serializers.ModelSerializer):
         if not request or not request.user or not request.user.is_authenticated:
             return False
         return RatingFood.objects.filter(order_id=obj.id, user=request.user).exists()
+    
+    def get_promo_discount(self, obj):
+        """Get total discount amount from applied promos"""
+        from apps.promotions.order_promo import OrderPromo
+        from django.db.models import Sum
+        
+        total = OrderPromo.objects.filter(order=obj).aggregate(
+            total=Sum('applied_amount')
+        )['total']
+        
+        return float(total) if total else 0
+    
+    def get_applied_promos(self, obj):
+        """Get list of applied promos with details"""
+        from apps.promotions.order_promo import OrderPromo
+        from apps.promotions.serializers import OrderPromoSerializer
+        
+        order_promos = OrderPromo.objects.filter(order=obj).select_related('promo')
+        return OrderPromoSerializer(order_promos, many=True).data
+
+    def get_store_latitude(self, obj):
+        return float(obj.store.latitude) if obj.store and obj.store.latitude is not None else None
+
+    def get_store_longitude(self, obj):
+        return float(obj.store.longitude) if obj.store and obj.store.longitude is not None else None
 
 
 class OrderListSerializer(serializers.ModelSerializer):
     """Lighter serializer for order list views"""
     items_count = serializers.SerializerMethodField()
     shipper = ShipperSerializer(read_only=True)
-    # Thêm trường created_date_display để hiển thị theo múi giờ Việt Nam
-    created_date_display = serializers.SerializerMethodField()
+    # Sử dụng VietnamDateTimeField để tự động convert sang múi giờ Việt Nam
+    created_date = VietnamDateTimeField(read_only=True)
+    cancelled_date = VietnamDateTimeField(read_only=True, required=False, allow_null=True)
     
     class Meta:
         model = Order
         fields = [
             'id', 'order_status', 'delivery_status', 'total_money', 'payment_method',
-            'receiver_name', 'shipper', 'items_count', 'created_date', 'created_date_display',
-            'cancel_reason', 'cancelled_date', 'cancelled_by_role'
+            'receiver_name', 'shipper', 'items_count', 'created_date',
+            'cancel_reason', 'cancelled_date', 'cancelled_by_role',
+            'refund_requested', 'refund_status', 'bank_name', 'bank_account', 'proof_image'
         ]
     
     def get_items_count(self, obj):
         return obj.details.count()
-        
-    def get_created_date_display(self, obj):
-        """Trả về thời gian đã được điều chỉnh theo múi giờ Việt Nam"""
-        if not obj.created_date:
-            return None
-            
-        # Chuyển về múi giờ Việt Nam (UTC+7)
-        vietnam_tz = timezone.get_fixed_timezone(7 * 60)  # 7 giờ * 60 phút
-        vn_time = obj.created_date.astimezone(vietnam_tz)
-        
-        # Định dạng thời gian
-        return vn_time.strftime("%Y-%m-%d %H:%M:%S")

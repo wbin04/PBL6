@@ -5,9 +5,15 @@ export interface User {
   email: string;
   fullname: string;
   role: 'Quản lý' | 'Khách hàng' | 'Chủ cửa hàng' | 'Người vận chuyển';
+  role_id?: number; // Role ID from backend (1=Khách hàng, 2=Quản lý, 3=Chủ cửa hàng, 4=Người vận chuyển)
   phone_number?: string;
   address?: string;
+  latitude?: number;
+  longitude?: number;
   created_date: string;
+  is_active?: boolean;
+  is_shipper_registered?: boolean;
+  is_store_registered?: boolean;
 }
 
 export interface AuthTokens {
@@ -28,6 +34,8 @@ export interface RegisterRequest {
   username: string;
   phone_number?: string;
   address?: string;
+  latitude?: number;
+  longitude?: number;
 }
 
 export interface LoginResponse {
@@ -50,6 +58,9 @@ export interface Store {
   store_name: string;
   image: string;
   description: string;
+  address?: string;
+  latitude?: number;
+  longitude?: number;
   manager?: User;
   // Store stats
   average_rating?: number;
@@ -129,8 +140,8 @@ export interface Order {
   id: number;
   user?: User;
   order_status: 'Chờ xác nhận' | 'Đã xác nhận' | 'Đang chuẩn bị' | 'Đang giao' | 'Đã giao' | 'Đã huỷ';
-  total_money: string;
-  payment_method: 'cash' | 'vnpay' | 'momo';
+  total_money: string; // Food items total only (no shipping, no discount)
+  payment_method: 'cash' | 'COD' | 'vnpay' | 'momo';
   receiver_name: string;
   phone_number: string;
   ship_address: string;
@@ -138,11 +149,32 @@ export interface Order {
   promo?: string;
   items: OrderItem[];
   is_rated: boolean;
-  created_date: string;
-  created_date_display?: string;
+  created_date: string; // Already in Vietnam timezone from backend
   cancel_reason?: string;
   cancelled_date?: string;
   cancelled_by_role?: 'Khách hàng' | 'Cửa hàng' | 'Quản lý';
+  promo_discount?: number; // Total discount from all promos
+  applied_promos?: OrderPromo[]; // List of applied promos with details
+  // New financial fields
+  total_before_discount?: string; // Food total + shipping
+  total_discount?: string; // Total discount applied
+  total_after_discount?: string; // Final amount to pay (after discount)
+  shipping_fee?: string; // Shipping fee
+  // Refund info
+  refund_requested?: boolean;
+  refund_status?: 'Không' | 'Chờ xử lý' | 'Đã hoàn thành';
+  bank_name?: string | null;
+  bank_account?: string | null;
+}
+
+export interface OrderPromo {
+  id: number;
+  order: number;
+  promo: number;
+  promo_name: string;
+  applied_amount: string;
+  note?: string;
+  created_at: string;
 }
 
 export interface CreateOrderRequest {
@@ -158,12 +190,34 @@ export interface CreateOrderRequest {
 // Promotion Types
 export interface Promotion {
   id: number;
-  promo_name: string;
-  promo_code: string;
-  discount_percentage: number;
+  name: string;
+  category: 'PERCENT' | 'AMOUNT';
+  discount_value: number;
+  minimum_pay: number;
+  max_discount_amount?: number;
   start_date: string;
   end_date: string;
+  store: number;
+  store_id?: number;
+  store_name?: string;
   is_active: boolean;
+  // Backward compatibility fields
+  percent?: number;
+  description?: string;
+}
+
+export interface ValidatePromoResponse {
+  valid: boolean;
+  discount_amount?: string;
+  final_amount?: string;
+  error?: string;
+  promo?: Promotion;
+}
+
+export interface AppliedPromo {
+  promo: Promotion;
+  discount: number;
+  storeAmount?: number;
 }
 
 // Rating Types
@@ -234,6 +288,7 @@ export type RootStackParamList = {
   Profile: undefined;
   EditProfile: undefined;
   AdminHome: undefined;
+  SearchResults: { keyword?: string; categoryId?: number; categoryName?: string };
 };
 
 export type MainTabParamList = {

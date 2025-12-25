@@ -29,6 +29,7 @@ class Order(models.Model):
         ('Đã xác nhận', 'Đã xác nhận'), 
         ('Đã lấy hàng', 'Đã lấy hàng'),
         ('Đang giao', 'Đang giao'),
+        ('Đã giao', 'Đã giao'),
         ('Đã huỷ', 'Đã huỷ'),
     ]
     
@@ -36,6 +37,12 @@ class Order(models.Model):
         ('Khách hàng', 'Khách hàng'),
         ('Cửa hàng', 'Cửa hàng'),
         ('Quản lý', 'Quản lý'),
+    ]
+
+    REFUND_STATUS_CHOICES = [
+        ('Không', 'Không'),
+        ('Chờ xử lý', 'Chờ xử lý'),
+        ('Đã hoàn thành', 'Đã hoàn thành'),
     ]
     
     created_date = models.DateTimeField(default=get_vietnam_time)
@@ -56,6 +63,9 @@ class Order(models.Model):
     payment_method = models.CharField(max_length=20, default='COD')
     receiver_name = models.CharField(max_length=50)
     ship_address = models.CharField(max_length=100)
+    ship_latitude = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True)
+    ship_longitude = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True)
+    route_polyline = models.TextField(null=True, blank=True)
     phone_number = models.CharField(max_length=10)
     
     # Legacy promo field - will be removed after migration
@@ -67,10 +77,18 @@ class Order(models.Model):
     cancelled_by_role = models.CharField(max_length=20, choices=CANCELLED_BY_ROLE_CHOICES, null=True, blank=True)  # Ai hủy đơn
     group_id = models.IntegerField(null=True, blank=True)  # Group orders from same checkout together
     store = models.ForeignKey(Store, on_delete=models.CASCADE, db_column='store_id', null=True, blank=True)  # Store for this specific order
+
+    # Refund info
+    refund_requested = models.BooleanField(default=False)
+    refund_status = models.CharField(max_length=20, choices=REFUND_STATUS_CHOICES, default='Không')
+    bank_name = models.CharField(max_length=100, null=True, blank=True)
+    bank_account = models.CharField(max_length=50, null=True, blank=True)
+    proof_image = models.CharField(max_length=255, null=True, blank=True)
     
     # New many-to-many relationship with promotions
     promotions = models.ManyToManyField('promotions.Promo', through='promotions.OrderPromo', blank=True, related_name='orders')
-    
+    # promotions = models.ManyToManyField('promotions.Promo', blank=True, related_name='orders')
+
     class Meta:
         db_table = 'orders'
     

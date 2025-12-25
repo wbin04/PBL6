@@ -7,6 +7,7 @@ urlpatterns = [
     path('refresh/', views.refresh_view, name='refresh'),
     path('profile/', views.profile_view, name='profile'),
     path('profile/update/', views.update_profile_view, name='update_profile'),
+    path('change-password/', views.change_password_view, name='change_password'),
     # Password reset via identifier
     path('reset-password/', views.reset_password_view, name='reset_password'),
     
