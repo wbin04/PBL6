@@ -1,1 +1,0 @@
-# Khởi tạo giao diện Mobile App

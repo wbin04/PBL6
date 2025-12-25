@@ -1,403 +1,106 @@
-# FastFood API - REST API Documentation & Setup Guide
+# FastFood Monorepo
 
-## 🚀 Tổng quan
+Monorepo cho hệ thống FastFood gồm ba phần chính: backend Django REST API, web frontend React (Vite + TypeScript) và mobile app React Native/Expo. Tài liệu này hướng dẫn chạy từng phần trên máy local.
 
-FastFood API là một REST API được xây dựng bằng Django REST Framework, cung cấp đầy đủ chức năng cho một ứng dụng đặt món ăn nhanh. API sử dụng JWT Authentication và PostgreSQL database.
+## Yêu cầu
+- Python 3.10+ (đề xuất 3.11)
+- Node.js 18+ (kèm npm)
+- PostgreSQL 13+
+- Git, OpenSSL
+- Expo CLI qua npx (để chạy mobile)
 
-## 📋 Yêu cầu hệ thống
+## Cấu trúc nhanh
+- backend/: Django REST API
+- react-frontend/: React + Vite + Tailwind
+- mobile/: React Native + Expo
+- data/: Backup SQL mẫu
+- docs/: Hướng dẫn thiết lập DB
 
-- **Python:** 3.8 trở lên
-- **PostgreSQL:** 12 trở lên
-- **Node.js:** 14 trở lên (cho frontend)
-
-## 🛠️ Cài đặt và chạy dự án
-
-### 1. Chuẩn bị database PostgreSQL
-
+## Backend (Django REST API)
+1) Tạo database PostgreSQL
 ```bash
-# Khởi động PostgreSQL service (nếu chưa chạy)
-net start postgresql-x64-14
-
-# Export database ra file SQL (nếu cần xuất dữ liệu)
-pg_dump -h localhost -p 5432 -U postgres -d fastfood_db --no-owner --no-acl -C -b -f fastfood_db.sql
-
-# Hoặc
-pg_dump -U postgres -h localhost -p 5432 -E UTF8 -f "backup.sql" fastfood_db
-
-
-# Import database schema từ file SQL
-cd docs
-psql -U postgres -f fastfood_db.sql
-
-# Hoặc
-psql -U postgres -f backup.sql
-psql -h localhost -U postgres -d fastfood_db -f data/rating_food_oct2025.sql
+psql -U postgres -c "CREATE DATABASE fastfood_data;"
+# Hoặc khôi phục dữ liệu mẫu (chạy từ thư mục gốc repo)
+psql -U postgres -d fastfood_data -f data/backup.sql
 ```
 
-### 2. Cài đặt Backend
-
+2) Thiết lập môi trường và dependencies
 ```bash
-# Clone và di chuyển vào thư mục backend
 cd backend
-
-# Tạo và kích hoạt virtual environment
 python -m venv .venv
-
-# Kích hoạt environment
-# Windows PowerShell:
-.venv\Scripts\Activate.ps1
-# Windows CMD:
-.venv\Scripts\activate.bat
-
-# Cài đặt dependencies
+.venv\Scripts\Activate.ps1  # Windows PowerShell
 pip install -r requirements.txt
-```
-
-### 3. Cấu hình môi trường
-
-```bash
-# Copy file cấu hình
 copy .env.example .env
-
-# Chỉnh sửa file .env với thông tin của bạn
-DB_NAME=fastfood_db
-DB_USER=postgres
-DB_PASSWORD=your_password
-DB_HOST=localhost
-DB_PORT=5432
-SECRET_KEY=your-django-secret-key-here
-DEBUG=True
 ```
+Điền `.env` với thông tin DB (DB_NAME, DB_USER, DB_PASSWORD, DB_HOST, DB_PORT), `SECRET_KEY`, `PAYOS_*`, và `GOOGLE_MAPS_API_KEY` nếu dùng tính năng bản đồ.
 
-### 4. Khởi tạo database
-
+3) Khởi tạo schema
 ```bash
-# Tạo migrations cho tất cả apps
-python manage.py makemigrations authentication
-python manage.py makemigrations menu
-python manage.py makemigrations cart
-python manage.py makemigrations orders
-python manage.py makemigrations payments
-python manage.py makemigrations promotions
-python manage.py makemigrations ratings
-
-# Áp dụng migrations
 python manage.py migrate
-
-# Tạo superuser để truy cập admin
-python manage.py createsuperuser
+python manage.py createsuperuser  # tùy chọn
 ```
 
-### 5. Chạy API Server
-
+4) Chạy server
 ```bash
-# Chạy development server
-python manage.py runserver
-
-# API sẽ chạy tại: http://localhost:8000
+python manage.py runserver 0.0.0.0:8000
 ```
+API base: http://localhost:8000. Admin: http://localhost:8000/admin. Media: http://localhost:8000/media/.
 
-### 6. Cài đặt và chạy Frontend
-
+## Web Frontend (React + Vite)
+1) Cài đặt
 ```bash
-# Di chuyển vào thư mục frontend
-cd frontend
-python -m http.server 8080
-
-# Frontend sẽ chạy tại: http://localhost:8080
+cd react-frontend
+npm install
 ```
 
-## 🌐 API Endpoints Documentation
+2) Cấu hình API
+- Cập nhật `API_BASE_URL` trong `src/services/api.ts` nếu backend không ở `http://localhost:8000`.
 
-### 🔐 Authentication API (`/api/auth/`)
-
-| Method | Endpoint | Description | Authentication |
-|--------|----------|-------------|----------------|
-| `POST` | `/api/auth/login/` | Đăng nhập | None |
-| `POST` | `/api/auth/register/` | Đăng ký tài khoản | None |
-| `POST` | `/api/auth/refresh/` | Refresh JWT token | None |
-| `GET` | `/api/auth/profile/` | Lấy thông tin profile | JWT Required |
-| `PUT` | `/api/auth/profile/update/` | Cập nhật profile | JWT Required |
-| `POST` | `/api/auth/reset-password/` | Reset mật khẩu | JWT Required |
-
-**Admin endpoints:**
-- `GET` `/api/auth/admin/customers/` - Danh sách khách hàng
-- `GET` `/api/auth/admin/customers/{id}/` - Chi tiết khách hàng
-
-### 🍔 Menu API (`/api/menu/`)
-
-| Method | Endpoint | Description | Authentication |
-|--------|----------|-------------|----------------|
-| `GET` | `/api/menu/categories/` | Danh sách danh mục | None |
-| `GET` | `/api/menu/items/` | Danh sách món ăn | None |
-| `GET` | `/api/menu/items/{id}/` | Chi tiết món ăn | None |
-| `GET` | `/api/menu/categories/{id}/foods/` | Món ăn theo danh mục | None |
-
-**Admin endpoints:**
-- `GET` `/api/menu/admin/foods/` - Quản lý món ăn
-- `GET/PUT/DELETE` `/api/menu/admin/foods/{id}/` - Chi tiết món ăn
-
-### 🛒 Cart API (`/api/cart/`)
-
-| Method | Endpoint | Description | Authentication |
-|--------|----------|-------------|----------------|
-| `GET` | `/api/cart/` | Xem giỏ hàng | JWT Required |
-| `POST` | `/api/cart/add/` | Thêm vào giỏ hàng | JWT Required |
-| `PUT` | `/api/cart/items/{food_id}/` | Cập nhật số lượng | JWT Required |
-| `DELETE` | `/api/cart/items/{food_id}/remove/` | Xóa khỏi giỏ hàng | JWT Required |
-| `DELETE` | `/api/cart/clear/` | Xóa toàn bộ giỏ hàng | JWT Required |
-
-### 📦 Orders API (`/api/orders/`)
-
-| Method | Endpoint | Description | Authentication |
-|--------|----------|-------------|----------------|
-| `GET` | `/api/orders/` | Danh sách đơn hàng | JWT Required |
-| `POST` | `/api/orders/` | Tạo đơn hàng mới | JWT Required |
-| `GET` | `/api/orders/{id}/` | Chi tiết đơn hàng | JWT Required |
-| `PUT` | `/api/orders/{id}/status/` | Cập nhật trạng thái | Staff/Admin |
-
-**Admin endpoints:**
-- `GET` `/api/orders/admin/` - Tất cả đơn hàng
-- `GET` `/api/orders/admin/{id}/` - Chi tiết đơn hàng admin
-
-### 💳 Payments API (`/api/payments/`)
-
-| Method | Endpoint | Description | Authentication |
-|--------|----------|-------------|----------------|
-| `POST` | `/api/payments/create/` | Tạo thanh toán | JWT Required |
-| `POST` | `/api/payments/webhook/` | Webhook xử lý thanh toán | None |
-
-### 🎯 Promotions API (`/api/promotions/`)
-
-| Method | Endpoint | Description | Authentication |
-|--------|----------|-------------|----------------|
-| `GET` | `/api/promotions/` | Danh sách khuyến mãi | None |
-| `POST` | `/api/promotions/validate/` | Validate mã giảm giá | JWT Required |
-
-### ⭐ Ratings API (`/api/ratings/`)
-
-| Method | Endpoint | Description | Authentication |
-|--------|----------|-------------|----------------|
-| `GET` | `/api/ratings/` | Danh sách đánh giá | None |
-| `POST` | `/api/ratings/` | Tạo đánh giá | JWT Required |
-| `GET/PUT/DELETE` | `/api/ratings/{id}/` | Chi tiết đánh giá | JWT Required |
-
-## 📊 Request/Response Examples
-
-### Authentication
-
-**Login Request:**
+3) Chạy dev server (nên dùng port đã mở CORS, ví dụ 3000)
 ```bash
-curl -X POST http://localhost:8000/api/auth/login/ \
-  -H "Content-Type: application/json" \
-  -d '{
-    "username": "user@example.com",
-    "password": "password123"
-  }'
+npm run dev -- --host --port 3000
 ```
+Truy cập http://localhost:3000.
 
-**Response:**
-```json
-{
-  "access": "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9...",
-  "refresh": "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9...",
-  "user": {
-    "id": 1,
-    "email": "user@example.com",
-    "full_name": "John Doe",
-    "role": "customer"
-  }
-}
-```
-
-### Menu Items
-
-**Get Menu Items:**
+4) Build/preview
 ```bash
-curl -X GET http://localhost:8000/api/menu/items/ \
-  -H "Content-Type: application/json"
+npm run build
+npm run preview
 ```
 
-**Response:**
-```json
-{
-  "count": 16,
-  "next": null,
-  "previous": null,
-  "results": [
-    {
-      "id": 1,
-      "name": "Classic Burger",
-      "description": "Burger cổ điển với thịt bò, rau củ tươi",
-      "price": "89000.00",
-      "image": "/media/assets/burger.png",
-      "category": {
-        "id": 1,
-        "name": "Burger"
-      },
-      "is_available": true
-    }
-  ]
-}
-```
-
-### Add to Cart
-
-**Request:**
+## Mobile App (React Native + Expo)
+1) Cài đặt
 ```bash
-curl -X POST http://localhost:8000/api/cart/add/ \
-  -H "Content-Type: application/json" \
-  -H "Authorization: Bearer YOUR_JWT_TOKEN" \
-  -d '{
-    "food_id": 1,
-    "quantity": 2
-  }'
+cd mobile
+npm install
 ```
 
-## 🔧 Cấu hình và tính năng
+2) Cấu hình API endpoint
+- Sửa `BASE_URL` trong `src/constants/index.ts` thành URL backend của bạn (ví dụ `http://<ip-may-ban>:8000/api`).
 
-### JWT Configuration
-- **Access Token Lifetime:** 60 phút
-- **Refresh Token Lifetime:** 7 ngày
-- **Token Rotation:** Enabled
-- **Header Format:** `Authorization: Bearer <token>`
+3) Thiết lập Google Maps (nếu dùng chọn địa chỉ)
+- Tạo file `.env` trong thư mục `mobile` với `EXPO_PUBLIC_GOOGLE_MAPS_API_KEY=your_key`.
 
-### CORS Configuration
-- **Allowed Origins:** `localhost:3000`, `localhost:8080`
-- **Allowed Headers:** Standard headers + Authorization
-- **Credentials:** Allowed
+4) Thêm assets Expo (nếu chưa có) trong `mobile/assets`: `icon.png`, `splash.png`, `adaptive-icon.png`, `favicon.png`.
 
-### Pagination
-- **Default Page Size:** 12 items
-- **Pagination Class:** PageNumberPagination
-
-## 📱 Truy cập ứng dụng
-
-| Service | URL | Description |
-|---------|-----|-------------|
-| **API Root** | http://localhost:8000 | API information page |
-| **API Documentation** | http://localhost:8000/api/ | All API endpoints |
-| **Admin Panel** | http://localhost:8000/admin/ | Django admin interface |
-| **Frontend** | http://localhost:8080 | User interface |
-| **Media Files** | http://localhost:8000/media/ | Static images |
-
-## 🗂️ Cấu trúc dự án
-
-```
-fastfood-app/                # Project root directory
-├── README.md                # Project documentation
-├── backend/                 # Django REST API server
-│   ├── manage.py            # Django management script
-│   ├── requirements.txt     # Python dependencies
-│   ├── .env.example         # Environment variables template
-│   ├── apps/                # Django applications
-│   │   ├── authentication/  # User & auth modules
-│   │   ├── menu/            # Menu, categories, items
-│   │   ├── cart/            # Shopping cart
-│   │   ├── orders/          # Order management
-│   │   ├── payments/        # Payment processing
-│   │   ├── promotions/      # Promotions & coupons
-│   │   └── ratings/         # Reviews & ratings
-│   ├── fastfood_api/        # Project settings & URLs
-│   └── media/               # Uploaded media files
-├── frontend/                # Static HTML/CSS/JS frontend
-│   ├── index.html           # Entry point
-│   ├── admin/               # Admin frontend
-│   ├── assets/              # Images, styles, scripts
-│   ├── auth/                # Auth pages (login/register)
-│   ├── cart/                # Cart pages & scripts
-│   ├── checkout/            # Checkout pages & scripts
-│   ├── menu/                # Menu pages & scripts
-│   └── orders/              # Order pages & scripts
-├── docs/                    # Project documentation & guides
-│   ├── init_project.md      # Project initialization guide
-│   ├── fastfood_base.md     # PostgreSQL setup guide
-│   └── fastfood_db.sql      # Database schema dump (SQL file)
-└── mobile/                  # Mobile-specific code or assets
-```
-
-## ✅ Tính năng đã hoàn thành
-
-- ✅ **Authentication System** - JWT-based auth với roles
-- ✅ **Menu Management** - Categories, items với pagination
-- ✅ **Shopping Cart** - Add, update, remove items
-- ✅ **Order System** - Create, track orders
-- ✅ **Admin Panel** - Django admin với custom views
-- ✅ **Media Handling** - Image upload và serving
-- ✅ **CORS Configuration** - Frontend integration ready
-- ✅ **API Documentation** - Comprehensive endpoints
-- ✅ **Error Handling** - Proper HTTP status codes
-- ✅ **Data Validation** - DRF serializers
-
-## 🔄 Tính năng đang phát triển
-
-- ⏳ **Payment Integration** - VNPay, Momo integration
-- ⏳ **Real-time Orders** - WebSocket cho order tracking
-- ⏳ **Advanced Search** - Full-text search, filters
-- ⏳ **Rating System** - Complete review functionality
-- ⏳ **Push Notifications** - Order status updates
-- ⏳ **Analytics Dashboard** - Sales và user analytics
-
-## 🛠️ Testing API
-
-### Sử dụng cURL
+5) Chạy ứng dụng
 ```bash
-# Test API root
-curl http://localhost:8000/
-
-# Test menu without auth
-curl http://localhost:8000/api/menu/items/
-
-# Test protected endpoint
-curl -H "Authorization: Bearer YOUR_TOKEN" \
-     http://localhost:8000/api/cart/
+npm run start     # mở Expo Dev Tools và QR
+npm run android   # mở emulator/thiết bị Android
+npm run ios       # yêu cầu macOS + Xcode
+npm run web       # chạy trên web
 ```
 
-### Sử dụng Postman
-1. Import collection từ `/docs/postman_collection.json`
-2. Set environment variable `base_url` = `http://localhost:8000`
-3. Login để lấy token và set variable `jwt_token`
-
-### Sử dụng Browser
-- Truy cập http://localhost:8000 để xem API overview
-- Truy cập http://localhost:8000/admin/ để quản lý data
-
-## ❗ Troubleshooting
-
-### Database Connection Issues
+6) Build với EAS (cần đăng nhập Expo)
 ```bash
-# Kiểm tra PostgreSQL service
-net start postgresql-x64-14
-
-# Test connection
-psql -U postgres -d fastfood_db -h localhost
-
-# Reset database nếu cần
-dropdb fastfood_db && createdb fastfood_db
+npm run build:android
+npm run build:ios
 ```
 
-### Migration Issues
-```bash
-# Reset migrations
-find . -path "*/migrations/*.py" -not -name "__init__.py" -delete
-find . -path "*/migrations/*.pyc" -delete
-
-# Recreate migrations
-python manage.py makemigrations
-python manage.py migrate
-```
-
-### CORS Issues
-- Kiểm tra `CORS_ALLOWED_ORIGINS` trong settings.py
-- Đảm bảo frontend chạy đúng port (8080)
-- Check browser console cho CORS errors
-
-### JWT Token Issues
-- Token hết hạn: Sử dụng refresh token
-- Invalid token: Check format `Bearer <token>`
-- Missing token: Include Authorization header
-
-### Port Already in Use
+## Ghi chú thêm
+- CORS trong backend hiện cho phép localhost:3000 và 8080. Nếu chạy web ở port khác, cần mở rộng `CORS_ALLOWED_ORIGINS` trong backend/fastfood_api/settings.py.
+- Dữ liệu mẫu: `data/backup.sql` (PostgreSQL dump). Bạn cũng có thể tham khảo `docs/fastfood_base.md` và `docs/init_project.md` để biết thêm chi tiết thiết lập DB.
+- Backend dùng JWT (access 60 phút, refresh 7 ngày). Kiểm tra Authorization header dạng `Bearer <token>`.
 ```bash
 # Kill process on port 8000
 netstat -ano | findstr :8000

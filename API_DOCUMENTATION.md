@@ -5,6 +5,78 @@ FastFood API cung cấp các endpoints để quản lý hệ thống đặt đ�
 
 **Base URL:** `http://localhost:8000`
 
+> Cập nhật nhanh (theo mã nguồn backend, 2025-12-25)
+- Auth, menu, cart, orders, payments (PayOS), promotions, ratings, stores, shipper, chatbot, dashboard.
+- Response mẫu bên dưới lấy từ serializer/view hiện tại; có thể thay đổi nhẹ nếu business logic chỉnh.
+- Tất cả endpoint dưới đều nằm sau prefix `/api/*`; các route admin cần role_id=2, store manager=3, shipper=4.
+
+## Quick Reference (mới)
+
+### Auth (`/api/auth/`)
+- `POST /login/` → `{refresh, access, user}`
+- `POST /register/` → `201 {refresh, access, user}`
+- `POST /refresh/` → `{access}`
+- `GET /profile/` (auth) → `User`
+- `PUT /profile/update/` (auth) → `User`
+- `POST /change-password/` (auth) → `{message}`
+- `POST /reset-password/` → `{message, user: {email, username}}`
+- Admin: `GET /admin/customers/?search=&page=&page_size=` → `{customers, total_pages, current_page, total_customers, page_size}`
+- Admin: `GET|PUT /admin/customers/{id}/` → `User`
+- Admin: `POST /admin/customers/{id}/toggle-status/` → `{message, customer}`
+- Registration flags: `POST /registration/shipper/` & `/registration/store/` → `{message, is_*_registered}`
+- `GET /registration/status/` → `{is_shipper_registered, is_store_registered}`
+- Admin shipper apps: `GET /shipper/applications/` → `{applications, total_pages, current_page, total_applications}`; approve/reject `POST /shipper/applications/{user_id}/approve|reject/` → `{message, user, shipper_id?}`
+- Admin store apps: `GET /store/applications/`; approve/reject `POST /store/applications/{user_id}/approve|reject/` → `{message, user, store_name?}`
+
+### Menu (`/api/menu/`)
+- Public: `GET /categories/`, `GET /stores/`, `GET /items/` (filters: `category`, `store`, `search`, paging), `GET /items/{id}/`, `GET /search/` (grouped), `GET /categories/{category_id}/foods/` (paging).
+- Store manager: `GET /store/foods/`, `GET|PUT|DELETE /store/foods/{food_id}/`, `GET|POST /store/foods/{food_id}/sizes/`, `GET|PUT|DELETE /store/foods/{food_id}/sizes/{size_id}/`.
+- Admin: `GET|POST /admin/foods/`, `GET|PUT|DELETE /admin/foods/{food_id}/`, size endpoints dùng chung như trên.
+- Response chung: food gồm `{id, title, description, price, image, availability, category, store, sizes[]}`; size gồm `{id, size_name, price}`.
+
+### Cart (`/api/cart/`)
+- `GET /` (auth) → `{id, total_money, items_count, items:[{id, food{...store{}}, size?, quantity, item_note, subtotal}]}`
+- `POST /add/` body `{food_id, quantity?, food_option_id?, toppings?, item_note?}` → `201 {message, item{food{...}, food_id, food_option_id, quantity, item_note, toppings_added[]}}`
+- `PUT /items/{food_id}/` body `{quantity?, item_note?}` → `{message, item{food..., quantity, item_note, subtotal}}`
+- `DELETE /items/{food_id}/remove/` → `{message}`
+- `DELETE /clear/` → `{message}`
+
+### Orders (`/api/orders/`)
+- `GET /` (auth, filters: status, page) → paginated list
+- `POST /` → tạo đơn (có thể đa cửa hàng) trả `{message, orders: [...]}`
+- `GET /{id}/` → chi tiết đơn
+- `PATCH /{id}/status/` → `{message, order_status}`
+- `POST /{id}/cancel-group/` → `{message, cancelled_orders: []}`
+- Admin: `GET /admin/`, `GET /admin/{id}/`, `POST /admin/{id}/assign-shipper/`, `PATCH /admin/{id}/status/`.
+- Shipper: `GET /shipper/` (list của mình), `GET /shipper/{shipper_id}/orders/`, `POST /shipper/{order_id}/accept/`, `PATCH /shipper/{order_id}/status/`.
+
+### Payments (`/api/payments/`)
+- `POST /create/` body `{order_id, amount?, return_url?}` → `{payment_url?, order, amount, message}`
+- `POST /webhook/` → `{status: "OK"}`
+- PayOS: `POST /payos/create-link/` → `{checkoutUrl, code, desc, orderCode, qrCode}`; `POST /payos/check-status/` → `{code, desc, data}`; `GET /payos-return` → message/state.
+
+### Promotions (`/api/promotions/`)
+- Public/store manager: `GET /` (filters: store/store_id) → danh sách promo; `POST /validate/` → `{valid, discount_amount?, discount_percent?, error?}`
+- Store manager CRUD: `POST /create/`, `GET|PUT|DELETE /{promo_id}/`, `POST /{promo_id}/update/` alias, `POST /{promo_id}/delete/` alias → trả promo hoặc `{success,message}`.
+- Admin (global): `GET /admin/`, `POST /admin/create/`, `GET|PUT|DELETE /admin/{promo_id}/`, `POST /admin/{promo_id}/update/`, `POST /admin/{promo_id}/delete/`.
+- Promo fields: `{id, name, description, discount_type (PERCENT|AMOUNT), discount_value, max_discount_amount, min_order_amount, start_date, end_date, is_active, store, scope}`.
+
+### Ratings (`/api/ratings/`)
+- `GET /` → list with paging; `POST /` → create rating `{id, food, user, rating_value, comment, created_at}`
+- `GET|PUT|DELETE /{id}/` → rating detail/update/delete.
+
+### Stores (`/api/stores/`)
+- `GET /public/` → danh sách public stores.
+- ViewSet (auth for modify): `GET /` list, `POST /` create, `GET /{id}/`, `PUT|PATCH /{id}/`, `DELETE /{id}/`.
+- Store fields: `{id, store_name, address, latitude, longitude, description, image}`.
+
+### Shipper (`/api/shipper/`)
+- ViewSet: `GET /shippers/`, `POST /shippers/`, `GET /shippers/{id}/`, `PUT|PATCH /shippers/{id}/`, `DELETE /shippers/{id}/`.
+
+### Chatbot (`/api/chatbot/`) & Dashboard (`/api/admin/dashboard/`, `/api/dashboard/`)
+- Chatbot: consult `apps/chatbot/urls.py` for Q&A endpoint (hiện 1 route chính `POST /api/chatbot/` trả lời từ services layer).
+- Dashboard: metrics cho admin và public dashboard (do `apps/dashboard/urls_admin.py` & `apps/dashboard/urls.py`).
+
 ---
 
 ## 1. Authentication API (`/api/auth/`)
